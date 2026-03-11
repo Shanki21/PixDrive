@@ -2,10 +2,10 @@ import { AlertCircle } from "lucide-react";
 
 export default function TrashWarning() {
   return (
-    <div className="flex gap-3 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">
-      <AlertCircle className="text-yellow-500 mt-0.5" size={20} />
+    <div className="flex items-center gap-3 rounded-sm border border-amber-100 bg-amber-50 px-4 py-3">
+      <AlertCircle className="mt-0.5 shrink-0 text-amber-500" size={18} />
 
-      <p className="text-sm text-gray-700">
+      <p className="text-sm font-normal text-gray-700">
         The gallery can be restored within <b>7 days</b> after it has been moved
         to the trash. After that, the data will be permanently deleted and
         cannot be restored.

@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Copy,
@@ -17,10 +17,11 @@ import {
 } from "lucide-react";
 import { MinimalGallery } from "../../types/DriveTableTypes";
 
-export default function GalleryRow({
+function GalleryRow({
   gallery,
   grid,
   onOpen,
+  onPrefetch,
   onSettings,
   onPreview,
   onPinToggle,
@@ -31,6 +32,7 @@ export default function GalleryRow({
   gallery: MinimalGallery;
   grid: string;
   onOpen: () => void;
+  onPrefetch?: () => void;
   onSettings: () => void;
   onPreview: () => void;
   onPinToggle: () => void;
@@ -43,6 +45,7 @@ export default function GalleryRow({
   const [isDragOver, setIsDragOver] = useState(false);
   const shareRef = useRef<HTMLDivElement | null>(null);
   const actionRef = useRef<HTMLDivElement | null>(null);
+  const prefetchedRef = useRef(false);
 
   const created = gallery.createdAt
     ? new Date(gallery.createdAt).toLocaleDateString()
@@ -52,11 +55,11 @@ export default function GalleryRow({
     ? new Date(gallery.expiresAt).toLocaleDateString()
     : gallery.storageTimeLabel ?? "-";
 
-  const showHeartIcon =
-    gallery.favoritesLimitSelected || gallery.type === "favorites";
+  const favoritesEnabled = Boolean(gallery.favoritesEnabled);
+  const hasFavoritesSelection = (gallery.favoritesListsCount ?? 0) > 0;
+  const showHeartIcon = favoritesEnabled;
 
-  const favoritesListsCount =
-    gallery.favoritesListsCount ?? (gallery.favoritesEnabled ? 1 : 0);
+  const favoritesListsCount = gallery.favoritesListsCount ?? 0;
   const selectionCompletedCount = gallery.selectionCompletedCount ?? 0;
   const filesLimitForSelection =
     gallery.favoritesMaxSelected == null
@@ -80,9 +83,17 @@ export default function GalleryRow({
     return () => document.removeEventListener("mousedown", closeMenus);
   }, []);
 
+  const tryPrefetch = () => {
+    if (!onPrefetch || prefetchedRef.current) return;
+    prefetchedRef.current = true;
+    onPrefetch();
+  };
+
   return (
     <div
       className={`${grid} items-center px-4 py-5 border-b hover:bg-gray-50 ${isDragOver ? "bg-blue-50" : ""}`}
+      onMouseEnter={tryPrefetch}
+      onTouchStart={tryPrefetch}
       onDragOver={(e) => {
         e.preventDefault();
         setIsDragOver(true);
@@ -111,19 +122,42 @@ export default function GalleryRow({
       <div className="w-4 h-4 rounded-full border border-gray-400" />
 
       <div className="w-14 h-14 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
-        {gallery.coverUrl ? (
-          <img src={gallery.coverUrl} alt={gallery.name} className="w-full h-full object-cover" />
+        {gallery.coverUrl || gallery.firstPhotoUrl ? (
+          <img
+            src={gallery.coverUrl ?? gallery.firstPhotoUrl ?? ""}
+            alt={gallery.name}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
         ) : (
           <span className="text-gray-300">IMG</span>
         )}
       </div>
 
       <div>
-        <p className="font-medium cursor-pointer" onClick={onOpen}>
-          {gallery.name}
-        </p>
+        <div className="group relative inline-block">
+          <p
+            className="font-medium cursor-pointer"
+            onMouseEnter={tryPrefetch}
+            onFocus={tryPrefetch}
+            onClick={onOpen}
+          >
+            {gallery.name}
+          </p>
+          <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-800 px-3 py-1.5 text-sm font-semibold text-white shadow-md group-hover:block">
+            {gallery.name}
+            <span className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-gray-800" />
+          </div>
+        </div>
         <p className="text-xs text-gray-500">
-          {created} • {gallery.filesCount ?? 0} files
+          <span className="group relative inline-block">
+            {created}
+            <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-800 px-3 py-1.5 text-sm font-semibold text-white shadow-md group-hover:block">
+              Shoot date
+              <span className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-gray-800" />
+            </span>
+          </span>{" "}
+          • {gallery.filesCount ?? 0} files{gallery.totalSize ? ` (${gallery.totalSize})` : ""}
         </p>
       </div>
 
@@ -134,7 +168,7 @@ export default function GalleryRow({
       <div className="relative flex justify-start">
         <div className="group relative inline-flex items-center">
           {showHeartIcon ? (
-            <Heart className="w-5 h-5 text-red-500" />
+            <Heart className={`w-5 h-5 ${hasFavoritesSelection ? "text-red-500" : "text-slate-700"}`} />
           ) : (
             <ImageIcon className="w-5 h-5 text-gray-700" />
           )}
@@ -147,9 +181,9 @@ export default function GalleryRow({
                 Client gallery
               </div>
             ) : (
-              <div className="bg-white border border-gray-200 shadow-lg rounded-lg p-5 min-w-80 text-sm text-gray-700">
+              <div className="bg-white border border-gray-200 shadow-lg rounded-lg p-5 min-w-50 text-sm text-gray-700">
                 <p className="font-semibold text-gray-800 mb-4 text-xl">
-                  {gallery.favoritesName || "Favorites lists"}
+                  {"Favorites lists"}
                 </p>
 
                 <div className="space-y-3">
@@ -175,16 +209,24 @@ export default function GalleryRow({
       <div className="text-left">{expires}</div>
 
       <div className="relative" ref={shareRef}>
-        <button
-          type="button"
-          onClick={() => {
-            setShowShareMenu((v) => !v);
-            setShowActionMenu(false);
-          }}
-          className="w-10 h-10 rounded-full hover:bg-gray-100 inline-flex items-center justify-center"
-        >
-          <Share2 size={18} className="text-gray-500" />
-        </button>
+        <div className="group relative inline-flex">
+          <button
+            type="button"
+            onClick={() => {
+              setShowShareMenu((v) => !v);
+              setShowActionMenu(false);
+            }}
+            className="w-10 h-10 rounded-full hover:bg-gray-100 inline-flex items-center justify-center"
+          >
+            <Share2 size={18} className="text-gray-500" />
+          </button>
+          {!showShareMenu ? (
+            <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-800 px-3 py-1.5 text-sm font-semibold text-white shadow-md group-hover:block">
+              Share gallery
+              <span className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-gray-800" />
+            </span>
+          ) : null}
+        </div>
 
         {showShareMenu && (
           <div className="absolute right-0 bottom-11 z-20 w-60 bg-white border border-gray-200 shadow-lg rounded-xl py-2">
@@ -309,3 +351,5 @@ function SocialDot({
     </span>
   );
 }
+
+export default memo(GalleryRow);

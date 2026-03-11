@@ -2,7 +2,46 @@
 @import "tailwindcss/theme";
 @import "tailwindcss/utilities";
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+}
+
 body {
-  font-family: system-ui, sans-serif;
+  margin: 0;
+  font-family: "Manrope", "Segoe UI", system-ui, -apple-system, sans-serif;
+  line-height: 1.45;
   background: #f8fafc;
+  color: #0f172a;
+}
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.tulip-bar svg.tulip-icon {
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  min-height: 14px;
+  display: block;
+  stroke: currentColor;
+  fill: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
 }

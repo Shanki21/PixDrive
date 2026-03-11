@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import EmptyDriveHero from "@/components/drive/EmptyDriveHero";
+import EmptyDrive from "@/components/drive/EmptyDrive";
 import AddGalleryModal from "@/components/drive/AddGalleryModal";
+import { saveGalleryMeta } from "@/lib/gallery-meta-storage";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -13,26 +14,35 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetch("/api/galleries")
-      .then(res => res.json())
-      .then(data => {
-        if (data.length > 0) {
+      .then(async (res) => {
+        const contentType = res.headers.get("content-type") ?? "";
+        if (!res.ok || !contentType.includes("application/json")) return [];
+        return res.json();
+      })
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
           router.replace("/dashboard/drive");
         } else {
           setHasGallery(false);
         }
-      });
+      })
+      .catch(() => setHasGallery(false));
   }, [router]);
 
   if (hasGallery === null) return null;
 
   return (
     <div className="max-w-275 mx-auto px-6">
-<EmptyDriveHero onAdd={() => setOpen(true)} />
+<EmptyDrive onCreate={() => setOpen(true)} />
   <AddGalleryModal
   open={open}
   onClose={() => setOpen(false)}
-  onCreated={() => {
-    window.location.href = "/dashboard/drive";
+  onCreated={(gallery) => {
+    saveGalleryMeta(gallery.id, {
+      expiresAt: gallery.expiresAt ?? null,
+      storageTimeLabel: gallery.storageTimeLabel ?? null,
+    });
+    router.push("/dashboard/drive");
   }}
 />
     </div>

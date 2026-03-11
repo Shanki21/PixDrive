@@ -10,9 +10,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Sidebar />
       <Header />
       {/* main area: margin-left matches sidebar width (w-56), padding-top matches topbar height (h-16) */}
-      <main className="ml-56 pt-16 min-h-screen">
-        {/* constrain width like original UI and add horizontal padding */}
-        <div className="max-w-7xl mx-auto px-6">{children}</div>
+      <main className="min-h-screen md:ml-56 md:pt-16">
+        {/* full-width content with responsive side padding to avoid clipping dialogs */}
+        <div className="w-full px-4 sm:px-6">{children}</div>
       </main>
     </div>
   );

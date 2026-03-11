@@ -2,6 +2,7 @@ export type MinimalGallery = {
   id: string;
   name: string;
   coverUrl?: string | null;
+  firstPhotoUrl?: string | null;
   createdAt?: string | null;
   filesCount?: number;
   totalSize?: string | null;
