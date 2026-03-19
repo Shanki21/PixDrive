@@ -1,7 +1,11 @@
-﻿type SendOtpParams = {
+type SendOtpParams = {
   to: string;
   otp: string;
 };
+
+type SendOtpResult =
+  | { ok: true; provider: "resend" | "smtp" }
+  | { ok: false; message: string; reason: string };
 
 function buildOtpHtml(otp: string) {
   return `
@@ -14,35 +18,64 @@ function buildOtpHtml(otp: string) {
   `;
 }
 
-async function sendWithResend({ to, otp }: SendOtpParams) {
+async function sendWithResend({ to, otp }: SendOtpParams): Promise<SendOtpResult> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL;
-  if (!apiKey || !from) return false;
+  if (!apiKey || !from) {
+    return {
+      ok: false,
+      reason: "missing_resend_env",
+      message: "Missing RESEND_API_KEY or RESEND_FROM_EMAIL.",
+    };
+  }
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from,
-      to: [to],
-      subject: "Your pixora OTP code",
-      html: buildOtpHtml(otp),
-    }),
-  });
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject: "Your pixora OTP code",
+        html: buildOtpHtml(otp),
+      }),
+    });
 
-  return res.ok;
+    if (res.ok) {
+      return { ok: true, provider: "resend" };
+    }
+
+    const body = await res.text().catch(() => "");
+    return {
+      ok: false,
+      reason: "resend_request_failed",
+      message: body || `Resend request failed with status ${res.status}.`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: "resend_network_error",
+      message: error instanceof Error ? error.message : "Unable to reach Resend.",
+    };
+  }
 }
 
-async function sendWithSmtp({ to, otp }: SendOtpParams) {
+async function sendWithSmtp({ to, otp }: SendOtpParams): Promise<SendOtpResult> {
   const host = process.env.SMTP_HOST;
   const port = Number(process.env.SMTP_PORT ?? 0);
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
   const from = process.env.SMTP_FROM_EMAIL;
-  if (!host || !port || !user || !pass || !from) return false;
+  if (!host || !port || !user || !pass || !from) {
+    return {
+      ok: false,
+      reason: "missing_smtp_env",
+      message: "Missing SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, or SMTP_FROM_EMAIL.",
+    };
+  }
 
   try {
     const nodemailer = await import("nodemailer");
@@ -60,27 +93,42 @@ async function sendWithSmtp({ to, otp }: SendOtpParams) {
       html: buildOtpHtml(otp),
     });
 
-    return true;
-  } catch {
-    return false;
+    return { ok: true, provider: "smtp" };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: "smtp_send_failed",
+      message: error instanceof Error ? error.message : "SMTP send failed.",
+    };
   }
 }
 
-export async function sendOtpEmail(params: SendOtpParams) {
-  if (await sendWithResend(params)) {
-    return { ok: true as const, provider: "resend" as const };
+export async function sendOtpEmail(params: SendOtpParams): Promise<SendOtpResult> {
+  const resendResult = await sendWithResend(params);
+  if (resendResult.ok) {
+    return resendResult;
   }
 
-  if (await sendWithSmtp(params)) {
-    return { ok: true as const, provider: "smtp" as const };
+  const smtpResult = await sendWithSmtp(params);
+  if (smtpResult.ok) {
+    return smtpResult;
+  }
+
+  if (
+    resendResult.reason === "missing_resend_env" &&
+    smtpResult.reason === "missing_smtp_env"
+  ) {
+    return {
+      ok: false,
+      reason: "no_email_provider_configured",
+      message:
+        "No email provider is configured on the server. In Vercel, add RESEND_API_KEY and RESEND_FROM_EMAIL, or add SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and SMTP_FROM_EMAIL.",
+    };
   }
 
   return {
-    ok: false as const,
-    message:
-      "No email provider configured. Set RESEND_API_KEY+RESEND_FROM_EMAIL or SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS/SMTP_FROM_EMAIL.",
+    ok: false,
+    reason: `${resendResult.reason}|${smtpResult.reason}`,
+    message: resendResult.message,
   };
 }
-
-
-

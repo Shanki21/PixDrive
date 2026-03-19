@@ -16,6 +16,12 @@ export async function POST(req: Request) {
     const code = createOtp(email);
     const result = await sendOtpEmail({ to: email, otp: code });
     if (!result.ok) {
+      console.error("[auth/request-otp] email delivery failed", {
+        reason: result.reason,
+        message: result.message,
+        email,
+      });
+
       if (process.env.NODE_ENV !== "production") {
         console.warn(`[DEV OTP FALLBACK] ${email}: ${code}`);
         return NextResponse.json({

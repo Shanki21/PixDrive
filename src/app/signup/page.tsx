@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import AuthShell from "@/components/auth/AuthShell";
 import AuthVisuals from "@/components/auth/AuthVisuals";
 import OtpCodeInput from "@/components/auth/OtpCodeInput";
@@ -26,6 +27,9 @@ const tutorialItems = [
 const languages = ["English", "Espanol", "Deutsch", "Francais", "Russkiy"];
 
 type SignupStep = "email" | "otp" | "language" | "contacts" | "tutorial";
+
+const inputClass =
+  "h-12 w-full rounded-full border border-[#d7d7d7] bg-white px-5 text-sm outline-none transition focus:-translate-y-0.5 focus:border-black focus:shadow-[0_0_0_4px_rgba(17,19,32,0.08)]";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -120,101 +124,102 @@ export default function SignupPage() {
   return (
     <AuthShell right={right} bottom={bottom}>
       {step === "email" ? (
-        <form onSubmit={onRequestOtp} className="space-y-6">
-          <h1 className="font-display text-5xl font-semibold text-[#111320]">Sign up</h1>
-          <div>
+        <motion.form initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} onSubmit={onRequestOtp} className="space-y-6">
+          <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="font-display text-5xl font-semibold text-[#111320]">
+            Sign up
+          </motion.h1>
+          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
             <label className="mb-2 block text-sm font-semibold text-[#151821]">Email</label>
             <input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Your email"
-              className={`h-12 w-full rounded-full border bg-white px-5 text-sm outline-none ${
-                error ? "border-red-400" : "border-[#9f9f9f]"
-              }`}
+              className={`${inputClass} ${error ? "border-red-400" : ""}`}
             />
             {error ? <p className="mt-2 text-sm text-red-500">{error}</p> : null}
-          </div>
-          <button type="button" className="text-sm underline">
+          </motion.div>
+          <motion.button type="button" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm underline">
             Do you have a promo code?
-          </button>
-          <button className="h-11 w-full rounded-full bg-[#101114] text-sm font-semibold text-white" disabled={loading}>
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.01, y: -2 }}
+            whileTap={{ scale: 0.99 }}
+            className="h-11 w-full rounded-full bg-[#101114] text-sm font-semibold text-white"
+            disabled={loading}
+          >
             {loading ? "Sending..." : "Continue"}
-          </button>
+          </motion.button>
           <p className="text-xs leading-relaxed text-[#1b1f27]">
             By clicking the &quot;Continue&quot; button, you agree to the terms of the{" "}
             <span className="underline">User Agreement</span> and the <span className="underline">Privacy Policy</span>.
           </p>
-        </form>
+        </motion.form>
       ) : null}
 
       {step === "otp" ? (
-        <form onSubmit={onVerifyOtp} className="space-y-6">
+        <motion.form initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} onSubmit={onVerifyOtp} className="space-y-6">
           <h1 className="font-display text-5xl font-semibold text-[#111320]">Sign up</h1>
           <p className="text-base leading-relaxed text-[#101218]">
             Access code sent to <strong>{email}</strong>.
           </p>
           <OtpCodeInput value={otp} onChange={setOtp} />
           {error ? <p className="text-sm text-red-500">{error}</p> : null}
-          <button
+          <motion.button
+            whileHover={{ scale: 1.01, y: -2 }}
+            whileTap={{ scale: 0.99 }}
             className="h-11 w-full rounded-full bg-[#101114] text-sm font-semibold text-white disabled:opacity-40"
             disabled={loading || otp.length !== 6}
           >
             {loading ? "Verifying..." : "Continue"}
-          </button>
-        </form>
+          </motion.button>
+        </motion.form>
       ) : null}
 
       {step === "language" ? (
-        <div className="space-y-6">
+        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
           <h1 className="font-display text-5xl font-semibold leading-tight text-[#111320]">Choose your language</h1>
           <p className="text-base leading-relaxed text-[#101218]">
             For the control panel, training materials, and communication with the support team. You can change it any
             time in your account settings.
           </p>
           <div className="space-y-4">
-            {languages.map((lang) => (
-              <button
+            {languages.map((lang, index) => (
+              <motion.button
                 key={lang}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 }}
+                whileHover={{ x: 4 }}
                 className="flex h-12 w-full items-center justify-between rounded-full border border-[#d8d8d8] bg-white px-5 text-sm"
                 onClick={() => setStep("contacts")}
               >
                 {lang} <span>{"->"}</span>
-              </button>
+              </motion.button>
             ))}
           </div>
           <button className="text-sm font-semibold underline">Log out from this account</button>
-        </div>
+        </motion.div>
       ) : null}
 
       {step === "contacts" ? (
-        <div className="space-y-4">
+        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
           <h1 className="font-display text-5xl font-semibold leading-tight text-[#111320]">Fill in your contacts</h1>
           <p className="text-base leading-relaxed text-[#101218]">
             The last step left! Fill in your contacts so that gallery visitors can contact you.
           </p>
           <div>
             <label className="mb-2 block text-sm font-semibold">Name</label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="John Smith"
-              className="h-12 w-full rounded-full border border-[#999] bg-white px-4 text-sm"
-            />
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="John Smith" className={inputClass} />
           </div>
           <div>
             <label className="mb-2 block text-sm font-semibold">Phone number</label>
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+48 (123) 123-123"
-              className="h-12 w-full rounded-full border border-[#ddd] bg-white px-4 text-sm"
-            />
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+48 (123) 123-123" className={inputClass} />
           </div>
-          <label className="flex items-center justify-between text-sm font-semibold">
+          <label className="flex items-center justify-between rounded-full border border-[#d8d8d8] bg-white px-5 py-3 text-sm font-semibold">
             I use WhatsApp
             <input type="checkbox" checked={useWhatsApp} onChange={(e) => setUseWhatsApp(e.target.checked)} />
           </label>
-          <label className="flex items-center justify-between text-sm font-semibold">
+          <label className="flex items-center justify-between rounded-full border border-[#d8d8d8] bg-white px-5 py-3 text-sm font-semibold">
             I use Telegram
             <input type="checkbox" checked={useTelegram} onChange={(e) => setUseTelegram(e.target.checked)} />
           </label>
@@ -224,14 +229,16 @@ export default function SignupPage() {
               value={occupation}
               onChange={(e) => setOccupation(e.target.value)}
               placeholder="For example: Wedding photographer"
-              className="h-12 w-full rounded-full border border-[#ddd] bg-white px-4 text-sm"
+              className={inputClass}
             />
           </div>
           <p className="text-xs text-[#151821]">
             Your contacts will appear in the &quot;Card&quot; section. In the same section, you can add your social
             networks.
           </p>
-          <button
+          <motion.button
+            whileHover={{ scale: 1.01, y: -2 }}
+            whileTap={{ scale: 0.99 }}
             className="h-11 w-full rounded-full bg-[#101114] text-sm font-semibold text-white"
             onClick={() => {
               const current = loadProfile();
@@ -246,13 +253,13 @@ export default function SignupPage() {
             }}
           >
             Start
-          </button>
+          </motion.button>
           <button className="text-sm font-semibold underline">Log out from this account</button>
-        </div>
+        </motion.div>
       ) : null}
 
       {step === "tutorial" ? (
-        <div className="flex h-full flex-col">
+        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="flex h-full flex-col">
           <div className="mb-8 flex items-center justify-between">
             <button className="text-sm font-semibold underline" onClick={() => router.push("/dashboard")}>
               Skip
@@ -263,21 +270,20 @@ export default function SignupPage() {
             {tutorialItems.map((item, idx) => {
               const active = idx <= tutorialStep;
               return (
-                <div key={item.title} className={`${active ? "opacity-100" : "opacity-30"}`}>
+                <motion.div key={item.title} animate={{ opacity: active ? 1 : 0.3 }} className={`${active ? "opacity-100" : "opacity-30"}`}>
                   <h3 className="font-display text-5xl font-semibold text-[#121722]">{item.title}</h3>
                   <p className="mt-2 text-base leading-relaxed text-[#141821]">{item.body}</p>
-                </div>
+                </motion.div>
               );
             })}
           </div>
           <div className="mt-auto flex items-center justify-between pb-2 pt-8">
-            <button
-              className="text-sm font-semibold underline"
-              onClick={() => setTutorialStep((s) => (s > 0 ? s - 1 : s))}
-            >
+            <button className="text-sm font-semibold underline" onClick={() => setTutorialStep((s) => (s > 0 ? s - 1 : s))}>
               {"<-"} Back
             </button>
-            <button
+            <motion.button
+              whileHover={{ scale: 1.03, y: -2 }}
+              whileTap={{ scale: 0.98 }}
               className="h-10 w-24 rounded-md bg-black text-sm font-semibold text-white"
               onClick={() => {
                 if (tutorialStep < 2) {
@@ -288,9 +294,9 @@ export default function SignupPage() {
               }}
             >
               Next
-            </button>
+            </motion.button>
           </div>
-        </div>
+        </motion.div>
       ) : null}
     </AuthShell>
   );

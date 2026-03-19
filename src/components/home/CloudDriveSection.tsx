@@ -1,38 +1,80 @@
+"use client";
+
+import { motion } from "framer-motion";
+
 type FeatureItemProps = {
   title: string;
   text: string;
 };
 
+type CloudDriveSectionProps = {
+  eyebrow: string;
+  title: string;
+  description: string;
+  items: FeatureItemProps[];
+  theme?: "studio" | "drive";
+};
+
 function Item({ title, text }: FeatureItemProps) {
   return (
-    <div>
-      <h3 className="text-xl font-semibold mb-2">{title}</h3>
+    <motion.div
+      variants={{
+        hidden: { opacity: 0, y: 20 },
+        visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
+      }}
+    >
+      <h3 className="mb-2 text-xl font-semibold">{title}</h3>
       <p className="text-gray-400">{text}</p>
-    </div>
+    </motion.div>
   );
 }
 
-export default function CloudDriveSection() {
+export default function CloudDriveSection({
+  eyebrow,
+  title,
+  description,
+  items,
+  theme = "studio",
+}: CloudDriveSectionProps) {
+  const isDrive = theme === "drive";
+
   return (
-    <section className="relative overflow-hidden bg-[#15151a] py-28 text-white">
-      <div className="absolute -right-32 -top-28 h-72 w-72 rounded-full bg-[#d97757]/20 blur-3xl" />
+    <section className={`relative overflow-hidden py-28 text-white ${isDrive ? "bg-[#0c1a24]" : "bg-[#15151a]"}`}>
+      <div
+        className={`absolute -right-32 -top-28 h-72 w-72 rounded-full blur-3xl ${
+          isDrive ? "bg-[#54a6d1]/18" : "bg-[#d97757]/20"
+        }`}
+      />
       <div className="mx-auto max-w-7xl px-6 md:px-10">
         <div className="grid gap-10 md:grid-cols-[1.1fr_0.9fr] md:items-center">
-          <div>
-            <p className="text-xs uppercase tracking-[0.35em] text-white/50">Cloud drive</p>
-            <h2 className="font-display mt-4 text-4xl font-semibold md:text-5xl">Deliver files with confidence</h2>
-            <p className="mt-5 text-base text-white/65">
-              Share full galleries, track favorites, and keep every delivery polished and consistent.
-            </p>
-          </div>
-          <div className="rounded-[26px] border border-white/10 bg-white/5 p-8 shadow-2xl">
+          <motion.div
+            initial={{ opacity: 0, y: 28 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.35 }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <p className="text-xs uppercase tracking-[0.35em] text-white/50">{eyebrow}</p>
+            <h2 className="font-display mt-4 text-4xl font-semibold md:text-5xl">{title}</h2>
+            <p className="mt-5 text-base text-white/65">{description}</p>
+          </motion.div>
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.25 }}
+            variants={{
+              hidden: {},
+              visible: { transition: { staggerChildren: 0.1 } },
+            }}
+            className={`rounded-[26px] border p-8 shadow-2xl ${
+              isDrive ? "border-[#2b4657] bg-[#122634]" : "border-white/10 bg-white/5"
+            }`}
+          >
             <div className="grid gap-6 md:grid-cols-2">
-              <Item title="Best way to share" text="Upload, preview, and deliver in minutes." />
-              <Item title="Favorites" text="Clients can like and comment instantly." />
-              <Item title="Impress" text="Branded presentation and clean downloads." />
-              <Item title="Attract" text="Keep links private or showcase publicly." />
+              {items.map((item) => (
+                <Item key={item.title} title={item.title} text={item.text} />
+              ))}
             </div>
-          </div>
+          </motion.div>
         </div>
       </div>
     </section>

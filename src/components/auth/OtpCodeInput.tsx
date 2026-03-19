@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { motion } from "framer-motion";
 
 type OtpCodeInputProps = {
   value: string;
@@ -14,8 +15,12 @@ export default function OtpCodeInput({ value, onChange }: OtpCodeInputProps) {
   return (
     <div className="flex items-center gap-2">
       {chars.map((char, idx) => (
-        <input
+        <motion.input
           key={idx}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: idx * 0.05, duration: 0.35 }}
+          whileFocus={{ y: -2, scale: 1.03 }}
           ref={(el) => {
             refs.current[idx] = el;
           }}
@@ -52,7 +57,7 @@ export default function OtpCodeInput({ value, onChange }: OtpCodeInputProps) {
             const focusIndex = Math.min(pasted.length, chars.length - 1);
             refs.current[focusIndex]?.focus();
           }}
-          className="h-14 w-11 rounded-full border border-[#dedede] bg-white text-center text-xl font-semibold outline-none focus:border-black"
+          className="h-14 w-11 rounded-full border border-[#dedede] bg-white text-center text-xl font-semibold outline-none transition focus:border-black focus:shadow-[0_0_0_4px_rgba(17,19,32,0.08)]"
         />
       ))}
     </div>

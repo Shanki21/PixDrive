@@ -7,6 +7,8 @@ import { getGalleryMeta, saveGalleryMeta } from "@/lib/gallery-meta-storage";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 import {
   ArrowDownToLine,
+  ChevronLeft,
+  ChevronRight,
   Eye,
   ExternalLink,
   Link as LinkIcon,
@@ -50,6 +52,7 @@ const CLIENT_GALLERY_BASE_URL =
   process.env.NEXT_PUBLIC_CLIENT_GALLERY_BASE_URL?.trim() || "https://vowgraphy.pixora.pro";
 const FOLDER_STORAGE_PREFIX = "wf_gallery_folders:";
 const FOLDER_PHOTOS_PREFIX = "wf_gallery_folder_photos:";
+const FOLDER_ORDER_PREFIX = "wf_gallery_folder_order:";
 const CLIENT_FAVORITES_PREFIX = "wf_client_favorites:";
 
 function formatDate(value?: string | null) {
@@ -114,6 +117,43 @@ function writeFolderPhotos(galleryId: string, map: Record<string, string[]>) {
   window.localStorage.setItem(`${FOLDER_PHOTOS_PREFIX}${galleryId}`, JSON.stringify(map));
 }
 
+function readFolderOrder(galleryId: string) {
+  try {
+    const raw = window.localStorage.getItem(`${FOLDER_ORDER_PREFIX}${galleryId}`);
+    if (!raw) return ["photos"];
+    const parsed = JSON.parse(raw) as string[];
+    return Array.isArray(parsed) ? parsed : ["photos"];
+  } catch {
+    return ["photos"];
+  }
+}
+
+function writeFolderOrder(galleryId: string, order: string[]) {
+  window.localStorage.setItem(`${FOLDER_ORDER_PREFIX}${galleryId}`, JSON.stringify(order));
+}
+
+function normalizeFolderOrder(order: string[], folders: Folder[]) {
+  const allIds = ["photos", ...folders.map((folder) => folder.id)];
+  const seen = new Set<string>();
+  const next: string[] = [];
+
+  order.forEach((id) => {
+    if (allIds.includes(id) && !seen.has(id)) {
+      next.push(id);
+      seen.add(id);
+    }
+  });
+
+  allIds.forEach((id) => {
+    if (!seen.has(id)) {
+      next.push(id);
+      seen.add(id);
+    }
+  });
+
+  return next;
+}
+
 function readFavoriteIds(galleryId: string) {
   try {
     const raw = window.localStorage.getItem(`${CLIENT_FAVORITES_PREFIX}${galleryId}`);
@@ -135,6 +175,7 @@ export default function DriveDetailPage() {
   const params = useParams<{ id: string }>();
   const galleryId = params?.id;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const shareMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [gallery, setGallery] = useState<GalleryDetail | null>(null);
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
@@ -153,10 +194,13 @@ export default function DriveDetailPage() {
   const [folderHidden, setFolderHidden] = useState(false);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [folderPhotos, setFolderPhotos] = useState<Record<string, string[]>>({});
+  const [folderOrder, setFolderOrder] = useState<string[]>(["photos"]);
 
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
   const [folderZipBusy, setFolderZipBusy] = useState<string | null>(null);
+  const [coverPhotoId, setCoverPhotoId] = useState<string | null>(null);
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
 
   const publicLink = useMemo(() => {
     if (!gallery) return null;
@@ -221,6 +265,7 @@ export default function DriveDetailPage() {
         if (active) {
           setGallery(galleryData);
           setPhotos(photoItems);
+          setCoverPhotoId((galleryData as GalleryDetail & { coverPhotoId?: string | null }).coverPhotoId ?? null);
         }
       } catch (err) {
         if (active) {
@@ -241,8 +286,10 @@ export default function DriveDetailPage() {
 
   useEffect(() => {
     if (!galleryId) return;
-    setFolders(readFolders(galleryId));
+    const nextFolders = readFolders(galleryId);
+    setFolders(nextFolders);
     setFolderPhotos(readFolderPhotos(galleryId));
+    setFolderOrder(normalizeFolderOrder(readFolderOrder(galleryId), nextFolders));
     setFavoriteIds(readFavoriteIds(galleryId));
   }, [galleryId]);
 
@@ -270,10 +317,35 @@ export default function DriveDetailPage() {
     };
   }, [menuOpenFor]);
 
+  useEffect(() => {
+    if (!shareMenuOpen) return;
+
+    const handleClick = (event: MouseEvent) => {
+      if (!shareMenuRef.current?.contains(event.target as Node)) {
+        setShareMenuOpen(false);
+      }
+    };
+
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShareMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("click", handleClick);
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      window.removeEventListener("click", handleClick);
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [shareMenuOpen]);
+
   const favoritePhotos = useMemo(() => {
     if (favoriteIds.size === 0) return [];
     return photos.filter((photo) => favoriteIds.has(photo.id));
   }, [photos, favoriteIds]);
+
+  const orderedFolderIds = useMemo(() => normalizeFolderOrder(folderOrder, folders), [folderOrder, folders]);
 
   const activeFolderPhotos = useMemo(() => {
 
@@ -357,6 +429,14 @@ export default function DriveDetailPage() {
     return url.toString();
   };
 
+  const buildPhotoLink = (photoId: string) => {
+    const folderLink = buildFolderLink(selectedFolderId);
+    if (!folderLink) return null;
+    const url = new URL(folderLink);
+    url.searchParams.set("photo", photoId);
+    return url.toString();
+  };
+
   const openFolderPreview = (folderId: string) => {
     if (!previewPath) return;
     const url = new URL(previewPath, window.location.origin);
@@ -373,6 +453,136 @@ export default function DriveDetailPage() {
       await navigator.clipboard.writeText(link);
     } catch {
       // Ignore clipboard errors.
+    }
+  };
+
+  const copyPhotoLink = async (photoId: string) => {
+    const link = buildPhotoLink(photoId);
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      // Ignore clipboard errors.
+    }
+  };
+
+  const shareGalleryTo = (platform: "facebook" | "whatsapp" | "telegram" | "viber") => {
+    if (!publicLink) return;
+    const encodedLink = encodeURIComponent(publicLink);
+    const encodedText = encodeURIComponent(`Take a look at this gallery: ${publicLink}`);
+
+    const shareUrl =
+      platform === "facebook"
+        ? `https://www.facebook.com/sharer/sharer.php?u=${encodedLink}`
+        : platform === "whatsapp"
+          ? `https://wa.me/?text=${encodedText}`
+          : platform === "telegram"
+            ? `https://t.me/share/url?url=${encodedLink}&text=${encodeURIComponent("Take a look at this gallery")}`
+            : `viber://forward?text=${encodedText}`;
+
+    window.open(shareUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const downloadGalleryQr = () => {
+    if (!publicLink) return;
+    const link = document.createElement("a");
+    link.href = `https://api.qrserver.com/v1/create-qr-code/?size=512x512&data=${encodeURIComponent(publicLink)}`;
+    link.download = `${sanitizeFileName(gallery?.name || "gallery")}-qr.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const previewPhoto = (photoId: string) => {
+    if (!previewPath) return;
+    const url = new URL(previewPath, window.location.origin);
+    if (selectedFolderId !== "photos") {
+      url.searchParams.set("folder", selectedFolderId);
+    }
+    url.searchParams.set("photo", photoId);
+    window.open(url.toString(), "_blank", "noopener,noreferrer");
+  };
+
+  const renamePhoto = async (photoId: string) => {
+    const photo = photos.find((item) => item.id === photoId);
+    if (!photo) return;
+    const nextName = window.prompt("Rename photo", photo.name)?.trim();
+    if (!nextName || nextName === photo.name) return;
+
+    try {
+      const res = await fetch(`/api/photos/${photoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: nextName }),
+      });
+      if (!res.ok) return;
+      setPhotos((prev) => prev.map((item) => (item.id === photoId ? { ...item, name: nextName } : item)));
+    } catch {
+      // Ignore rename failures.
+    }
+  };
+
+  const downloadPhoto = async (photo: GalleryPhoto) => {
+    try {
+      const response = await fetch(photo.url);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = sanitizeFileName(photo.name || "photo");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch {
+      // Ignore download failures.
+    }
+  };
+
+  const setPhotoAsCover = async (photoId: string) => {
+    if (!galleryId) return;
+    try {
+      const res = await fetch(`/api/galleries/${galleryId}/cover`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoId }),
+      });
+      if (!res.ok) return;
+      setCoverPhotoId(photoId);
+      setActiveTab("design");
+    } catch {
+      // Ignore cover failures.
+    }
+  };
+
+  const deletePhoto = async (photoId: string) => {
+    const confirmed = window.confirm("Delete this photo?");
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`/api/photos/${photoId}`, { method: "DELETE" });
+      if (!res.ok) return;
+
+      setPhotos((prev) => prev.filter((item) => item.id !== photoId));
+      setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        next.delete(photoId);
+        return next;
+      });
+      setFolderPhotos((prev) => {
+        const next = Object.fromEntries(
+          Object.entries(prev).map(([folderId, ids]) => [folderId, ids.filter((id) => id !== photoId)])
+        );
+        if (galleryId) {
+          writeFolderPhotos(galleryId, next);
+        }
+        return next;
+      });
+      if (coverPhotoId === photoId) {
+        setCoverPhotoId(null);
+      }
+    } catch {
+      // Ignore delete failures.
     }
   };
 
@@ -395,11 +605,27 @@ export default function DriveDetailPage() {
     writeFolders(galleryId, next);
   };
 
+  const moveFolder = (folderId: string, direction: -1 | 1) => {
+    if (!galleryId) return;
+    const current = normalizeFolderOrder(folderOrder, folders);
+    const index = current.indexOf(folderId);
+    const nextIndex = index + direction;
+    if (index === -1 || nextIndex < 0 || nextIndex >= current.length) return;
+
+    const next = [...current];
+    [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+    setFolderOrder(next);
+    writeFolderOrder(galleryId, next);
+  };
+
   const deleteFolder = (folderId: string) => {
     if (!galleryId) return;
     const nextFolders = folders.filter((folder) => folder.id !== folderId);
     setFolders(nextFolders);
     writeFolders(galleryId, nextFolders);
+    const nextOrder = normalizeFolderOrder(folderOrder.filter((id) => id !== folderId), nextFolders);
+    setFolderOrder(nextOrder);
+    writeFolderOrder(galleryId, nextOrder);
 
     setFolderPhotos((prev) => {
       const next = { ...prev };
@@ -463,6 +689,8 @@ export default function DriveDetailPage() {
   const getFolderMenuItems = (folderId: string) => {
     const isPhotos = folderId === "photos";
     const folder = folders.find((f) => f.id === folderId);
+    const currentOrder = normalizeFolderOrder(folderOrder, folders);
+    const orderIndex = currentOrder.indexOf(folderId);
 
     const items = [
       {
@@ -470,15 +698,18 @@ export default function DriveDetailPage() {
         icon: Eye,
         onClick: () => openFolderPreview(folderId),
       },
-      ...(isPhotos
-        ? []
-        : [
-          {
-            label: "Settings",
-            icon: Settings,
-            onClick: () => startEditFolder(folderId),
-          },
-        ]),
+      {
+        label: "Settings",
+        icon: Settings,
+        onClick: () => {
+          if (isPhotos) {
+            setActiveTab("settings");
+            setSettingsOpen(true);
+            return;
+          }
+          startEditFolder(folderId);
+        },
+      },
       {
         label: "Copy Link",
         icon: LinkIcon,
@@ -489,6 +720,18 @@ export default function DriveDetailPage() {
         icon: ArrowDownToLine,
         onClick: () => downloadFolderZip(folderId),
         disabled: folderZipBusy === folderId,
+      },
+      {
+        label: "Move to left",
+        icon: ChevronLeft,
+        onClick: () => moveFolder(folderId, -1),
+        disabled: orderIndex <= 0,
+      },
+      {
+        label: "Move to right",
+        icon: ChevronRight,
+        onClick: () => moveFolder(folderId, 1),
+        disabled: orderIndex === -1 || orderIndex >= currentOrder.length - 1,
       },
       ...(isPhotos
         ? []
@@ -536,6 +779,9 @@ export default function DriveDetailPage() {
       const next = [folder, ...folders];
       setFolders(next);
       writeFolders(galleryId, next);
+      const nextOrder = normalizeFolderOrder([...folderOrder, folder.id], next);
+      setFolderOrder(nextOrder);
+      writeFolderOrder(galleryId, nextOrder);
     }
 
     setFolderName("");
@@ -586,13 +832,76 @@ export default function DriveDetailPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            className="rounded-full border border-[#d9cfc4] px-5 py-2.5 text-sm font-semibold text-[#4a433d]"
-            type="button"
-            onClick={() => navigator.clipboard.writeText(publicLink ?? "")}
-          >
-            Share gallery
-          </button>
+          <div className="relative" ref={shareMenuRef}>
+            <button
+              className="rounded-full border border-[#d9cfc4] px-5 py-2.5 text-sm font-semibold text-[#4a433d]"
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setShareMenuOpen((prev) => !prev);
+              }}
+            >
+              Share gallery
+            </button>
+            {shareMenuOpen ? (
+              <div
+                className="absolute right-0 top-full z-50 mt-3 w-72 overflow-hidden rounded-2xl border border-[#e3d8cc] bg-white shadow-2xl"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="py-2 text-sm text-[#3b3430]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(publicLink ?? "");
+                      setShareMenuOpen(false);
+                    }}
+                    className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-[#f7f3ee]"
+                  >
+                    <LinkIcon className="h-5 w-5 text-[#9a9187]" />
+                    <span>Copy link</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      downloadGalleryQr();
+                      setShareMenuOpen(false);
+                    }}
+                    className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-[#f7f3ee]"
+                  >
+                    <div className="flex h-5 w-5 items-center justify-center rounded bg-[#f1ece5] text-[10px] font-bold text-[#7f776e]">
+                      QR
+                    </div>
+                    <span>Download QR code</span>
+                  </button>
+                </div>
+                <div className="border-t border-[#efe6dc] py-2 text-sm text-[#3b3430]">
+                  {[
+                    { id: "facebook", label: "Facebook", bg: "bg-[#4267B2]", text: "f" },
+                    { id: "whatsapp", label: "WhatsApp", bg: "bg-[#25D366]", text: "w" },
+                    { id: "telegram", label: "Telegram", bg: "bg-[#229ED9]", text: "t" },
+                    { id: "viber", label: "Viber", bg: "bg-[#7360F2]", text: "v" },
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        shareGalleryTo(item.id as "facebook" | "whatsapp" | "telegram" | "viber");
+                        setShareMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-[#f7f3ee]"
+                    >
+                      <span
+                        className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold uppercase text-white ${item.bg}`}
+                      >
+                        {item.text}
+                      </span>
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
           {previewPath ? (
             <button
               type="button"
@@ -627,133 +936,92 @@ export default function DriveDetailPage() {
       {activeTab === "gallery" && (
         <div className="mt-8 space-y-8">
           <div className="relative z-20 flex flex-wrap items-stretch gap-4">
-            <div className="relative min-w-48 z-20">
-              <button
-                type="button"
-                onClick={() => setSelectedFolderId("photos")}
-                className={`w-full rounded-xl border px-4 py-3 text-left text-sm ${selectedFolderId === "photos"
-                    ? "border-[#15161a] bg-white text-[#15161a]"
-                    : "border-[#e3d8cc] bg-white/60 text-[#6b645c]"
-                  }`}
-              >
-                <p className="font-semibold">Photos</p>
-                <p className="mt-1 text-xs text-[#8a7f73]">
-                  {photos.length} files {photos.length ? "??" : ""}{" "}
-                  {photos.length ? `${(photos.length * 1.2).toFixed(1)} MB` : ""}
-                </p>
-              </button>
-              <button
-                type="button"
-                aria-label="Open folder actions"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setMenuOpenFor((prev) => (prev === "folder-photos" ? null : "folder-photos"));
-                }}
-                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full border border-[#e3d8cc] bg-white text-[#15161a] shadow-sm transition hover:bg-[#f7f3ee]"
-              >
-                <MoreVertical className="h-4 w-4" />
-              </button>
-              {menuOpenFor === "folder-photos" ? (
-                <div
-                  className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-[#e3d8cc] bg-white shadow-2xl"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <div className="py-2 text-sm text-[#3b3430]">
-                    {getFolderMenuItems("photos").items.map((item) => (
-                      <button
-                        key={item.label}
-                        type="button"
-                        disabled={item.disabled}
-                        onClick={() => {
-                          setMenuOpenFor(null);
-                          item.onClick();
-                        }}
-                        className={`flex w-full items-center gap-3 px-4 py-2.5 text-left ${item.disabled ? "cursor-not-allowed opacity-60" : "hover:bg-[#f7f3ee]"
-                          }`}
-                      >
-                        <item.icon className="h-4 w-4 text-[#9a9187]" />
-                        <span>{item.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
+            {orderedFolderIds.map((folderId) => {
+              const isPhotos = folderId === "photos";
+              const folder = isPhotos ? null : folders.find((item) => item.id === folderId);
+              if (!isPhotos && !folder) return null;
+              const menuId = `folder-${folderId}`;
+              const menu = getFolderMenuItems(folderId);
 
-            {folders.map((folder) => (
-              <div key={folder.id} className="relative min-w-48 z-20">
-                <button
-                  type="button"
-                  onClick={() => setSelectedFolderId(folder.id)}
-                  className={`w-full rounded-xl border px-4 py-3 text-left text-sm ${selectedFolderId === folder.id
-                      ? "border-[#15161a] bg-white text-[#15161a]"
-                      : "border-[#e3d8cc] bg-white/60 text-[#6b645c]"
-                    }`}
-                >
-                  <p className="flex items-center gap-2 font-semibold">
-                    {folder.hidden ? <Lock className="h-4 w-4 text-[#8a7f73]" /> : null}
-                    <span>{folder.name}</span>
-                  </p>
-                  <p className="mt-1 text-xs text-[#8a7f73]">{folder.description || "No description"}</p>
-                </button>
-                <button
-                  type="button"
-                  aria-label="Open folder actions"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setMenuOpenFor((prev) => (prev === `folder-${folder.id}` ? null : `folder-${folder.id}`));
-                  }}
-                  className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full border border-[#e3d8cc] bg-white text-[#15161a] shadow-sm transition hover:bg-[#f7f3ee]"
-                >
-                  <MoreVertical className="h-4 w-4" />
-                </button>
-                {menuOpenFor === `folder-${folder.id}` ? (
-                  <div
-                    className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-[#e3d8cc] bg-white shadow-2xl"
-                    onClick={(event) => event.stopPropagation()}
+              return (
+                <div key={folderId} className="relative min-w-48 z-20">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedFolderId(folderId)}
+                    className={`w-full rounded-xl border px-4 py-3 text-left text-sm ${selectedFolderId === folderId
+                        ? "border-[#15161a] bg-white text-[#15161a]"
+                        : "border-[#e3d8cc] bg-white/60 text-[#6b645c]"
+                      }`}
                   >
-                    <div className="py-2 text-sm text-[#3b3430]">
-                      {getFolderMenuItems(folder.id).items.map((item) => (
-                        <button
-                          key={item.label}
-                          type="button"
-                          disabled={item.disabled}
-                          onClick={() => {
-                            setMenuOpenFor(null);
-                            item.onClick();
-                          }}
-                          className={`flex w-full items-center gap-3 px-4 py-2.5 text-left ${item.disabled ? "cursor-not-allowed opacity-60" : "hover:bg-[#f7f3ee]"
-                            }`}
-                        >
-                          <item.icon className="h-4 w-4 text-[#9a9187]" />
-                          <span>{item.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                    {getFolderMenuItems(folder.id).destructive ? (
-                      <div className="border-t border-[#efe6dc]">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMenuOpenFor(null);
-                            getFolderMenuItems(folder.id).destructive?.onClick();
-                          }}
-                          className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[#e11d48] hover:bg-[#fde8ee]"
-                        >
-                          {(() => {
-                            const destructive = getFolderMenuItems(folder.id).destructive;
-                            if (!destructive) return null;
-                            const Icon = destructive.icon;
-                            return <Icon className="h-4 w-4" />;
-                          })()}
-                          <span>{getFolderMenuItems(folder.id).destructive?.label}</span>
-                        </button>
+                    <p className="flex items-center gap-2 font-semibold">
+                      {!isPhotos && folder?.hidden ? <Lock className="h-4 w-4 text-[#8a7f73]" /> : null}
+                      <span>{isPhotos ? "Photos" : folder?.name}</span>
+                    </p>
+                    <p className="mt-1 text-xs text-[#8a7f73]">
+                      {isPhotos
+                        ? `${photos.length} files ${photos.length ? "??" : ""} ${photos.length ? `${(photos.length * 1.2).toFixed(1)} MB` : ""}`
+                        : folder?.description || "No description"}
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Open folder actions"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setMenuOpenFor((prev) => (prev === menuId ? null : menuId));
+                    }}
+                    className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full border border-[#e3d8cc] bg-white text-[#15161a] shadow-sm transition hover:bg-[#f7f3ee]"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
+                  {menuOpenFor === menuId ? (
+                    <div
+                      className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-[#e3d8cc] bg-white shadow-2xl"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <div className="py-2 text-sm text-[#3b3430]">
+                        {menu.items.map((item) => (
+                          <button
+                            key={item.label}
+                            type="button"
+                            disabled={item.disabled}
+                            onClick={() => {
+                              setMenuOpenFor(null);
+                              item.onClick();
+                            }}
+                            className={`flex w-full items-center gap-3 px-4 py-2.5 text-left ${item.disabled ? "cursor-not-allowed opacity-60" : "hover:bg-[#f7f3ee]"
+                              }`}
+                          >
+                            <item.icon className="h-4 w-4 text-[#9a9187]" />
+                            <span>{item.label}</span>
+                          </button>
+                        ))}
                       </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            ))}
+                      {menu.destructive ? (
+                        <div className="border-t border-[#efe6dc]">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMenuOpenFor(null);
+                              menu.destructive?.onClick();
+                            }}
+                            className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[#e11d48] hover:bg-[#fde8ee]"
+                          >
+                            {(() => {
+                              const destructive = menu.destructive;
+                              if (!destructive) return null;
+                              const Icon = destructive.icon;
+                              return <Icon className="h-4 w-4" />;
+                            })()}
+                            <span>{menu.destructive?.label}</span>
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
 
             <button
               type="button"
@@ -827,26 +1095,74 @@ export default function DriveDetailPage() {
                 {activeFolderPhotos.map((photo) => (
                   <div key={photo.id} className="group relative">
                     <div className="relative">
-
-                      <div className="mb-2 flex items-center overflow-hidden rounded-full border border-[#e3d8cc] bg-white/90 opacity-0 shadow transition group-hover:opacity-100">
-                        <button className="flex h-8 w-8 items-center justify-center text-[#4a433d] hover:bg-[#f2ece4]">
-                          <ExternalLink className="h-4 w-4" />
-                        </button>
-                        <button className="flex h-8 w-8 items-center justify-center text-[#4a433d] hover:bg-[#f2ece4]">
-                          <Star className="h-4 w-4" />
-                        </button>
-                        <button className="flex h-8 w-8 items-center justify-center text-[#4a433d] hover:bg-[#f2ece4]">
-                          <PencilLine className="h-4 w-4" />
-                        </button>
-                        <button className="flex h-8 w-8 items-center justify-center text-[#4a433d] hover:bg-[#f2ece4]">
-                          <ArrowDownToLine className="h-4 w-4" />
-                        </button>
-                        <button className="flex h-8 w-8 items-center justify-center text-[#4a433d] hover:bg-[#f2ece4]">
-                          <LinkIcon className="h-4 w-4" />
-                        </button>
-                        <button className="flex h-8 w-8 items-center justify-center text-[#e11d48] hover:bg-[#fde8ee]">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                      <div className="mb-2 flex items-center overflow-visible rounded-full border border-[#e3d8cc] bg-white/90 opacity-0 shadow transition group-hover:opacity-100">
+                        {[
+                          {
+                            label: coverPhotoId === photo.id ? "Cover selected" : "cover",
+                            icon: Star,
+                            onClick: () => setPhotoAsCover(photo.id),
+                            active: coverPhotoId === photo.id,
+                            danger: false,
+                          },
+                          {
+                            label: "Preview",
+                            icon: ExternalLink,
+                            onClick: () => previewPhoto(photo.id),
+                            active: false,
+                            danger: false,
+                          },
+                          {
+                            label: "Rename",
+                            icon: PencilLine,
+                            onClick: () => renamePhoto(photo.id),
+                            active: false,
+                            danger: false,
+                          },
+                          {
+                            label: "Download file",
+                            icon: ArrowDownToLine,
+                            onClick: () => downloadPhoto(photo),
+                            active: false,
+                            danger: false,
+                          },
+                          {
+                            label: "Copy link",
+                            icon: LinkIcon,
+                            onClick: () => copyPhotoLink(photo.id),
+                            active: false,
+                            danger: false,
+                          },
+                          {
+                            label: "Delete photo",
+                            icon: Trash2,
+                            onClick: () => deletePhoto(photo.id),
+                            active: false,
+                            danger: true,
+                          },
+                        ].map((action) => {
+                          const Icon = action.icon;
+                          return (
+                            <div key={action.label} className="group/action relative">
+                              <button
+                                type="button"
+                                onClick={action.onClick}
+                                className={`flex h-8 w-8 items-center justify-center transition ${
+                                  action.danger
+                                    ? "text-[#e11d48] hover:bg-[#fde8ee]"
+                                    : action.active
+                                      ? "text-[#d97757] hover:bg-[#f2ece4]"
+                                      : "text-[#4a433d] hover:bg-[#f2ece4]"
+                                }`}
+                              >
+                                <Icon className="h-4 w-4" />
+                              </button>
+                              <div className="pointer-events-none absolute -top-12 left-1/2 z-20 -translate-x-1/2 rounded-lg bg-[#2a2928] px-3 py-2 text-xs font-semibold text-white opacity-0 shadow-lg transition group-hover/action:opacity-100">
+                                {action.label}
+                                <span className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-[#2a2928]" />
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                       <div className="h-56 w-full overflow-hidden rounded-[14px] shadow-sm">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -908,7 +1224,11 @@ export default function DriveDetailPage() {
             <div className="overflow-hidden rounded-[20px] border border-[#e3d8cc] bg-[#f7f3ee]">
               {photos[0] ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={photos[0].url} alt="Cover preview" className="h-52 w-full object-cover" />
+                <img
+                  src={(photos.find((photo) => photo.id === coverPhotoId) ?? photos[0]).url}
+                  alt="Cover preview"
+                  className="h-52 w-full object-cover"
+                />
               ) : (
                 <div className="flex h-52 items-center justify-center text-sm text-[#8a7f73]">No cover yet</div>
               )}
