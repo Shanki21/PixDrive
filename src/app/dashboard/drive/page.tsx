@@ -13,6 +13,8 @@ import { getGalleryMeta, saveGalleryMeta } from "@/lib/gallery-meta-storage";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 
 const VISITS_STORAGE_KEY = "wf_gallery_visits";
+const GALLERIES_CACHE_KEY = "wf_drive_galleries_cache_v1";
+const GALLERIES_CACHE_TTL = 60 * 1000;
 
 function insertAfterPinned(list: MinimalGallery[], item: MinimalGallery) {
   const pinnedCount = list.filter((g) => g.pinned).length;
@@ -24,16 +26,33 @@ export default function DrivePage() {
   const [galleries, setGalleries] = useState<MinimalGallery[]>([]);
   const [trash, setTrash] = useState<MinimalGallery[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasMounted, setHasMounted] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingGallery, setEditingGallery] = useState<MinimalGallery | null>(null);
   const [tab, setTab] = useState<"galleries" | "trash">("galleries");
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem(GALLERIES_CACHE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { ts: number; data: MinimalGallery[] };
+      if (!parsed?.ts || !Array.isArray(parsed.data)) return;
+      if (Date.now() - parsed.ts > GALLERIES_CACHE_TTL) return;
+      setGalleries(parsed.data);
+    } catch {
+      // Ignore cache read failures.
+    }
+  }, []);
 
   useEffect(() => {
     const load = async () => {
       const res = await fetch("/api/galleries");
       const contentType = res.headers.get("content-type") ?? "";
       if (!res.ok || !contentType.includes("application/json")) {
-        setGalleries([]);
         return;
       }
 
@@ -70,6 +89,14 @@ export default function DrivePage() {
       });
 
       setGalleries(rowsWithVisits);
+      try {
+        window.sessionStorage.setItem(
+          GALLERIES_CACHE_KEY,
+          JSON.stringify({ ts: Date.now(), data: rowsWithVisits })
+        );
+      } catch {
+        // Ignore cache write failures.
+      }
     };
 
     load().finally(() => setLoading(false));
@@ -91,10 +118,26 @@ export default function DrivePage() {
     return () => clearTimeout(timeoutId);
   }, [galleries, router]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.sessionStorage.setItem(
+        GALLERIES_CACHE_KEY,
+        JSON.stringify({ ts: Date.now(), data: galleries })
+      );
+    } catch {
+      // Ignore cache write failures.
+    }
+  }, [galleries]);
+
   const trashCount = useMemo(() => trash.length, [trash]);
 
-  if (loading) {
-    return null;
+  if (!hasMounted || (loading && galleries.length === 0)) {
+    return (
+      <div className="mx-auto w-full max-w-6xl px-6 py-20 text-center text-[#8a7f73]">
+        Loading your galleries...
+      </div>
+    );
   }
 
   return (

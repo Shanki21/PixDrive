@@ -5,11 +5,11 @@ import React from "react";
 
 export default function Sidebar() {
   return (
-    <aside className="fixed inset-y-0 left-0 z-50 hidden w-48 flex-col border-r border-white/5 bg-[#0b0d12] text-white shadow-lg md:flex">
-      <div className="px-5 py-5">
-        <div className="text-xl font-semibold tracking-tight">Pixora</div>
-        <div className="mt-3 text-xs text-slate-300">sample.pixora.pro</div>
-        <button className="mt-4 inline-flex items-center rounded-md bg-white/10 px-3 py-2 text-xs font-medium text-white hover:bg-white/15">
+    <aside className="fixed inset-y-0 left-0 z-50 hidden w-56 flex-col border-r border-[#e3d8cc] bg-[#f7f3ee] text-[#15161a] shadow-lg md:flex">
+      <div className="px-6 py-6">
+        <div className="font-display text-2xl font-semibold tracking-tight">Pixora</div>
+        <div className="mt-2 text-xs uppercase tracking-[0.2em] text-[#8a7f73]">sample.pixora.pro</div>
+        <button className="mt-5 inline-flex items-center rounded-full border border-[#d9cfc4] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#4a433d] hover:bg-[#f1e8de]">
           My Contacts {"->"}
         </button>
       </div>
@@ -19,9 +19,9 @@ export default function Sidebar() {
           <li>
             <Link
               href="/dashboard/drive"
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-100 hover:bg-white/10"
+              className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-[#4a433d] hover:bg-white"
             >
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-[11px]">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#efe6dc] text-[11px] text-[#4a433d]">
                 DR
               </span>
               <span>Drive</span>
@@ -31,9 +31,9 @@ export default function Sidebar() {
           <li>
             <Link
               href="/dashboard/card"
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-100 hover:bg-white/10"
+              className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-[#4a433d] hover:bg-white"
             >
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-[11px]">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#efe6dc] text-[11px] text-[#4a433d]">
                 CD
               </span>
               <span>Card</span>
@@ -41,8 +41,8 @@ export default function Sidebar() {
           </li>
 
           <li>
-            <a className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-100 hover:bg-white/10">
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-[11px]">
+            <a className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-[#4a433d] hover:bg-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#efe6dc] text-[11px] text-[#4a433d]">
                 SH
               </span>
               <span>Shop</span>
@@ -50,8 +50,8 @@ export default function Sidebar() {
           </li>
 
           <li>
-            <a className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-100 hover:bg-white/10">
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-[11px]">
+            <a className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-[#4a433d] hover:bg-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#efe6dc] text-[11px] text-[#4a433d]">
                 RV
               </span>
               <span>Reviews</span>
@@ -59,8 +59,8 @@ export default function Sidebar() {
           </li>
 
           <li>
-            <a className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-100 hover:bg-white/10">
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-[11px]">
+            <a className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-[#4a433d] hover:bg-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#efe6dc] text-[11px] text-[#4a433d]">
                 AN
               </span>
               <span>Analytics</span>
@@ -68,8 +68,8 @@ export default function Sidebar() {
           </li>
 
           <li>
-            <a className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-100 hover:bg-white/10">
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-[11px]">
+            <a className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-[#4a433d] hover:bg-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#efe6dc] text-[11px] text-[#4a433d]">
                 ST
               </span>
               <span>Settings</span>
@@ -78,8 +78,10 @@ export default function Sidebar() {
         </ul>
       </nav>
 
-      <div className="px-5 py-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-xs">N</div>
+      <div className="px-6 py-6">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#efe6dc] text-xs text-[#4a433d]">
+          N
+        </div>
       </div>
     </aside>
   );

@@ -15,10 +15,10 @@ html {
 
 body {
   margin: 0;
-  font-family: "Manrope", "Segoe UI", system-ui, -apple-system, sans-serif;
-  line-height: 1.45;
-  background: #f8fafc;
-  color: #0f172a;
+  font-family: var(--font-body), "Segoe UI", system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  background: radial-gradient(circle at 10% 10%, #f4efe7 0%, #f7f3ee 35%, #f3f5f8 100%);
+  color: #16161a;
 }
 
 img,
@@ -44,4 +44,23 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+:root {
+  --surface: #ffffff;
+  --ink: #16161a;
+  --muted: #5a5d66;
+  --accent: #d97757;
+  --accent-strong: #b5553a;
+  --deep: #101114;
+  --soft: #f4efe7;
+}
+
+.font-display {
+  font-family: var(--font-display), "Georgia", serif;
+  letter-spacing: -0.02em;
+}
+
+.font-body {
+  font-family: var(--font-body), "Segoe UI", system-ui, -apple-system, sans-serif;
 }

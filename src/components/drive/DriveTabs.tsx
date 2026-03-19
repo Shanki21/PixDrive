@@ -16,7 +16,7 @@ export default function DriveTabs({
   trashCount = 0,
 }: Props) {
   return (
-    <div className="mt-4 border-b border-gray-200">
+    <div className="mt-6 border-b border-[#e6ddd4]">
       <div className="flex gap-5 sm:gap-7">
 
         {/* Galleries */}
@@ -25,8 +25,8 @@ export default function DriveTabs({
           className={`flex items-center gap-1.5 pb-3 text-sm font-semibold transition sm:text-[15px]
           ${
             active === "galleries"
-              ? "border-b-2 border-blue-600 text-black"
-              : "border-b-2 border-transparent text-gray-500 hover:text-black"
+              ? "border-b-2 border-[#d97757] text-[#15161a]"
+              : "border-b-2 border-transparent text-[#7a736b] hover:text-[#15161a]"
           }`}
         >
           <Folder size={15} />
@@ -40,14 +40,14 @@ export default function DriveTabs({
             className={`flex items-center gap-1.5 pb-3 text-sm font-semibold transition sm:text-[15px]
             ${
               active === "trash"
-                ? "border-b-2 border-blue-600 text-black"
-                : "border-b-2 border-transparent text-gray-500 hover:text-black"
+                ? "border-b-2 border-[#d97757] text-[#15161a]"
+                : "border-b-2 border-transparent text-[#7a736b] hover:text-[#15161a]"
             }`}
           >
             <Trash2 size={15} />
             Trash
             {trashCount > 0 && (
-              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-gray-400 px-1 text-[11px] font-semibold text-white">
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#8a7f73] px-1 text-[11px] font-semibold text-white">
                 {trashCount}
               </span>
             )}

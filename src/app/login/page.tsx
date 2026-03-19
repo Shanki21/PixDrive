@@ -94,33 +94,36 @@ export default function LoginPage() {
     >
       {step === "email" ? (
         <form onSubmit={onEmailSubmit} className="space-y-6">
-          <h1 className="text-5xl font-semibold text-[#111320]">Login</h1>
+          <h1 className="font-display text-5xl font-semibold text-[#111320]">Login</h1>
           <div>
             <label className="mb-2 block text-sm font-semibold text-[#151821]">Email</label>
             <input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Your email"
-              className={`h-11 w-full rounded-md border px-4 text-sm outline-none ${
+              className={`h-12 w-full rounded-full border bg-white px-5 text-sm outline-none ${
                 error ? "border-red-400" : "border-[#d7d7d7]"
               }`}
             />
             {error ? <p className="mt-2 text-sm text-[#ef4444]">{error}</p> : null}
           </div>
-          <button className="h-10 w-full rounded-md bg-black text-sm font-semibold text-white" disabled={loading}>
+          <button
+            className="h-11 w-full rounded-full bg-[#101114] text-sm font-semibold text-white"
+            disabled={loading}
+          >
             {loading ? "Checking..." : "Next"}
           </button>
         </form>
       ) : (
         <form onSubmit={onOtpSubmit} className="space-y-6">
-          <h1 className="text-5xl font-semibold text-[#111320]">Login</h1>
+          <h1 className="font-display text-5xl font-semibold text-[#111320]">Login</h1>
           <p className="text-base leading-relaxed text-[#101218]">
             Access code sent to <strong>{email}</strong>.
           </p>
           <OtpCodeInput value={otp} onChange={setOtp} />
           {error ? <p className="text-sm text-[#ef4444]">{error}</p> : null}
           <button
-            className="h-10 w-full rounded-md bg-black text-sm font-semibold text-white disabled:opacity-40"
+            className="h-11 w-full rounded-full bg-[#101114] text-sm font-semibold text-white disabled:opacity-40"
             disabled={loading || otp.length !== 6}
           >
             {loading ? "Verifying..." : "Log in"}

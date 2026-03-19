@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownTrayIcon,
   ArrowLeftIcon,
@@ -20,13 +20,24 @@ type GalleryPhoto = {
   url: string;
 };
 
+type Folder = {
+  id: string;
+  name: string;
+  description: string;
+  hidden: boolean;
+  createdAt: string;
+};
+
 type DiskGalleryClientProps = {
   galleryId: string;
+  gallerySlug: string;
   galleryName: string;
   ownerName: string;
   expiresAt: string;
   coverUrl: string | null;
-  photos: GalleryPhoto[];
+  initialPhotos: GalleryPhoto[];
+  totalPhotos: number;
+  initialCursor: string | null;
   hostLabel: string;
   formatHeaderDate: string;
 };
@@ -46,6 +57,7 @@ const CLIENT_FAVORITES_PREFIX = "wf_client_favorites:";
 const CLIENT_PROFILE_PREFIX = "wf_client_profile:";
 const FAVORITES_LIST_STORAGE_PREFIX = "wf_gallery_favorites_lists:";
 const FOLDER_STORAGE_PREFIX = "wf_gallery_folders:";
+const FOLDER_PHOTOS_PREFIX = "wf_gallery_folder_photos:";
 const CLIENT_DOWNLOADS_PREFIX = "wf_client_downloads:";
 const CLIENT_KEY_PREFIX = "wf_client_key:";
 
@@ -113,6 +125,28 @@ function writeClientDownloads(galleryId: string, next: string[]) {
   window.localStorage.setItem(`${CLIENT_DOWNLOADS_PREFIX}${galleryId}`, JSON.stringify(next));
 }
 
+function readFolders(galleryId: string): Folder[] {
+  try {
+    const raw = window.localStorage.getItem(`${FOLDER_STORAGE_PREFIX}${galleryId}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Folder[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function readFolderPhotos(galleryId: string): Record<string, string[]> {
+  try {
+    const raw = window.localStorage.getItem(`${FOLDER_PHOTOS_PREFIX}${galleryId}`);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, string[]>;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 function markDownloaded(galleryId: string, photoIds: string[]) {
   if (photoIds.length === 0) return;
   const current = readClientDownloads(galleryId);
@@ -171,11 +205,14 @@ function syncDashboardFavorites(
 
 export default function DiskGalleryClient({
   galleryId,
+  gallerySlug,
   galleryName,
   ownerName,
   expiresAt,
   coverUrl,
-  photos,
+  initialPhotos,
+  totalPhotos,
+  initialCursor,
   hostLabel,
   formatHeaderDate,
 }: DiskGalleryClientProps) {
@@ -189,10 +226,41 @@ export default function DiskGalleryClient({
   const [emailDraft, setEmailDraft] = useState("");
   const [pendingLikePhotoId, setPendingLikePhotoId] = useState<string | null>(null);
   const [clientKey, setClientKey] = useState("");
+  const [photos, setPhotos] = useState<GalleryPhoto[]>(initialPhotos);
+  const [nextCursor, setNextCursor] = useState<string | null>(initialCursor);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const [folderFilterId, setFolderFilterId] = useState<string | null>(null);
+  const [hiddenFolderIds, setHiddenFolderIds] = useState<Set<string>>(new Set());
+  const [folderPhotosMap, setFolderPhotosMap] = useState<Record<string, string[]>>({});
 
   const likedCount = useMemo(() => Object.values(liked).filter(Boolean).length, [liked]);
-  const activePhoto = activeIndex === null ? null : photos[activeIndex] ?? null;
-  const hasPhotos = photos.length > 0;
+  const hiddenPhotoIds = useMemo(() => {
+    if (hiddenFolderIds.size === 0) return new Set<string>();
+    const ids = new Set<string>();
+    hiddenFolderIds.forEach((folderId) => {
+      (folderPhotosMap[folderId] ?? []).forEach((id) => ids.add(id));
+    });
+    return ids;
+  }, [hiddenFolderIds, folderPhotosMap]);
+
+  const folderFilterSet = useMemo(() => {
+    if (!folderFilterId) return null;
+    const ids = folderPhotosMap[folderFilterId] ?? [];
+    return new Set(ids);
+  }, [folderFilterId, folderPhotosMap]);
+
+  const visiblePhotos = useMemo(() => {
+    return photos.filter((photo) => {
+      if (hiddenPhotoIds.has(photo.id)) return false;
+      if (folderFilterSet) return folderFilterSet.has(photo.id);
+      return true;
+    });
+  }, [photos, hiddenPhotoIds, folderFilterSet]);
+
+  const activePhoto = activeIndex === null ? null : visiblePhotos[activeIndex] ?? null;
+  const hasPhotos = visiblePhotos.length > 0;
+  const hasMorePhotos = photos.length < totalPhotos;
 
   useEffect(() => {
     const meta = getGalleryMeta(galleryId);
@@ -221,6 +289,31 @@ export default function DiskGalleryClient({
       likedMap[id] = true;
     });
     setLiked(likedMap);
+  }, [galleryId]);
+
+  useEffect(() => {
+    const syncFolderState = () => {
+      const folders = readFolders(galleryId);
+      const hiddenIds = new Set(folders.filter((folder) => folder.hidden).map((folder) => folder.id));
+      setHiddenFolderIds(hiddenIds);
+      setFolderPhotosMap(readFolderPhotos(galleryId));
+    };
+
+    const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+    const folderParam = urlParams?.get("folder");
+    setFolderFilterId(folderParam && folderParam !== "photos" ? folderParam : null);
+
+    syncFolderState();
+
+    const handleStorage = (event: StorageEvent) => {
+      if (!event.key) return;
+      if (event.key.startsWith(FOLDER_STORAGE_PREFIX) || event.key.startsWith(FOLDER_PHOTOS_PREFIX)) {
+        syncFolderState();
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
   }, [galleryId]);
 
   const recordClientActions = async (
@@ -349,20 +442,20 @@ export default function DiskGalleryClient({
   const onDownloadAll = () => {
     markDownloaded(
       galleryId,
-      photos.map((photo) => photo.id)
+      visiblePhotos.map((photo) => photo.id)
     );
     void recordClientActions(
-      photos.map((photo) => ({
+      visiblePhotos.map((photo) => ({
         photoId: photo.id,
         action: "download",
       }))
     );
-    photos.forEach((photo) => triggerDownload(photo.url, photo.name));
+    visiblePhotos.forEach((photo) => triggerDownload(photo.url, photo.name));
     setIsDownloadMenuOpen(false);
   };
 
   const onDownloadFavorites = () => {
-    const selected = photos.filter((photo) => liked[photo.id]);
+    const selected = visiblePhotos.filter((photo) => liked[photo.id]);
     markDownloaded(
       galleryId,
       selected.map((photo) => photo.id)
@@ -380,13 +473,13 @@ export default function DiskGalleryClient({
   const closeLightbox = () => setActiveIndex(null);
 
   const showNext = () => {
-    if (activeIndex === null || photos.length === 0) return;
-    setActiveIndex((activeIndex + 1) % photos.length);
+    if (activeIndex === null || visiblePhotos.length === 0) return;
+    setActiveIndex((activeIndex + 1) % visiblePhotos.length);
   };
 
   const showPrevious = () => {
-    if (activeIndex === null || photos.length === 0) return;
-    setActiveIndex((activeIndex - 1 + photos.length) % photos.length);
+    if (activeIndex === null || visiblePhotos.length === 0) return;
+    setActiveIndex((activeIndex - 1 + visiblePhotos.length) % visiblePhotos.length);
   };
 
   useEffect(() => {
@@ -401,71 +494,128 @@ export default function DiskGalleryClient({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [activeIndex]);
 
+  useEffect(() => {
+    if (activeIndex === null) return;
+    if (activeIndex >= visiblePhotos.length) {
+      setActiveIndex(null);
+    }
+  }, [activeIndex, visiblePhotos.length]);
+
+  const mergePhotos = (existing: GalleryPhoto[], incoming: GalleryPhoto[]) => {
+    if (existing.length === 0) return incoming;
+    const map = new Map<string, GalleryPhoto>();
+    existing.forEach((photo) => map.set(photo.id, photo));
+    incoming.forEach((photo) => map.set(photo.id, photo));
+    return Array.from(map.values());
+  };
+
+  const loadMorePhotos = async () => {
+    if (!hasMorePhotos || isLoadingMore) return;
+    setIsLoadingMore(true);
+    try {
+      const url = new URL(`/api/disk/${gallerySlug}/photos`, window.location.origin);
+      url.searchParams.set("take", "60");
+      if (nextCursor) url.searchParams.set("cursor", nextCursor);
+      const res = await fetch(url.toString());
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!res.ok || !contentType.includes("application/json")) {
+        return;
+      }
+      const payload = (await res.json()) as { items?: GalleryPhoto[]; nextCursor?: string | null };
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      setPhotos((prev) => mergePhotos(prev, items));
+      setNextCursor(payload.nextCursor ?? null);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!hasMorePhotos) return;
+    const target = loadMoreRef.current;
+    if (!target) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          void loadMorePhotos();
+        }
+      },
+      { rootMargin: "400px" }
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMorePhotos, nextCursor]);
+
   return (
-    <div className="min-h-screen bg-white text-slate-900">
+    <div className="min-h-screen bg-[#f7f3ee] text-[#15161a]">
       <section className="relative h-[74vh] min-h-115 w-full overflow-hidden">
         {coverUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={coverUrl} alt={galleryName} className="h-full w-full object-cover" />
+          <img
+            src={coverUrl}
+            alt={galleryName}
+            className="h-full w-full object-cover"
+            decoding="async"
+          />
         ) : (
           <div className="h-full w-full bg-slate-900" />
         )}
-        <div className="absolute inset-0 bg-black/35" />
+        <div className="absolute inset-0 bg-black/45" />
         <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center text-white">
-          <p className="text-sm tracking-[0.2em] opacity-80">{formatHeaderDate}</p>
-          <h1 className="mt-4 text-4xl font-semibold sm:text-6xl">{galleryName}</h1>
+          <p className="text-xs uppercase tracking-[0.4em] opacity-80">{formatHeaderDate}</p>
+          <h1 className="font-display mt-4 text-4xl font-semibold sm:text-6xl">{galleryName}</h1>
           <p className="mt-4 text-sm opacity-90">
             {ownerName} | <span className="underline underline-offset-2">{hostLabel}</span>
           </p>
         </div>
       </section>
 
-      <section className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
+      <section className="sticky top-0 z-20 border-b border-white/40 bg-white/80 backdrop-blur">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-end gap-4 px-4 py-4 sm:px-8">
           {favoritesEnabled ? (
-            <button className="inline-flex items-center gap-2 text-sm text-slate-700 hover:text-black">
+            <button className="inline-flex items-center gap-2 text-sm text-[#5f5b55] hover:text-[#15161a]">
               <span>{likedCount}</span>
               <HeartSolidIcon className="h-4 w-4" />
             </button>
           ) : null}
           <button
-            className="inline-flex items-center text-slate-700 hover:text-black"
+            className="inline-flex items-center text-[#5f5b55] hover:text-[#15161a]"
             onClick={() => onShare(window.location.href)}
           >
             <ShareIcon className="h-4 w-4" />
           </button>
-          <button className="inline-flex items-center text-slate-700 hover:text-black">
+          <button className="inline-flex items-center text-[#5f5b55] hover:text-[#15161a]">
             <ChatBubbleOvalLeftEllipsisIcon className="h-4 w-4" />
           </button>
-          <span className="text-sm text-slate-700">Expires on {formatDateLabel(expiresAt)}</span>
+          <span className="text-sm text-[#5f5b55]">Expires on {formatDateLabel(expiresAt)}</span>
           <div className="relative">
             <button
-              className="rounded-md bg-black px-5 py-2.5 text-sm font-semibold text-white"
+              className="rounded-full bg-[#101114] px-5 py-2.5 text-sm font-semibold text-white"
               onClick={() => setIsDownloadMenuOpen((v) => !v)}
             >
               Download files
             </button>
             {isDownloadMenuOpen ? (
-              <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+              <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-[#e3d8cc] bg-white p-2 shadow-lg">
                 <button
-                  className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-[#f7f3ee]"
                   onClick={onDownloadAll}
                 >
                   <ArrowDownTrayIcon className="h-4 w-4" />
                   <span>
-                    <span className="block font-medium text-slate-900">Whole project</span>
-                    <span className="block text-xs text-slate-500">All files and folders</span>
+                    <span className="block font-medium text-[#15161a]">Whole project</span>
+                    <span className="block text-xs text-[#8a7f73]">All files and folders</span>
                   </span>
                 </button>
                 {favoritesEnabled ? (
                   <button
-                    className="mt-1 flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"
+                    className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-[#f7f3ee]"
                     onClick={onDownloadFavorites}
                   >
                     <HeartSolidIcon className="h-4 w-4" />
                     <span>
-                      <span className="block font-medium text-slate-900">Favorites</span>
-                      <span className="block text-xs text-slate-500">Only liked files</span>
+                      <span className="block font-medium text-[#15161a]">Favorites</span>
+                      <span className="block text-xs text-[#8a7f73]">Only liked files</span>
                     </span>
                   </button>
                 ) : null}
@@ -477,73 +627,82 @@ export default function DiskGalleryClient({
 
       <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-8 sm:py-10">
         {hasPhotos ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-            {photos.map((photo, idx) => {
-              const isLiked = Boolean(liked[photo.id]);
-              return (
-                <figure key={photo.id} className="group relative overflow-hidden bg-slate-100">
-                  <button
-                    type="button"
-                    className="block w-full"
-                    onClick={() => setActiveIndex(idx)}
-                    aria-label={`Open ${photo.name}`}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={photo.url}
-                      alt={photo.name}
-                      className="aspect-4/3 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                      loading="lazy"
-                    />
-                  </button>
-                  <div className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-black/25" />
-                  <div className="absolute bottom-3 right-3 flex gap-2 opacity-0 transition group-hover:opacity-100">
+          <>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+              {visiblePhotos.map((photo, idx) => {
+                const isLiked = Boolean(liked[photo.id]);
+                return (
+                  <figure key={photo.id} className="group relative overflow-hidden rounded-[18px] bg-white shadow-sm">
                     <button
                       type="button"
-                    className="rounded-full bg-black/60 p-2 text-white"
-                    onClick={() => onShare(photo.url)}
-                    aria-label="Share photo"
-                  >
-                    <ShareIcon className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full bg-black/60 p-2 text-white"
-                    onClick={() => {
-                      markDownloaded(galleryId, [photo.id]);
-                      void recordClientActions([
-                        {
-                          photoId: photo.id,
-                          action: "download",
-                        },
-                      ]);
-                      triggerDownload(photo.url, photo.name);
-                    }}
-                    aria-label="Download photo"
-                  >
-                    <ArrowDownTrayIcon className="h-3.5 w-3.5" />
-                  </button>
-                  {favoritesEnabled ? (
-                    <button
-                      type="button"
-                      className={`rounded-full p-2 text-white ${isLiked ? "bg-rose-500" : "bg-black/60"}`}
-                      onClick={() => toggleLike(photo.id)}
-                      aria-label="Favorite photo"
+                      className="block w-full"
+                      onClick={() => setActiveIndex(idx)}
+                      aria-label={`Open ${photo.name}`}
                     >
-                      {isLiked ? (
-                        <HeartSolidIcon className="h-3.5 w-3.5" />
-                      ) : (
-                        <HeartOutlineIcon className="h-3.5 w-3.5" />
-                      )}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photo.url}
+                        alt={photo.name}
+                        className="aspect-4/3 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                        loading="lazy"
+                        decoding="async"
+                      />
                     </button>
-                  ) : null}
-                </div>
-              </figure>
-              );
-            })}
-          </div>
+                      <div className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-black/25" />
+                    <div className="absolute bottom-3 right-3 flex gap-2 opacity-0 transition group-hover:opacity-100">
+                      <button
+                        type="button"
+                        className="rounded-full bg-black/60 p-2 text-white"
+                        onClick={() => onShare(photo.url)}
+                        aria-label="Share photo"
+                      >
+                        <ShareIcon className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full bg-black/60 p-2 text-white"
+                        onClick={() => {
+                          markDownloaded(galleryId, [photo.id]);
+                          void recordClientActions([
+                            {
+                              photoId: photo.id,
+                              action: "download",
+                            },
+                          ]);
+                          triggerDownload(photo.url, photo.name);
+                        }}
+                        aria-label="Download photo"
+                      >
+                        <ArrowDownTrayIcon className="h-3.5 w-3.5" />
+                      </button>
+                      {favoritesEnabled ? (
+                        <button
+                        type="button"
+                        className={`rounded-full p-2 text-white ${isLiked ? "bg-[#d97757]" : "bg-black/60"}`}
+                        onClick={() => toggleLike(photo.id)}
+                        aria-label="Favorite photo"
+                      >
+                          {isLiked ? (
+                            <HeartSolidIcon className="h-3.5 w-3.5" />
+                          ) : (
+                            <HeartOutlineIcon className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      ) : null}
+                    </div>
+                  </figure>
+                );
+              })}
+            </div>
+            {hasMorePhotos ? (
+              <div className="mt-6 flex items-center justify-center text-sm text-[#8a7f73]">
+                {isLoadingMore ? "Loading more photos..." : "Scroll to load more"}
+              </div>
+            ) : null}
+            <div ref={loadMoreRef} />
+          </>
         ) : (
-          <div className="rounded-lg border border-slate-200 px-6 py-12 text-center text-slate-500">
+          <div className="rounded-2xl border border-[#e3d8cc] bg-white px-6 py-12 text-center text-[#8a7f73]">
             No photos uploaded yet.
           </div>
         )}
@@ -619,6 +778,7 @@ export default function DiskGalleryClient({
               src={activePhoto.url}
               alt={activePhoto.name}
               className="max-h-full max-w-full object-contain"
+              decoding="async"
             />
           </div>
           <p className="absolute inset-x-0 bottom-5 text-center text-3xl text-white/90">{activePhoto.name}</p>
@@ -627,10 +787,10 @@ export default function DiskGalleryClient({
 
       {isIdentityModalOpen ? (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 p-4">
-          <div className="relative w-full max-w-lg rounded-2xl bg-white px-5 py-7 sm:px-7">
+          <div className="relative w-full max-w-lg rounded-[28px] bg-white px-5 py-7 sm:px-7">
             <button
               type="button"
-              className="absolute right-4 top-4 rounded-full bg-slate-200 p-2 text-slate-600"
+              className="absolute right-4 top-4 rounded-full bg-[#f0e6db] p-2 text-[#6b645c]"
               onClick={() => {
                 setIsIdentityModalOpen(false);
                 setPendingLikePhotoId(null);
@@ -639,13 +799,13 @@ export default function DiskGalleryClient({
             >
               <XMarkIcon className="h-5 w-5" />
             </button>
-            <h3 className="text-center text-2xl font-semibold text-slate-900">sample</h3>
-            <p className="mt-1.5 text-center text-base text-slate-500">
-              Available for selection: {photos.length}
+            <h3 className="font-display text-center text-2xl font-semibold text-[#15161a]">sample</h3>
+            <p className="mt-1.5 text-center text-base text-[#8a7f73]">
+              Available for selection: {visiblePhotos.length}
             </p>
             <form className="mx-auto mt-5 max-w-md space-y-3.5" onSubmit={onSubmitIdentity}>
               <input
-                className="h-12 w-full rounded-lg border border-slate-300 px-4 text-base"
+                className="h-12 w-full rounded-full border border-[#d9cfc4] bg-white px-4 text-base"
                 placeholder="First name and last name"
                 value={nameDraft}
                 onChange={(e) => setNameDraft(e.target.value)}
@@ -653,7 +813,7 @@ export default function DiskGalleryClient({
               />
               <input
                 type="email"
-                className="h-12 w-full rounded-lg border border-slate-300 px-4 text-base"
+                className="h-12 w-full rounded-full border border-[#d9cfc4] bg-white px-4 text-base"
                 placeholder="Email"
                 value={emailDraft}
                 onChange={(e) => setEmailDraft(e.target.value)}
@@ -662,7 +822,7 @@ export default function DiskGalleryClient({
               <div className="flex justify-center pt-2">
                 <button
                   type="submit"
-                  className="h-12 min-w-48 rounded-xl bg-black px-6 text-lg font-semibold text-white"
+                  className="h-12 min-w-48 rounded-full bg-[#101114] px-6 text-lg font-semibold text-white"
                 >
                   Continue
                 </button>

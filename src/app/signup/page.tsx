@@ -121,14 +121,14 @@ export default function SignupPage() {
     <AuthShell right={right} bottom={bottom}>
       {step === "email" ? (
         <form onSubmit={onRequestOtp} className="space-y-6">
-          <h1 className="text-5xl font-semibold text-[#111320]">Sign up</h1>
+          <h1 className="font-display text-5xl font-semibold text-[#111320]">Sign up</h1>
           <div>
             <label className="mb-2 block text-sm font-semibold text-[#151821]">Email</label>
             <input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Your email"
-              className={`h-11 w-full rounded-md border px-4 text-sm outline-none ${
+              className={`h-12 w-full rounded-full border bg-white px-5 text-sm outline-none ${
                 error ? "border-red-400" : "border-[#9f9f9f]"
               }`}
             />
@@ -137,7 +137,7 @@ export default function SignupPage() {
           <button type="button" className="text-sm underline">
             Do you have a promo code?
           </button>
-          <button className="h-10 w-full rounded-md bg-black text-sm font-semibold text-white" disabled={loading}>
+          <button className="h-11 w-full rounded-full bg-[#101114] text-sm font-semibold text-white" disabled={loading}>
             {loading ? "Sending..." : "Continue"}
           </button>
           <p className="text-xs leading-relaxed text-[#1b1f27]">
@@ -149,14 +149,14 @@ export default function SignupPage() {
 
       {step === "otp" ? (
         <form onSubmit={onVerifyOtp} className="space-y-6">
-          <h1 className="text-5xl font-semibold text-[#111320]">Sign up</h1>
+          <h1 className="font-display text-5xl font-semibold text-[#111320]">Sign up</h1>
           <p className="text-base leading-relaxed text-[#101218]">
             Access code sent to <strong>{email}</strong>.
           </p>
           <OtpCodeInput value={otp} onChange={setOtp} />
           {error ? <p className="text-sm text-red-500">{error}</p> : null}
           <button
-            className="h-10 w-full rounded-md bg-black text-sm font-semibold text-white disabled:opacity-40"
+            className="h-11 w-full rounded-full bg-[#101114] text-sm font-semibold text-white disabled:opacity-40"
             disabled={loading || otp.length !== 6}
           >
             {loading ? "Verifying..." : "Continue"}
@@ -166,7 +166,7 @@ export default function SignupPage() {
 
       {step === "language" ? (
         <div className="space-y-6">
-          <h1 className="text-5xl font-semibold leading-tight text-[#111320]">Choose your language</h1>
+          <h1 className="font-display text-5xl font-semibold leading-tight text-[#111320]">Choose your language</h1>
           <p className="text-base leading-relaxed text-[#101218]">
             For the control panel, training materials, and communication with the support team. You can change it any
             time in your account settings.
@@ -175,7 +175,7 @@ export default function SignupPage() {
             {languages.map((lang) => (
               <button
                 key={lang}
-                className="flex h-11 w-full items-center justify-between rounded-md border border-[#d8d8d8] px-5 text-sm"
+                className="flex h-12 w-full items-center justify-between rounded-full border border-[#d8d8d8] bg-white px-5 text-sm"
                 onClick={() => setStep("contacts")}
               >
                 {lang} <span>{"->"}</span>
@@ -188,7 +188,7 @@ export default function SignupPage() {
 
       {step === "contacts" ? (
         <div className="space-y-4">
-          <h1 className="text-5xl font-semibold leading-tight text-[#111320]">Fill in your contacts</h1>
+          <h1 className="font-display text-5xl font-semibold leading-tight text-[#111320]">Fill in your contacts</h1>
           <p className="text-base leading-relaxed text-[#101218]">
             The last step left! Fill in your contacts so that gallery visitors can contact you.
           </p>
@@ -198,7 +198,7 @@ export default function SignupPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="John Smith"
-              className="h-11 w-full rounded border border-[#999] px-3 text-sm"
+              className="h-12 w-full rounded-full border border-[#999] bg-white px-4 text-sm"
             />
           </div>
           <div>
@@ -207,7 +207,7 @@ export default function SignupPage() {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+48 (123) 123-123"
-              className="h-11 w-full rounded border border-[#ddd] px-3 text-sm"
+              className="h-12 w-full rounded-full border border-[#ddd] bg-white px-4 text-sm"
             />
           </div>
           <label className="flex items-center justify-between text-sm font-semibold">
@@ -224,7 +224,7 @@ export default function SignupPage() {
               value={occupation}
               onChange={(e) => setOccupation(e.target.value)}
               placeholder="For example: Wedding photographer"
-              className="h-11 w-full rounded border border-[#ddd] px-3 text-sm"
+              className="h-12 w-full rounded-full border border-[#ddd] bg-white px-4 text-sm"
             />
           </div>
           <p className="text-xs text-[#151821]">
@@ -232,7 +232,7 @@ export default function SignupPage() {
             networks.
           </p>
           <button
-            className="h-10 w-full rounded-md bg-black text-sm font-semibold text-white"
+            className="h-11 w-full rounded-full bg-[#101114] text-sm font-semibold text-white"
             onClick={() => {
               const current = loadProfile();
               saveProfile({
@@ -264,7 +264,7 @@ export default function SignupPage() {
               const active = idx <= tutorialStep;
               return (
                 <div key={item.title} className={`${active ? "opacity-100" : "opacity-30"}`}>
-                  <h3 className="text-5xl font-semibold text-[#121722]">{item.title}</h3>
+                  <h3 className="font-display text-5xl font-semibold text-[#121722]">{item.title}</h3>
                   <p className="mt-2 text-base leading-relaxed text-[#141821]">{item.body}</p>
                 </div>
               );

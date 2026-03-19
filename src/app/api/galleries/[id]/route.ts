@@ -29,14 +29,28 @@ export async function GET(
       id,
       userId: user.id,
     },
-    include: { photos: true },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      userId: true,
+      coverPhotoId: true,
+      createdAt: true,
+      _count: {
+        select: { photos: true },
+      },
+    },
   });
 
   if (!gallery) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  return NextResponse.json(gallery);
+  const { _count, ...rest } = gallery;
+  return NextResponse.json({
+    ...rest,
+    photosCount: _count.photos,
+  });
 }
 
 export async function PATCH(
@@ -80,6 +94,14 @@ export async function PATCH(
 
   const gallery = await prisma.gallery.findUnique({
     where: { id },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      userId: true,
+      coverPhotoId: true,
+      createdAt: true,
+    },
   });
 
   return NextResponse.json(gallery);

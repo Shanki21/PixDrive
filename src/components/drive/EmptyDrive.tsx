@@ -8,26 +8,26 @@ type Props = {
 
 export default function EmptyDrive({ onCreate }: Props) {
   return (
-    <div className="max-w-6xl mx-auto py-20 px-6 text-center">
-      <h2 className="text-3xl font-semibold mb-4">Cloud Drive</h2>
-      <p className="text-gray-600 mb-8">
+    <div className="mx-auto max-w-6xl px-6 py-20 text-center">
+      <h2 className="font-display mb-4 text-4xl font-semibold">Cloud Drive</h2>
+      <p className="mb-8 text-[#6b645c]">
         Create client galleries for sharing photos and videos.
       </p>
 
-      <div className="flex justify-center gap-4 mb-8">
+      <div className="mb-8 flex flex-wrap justify-center gap-4">
         <button
           onClick={onCreate}
-          className="bg-blue-600 text-white px-5 py-2 rounded shadow"
+          className="rounded-full bg-[#101114] px-6 py-2.5 text-sm font-semibold text-white shadow"
         >
           + Add gallery
         </button>
-        <a className="text-sm text-blue-600 self-center">How to create a gallery</a>
+        <a className="self-center text-sm font-semibold text-[#b5553a]">How to create a gallery</a>
       </div>
 
-      <div className="mx-auto w-full max-w-3xl rounded-lg overflow-hidden shadow-lg bg-black">
-        <div className="p-4 text-left text-white">
-          <div className="text-sm mb-2">Video instruction</div>
-          <div className="h-56 bg-[url('https://images.unsplash.com/photo-1500530855697-b586d89ba3ee')] bg-cover bg-center rounded" />
+      <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-[24px] border border-[#e3d8cc] bg-white shadow-xl">
+        <div className="p-5 text-left text-[#15161a]">
+          <div className="text-xs uppercase tracking-[0.3em] text-[#8a7f73]">Video instruction</div>
+          <div className="mt-3 h-56 rounded-[18px] bg-[linear-gradient(135deg,#e9dac7,#96a4ae)]" />
         </div>
       </div>
     </div>

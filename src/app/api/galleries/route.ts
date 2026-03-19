@@ -1,3 +1,4 @@
+import { getPrismaUnavailableMessage, isPrismaUnavailableError } from "@/lib/prisma-errors";
 import prisma from "@/lib/prisma";
 import { NextResponse, NextRequest } from "next/server";
 import slugify from "slugify";
@@ -57,8 +58,8 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     console.error("Failed to fetch galleries:", error);
     return NextResponse.json(
-      { error: "Database unavailable" },
-      { status: 503 }
+      { error: isPrismaUnavailableError(error) ? getPrismaUnavailableMessage() : "Unable to fetch galleries" },
+      { status: isPrismaUnavailableError(error) ? 503 : 500 }
     );
   }
 }
@@ -93,8 +94,8 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("Failed to create gallery:", error);
     return NextResponse.json(
-      { error: "Unable to create gallery" },
-      { status: 503 }
+      { error: isPrismaUnavailableError(error) ? getPrismaUnavailableMessage() : "Unable to create gallery" },
+      { status: isPrismaUnavailableError(error) ? 503 : 500 }
     );
   }
 }

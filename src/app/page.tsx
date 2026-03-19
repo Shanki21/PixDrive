@@ -23,8 +23,7 @@ const DRIVE_TAB_SECTIONS: DriveSection[] = [
     title: "View and download with ease",
     description:
       "Your work looks clean on every device. Clients can instantly download full projects or favorites.",
-    image:
-      "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=1600&q=80",
+    image: "",
   },
   {
     index: "02.",
@@ -32,16 +31,14 @@ const DRIVE_TAB_SECTIONS: DriveSection[] = [
     title: "Selecting the photos",
     description:
       "Clients mark favorites in one click so you know exactly which images to retouch and deliver first.",
-    image:
-      "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=1600&q=80",
+    image: "",
   },
   {
     index: "03.",
     title: "Share your projects beautifully",
     description:
       "Send one elegant drive link, collect feedback, and keep your presentation premium for every client.",
-    image:
-      "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1600&q=80",
+    image: "",
   },
 ];
 
@@ -53,7 +50,7 @@ function SiteDriveContent() {
         index="01."
         title="Easy website creation"
         description="Pre-made templates ready for you to add your personal touch."
-        image="https://images.unsplash.com/photo-1519741497674-611481863552"
+        image=""
       />
 
       <FeatureSplitSection
@@ -61,14 +58,14 @@ function SiteDriveContent() {
         dark
         title="Specifically designed for photographers"
         description="Our interface and tools streamline your daily work."
-        image="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee"
+        image=""
       />
 
       <FeatureSplitSection
         index="03."
         title="Get noticed and grow your business"
         description="Share galleries and boost your online sales."
-        image="https://images.unsplash.com/photo-1522202176988-66273c2fd55f"
+        image=""
       />
 
       <ShowcaseGrid />

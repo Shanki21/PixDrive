@@ -106,13 +106,16 @@ export default function TrashTable({
       </div>
 
       <div className="space-y-3 p-3 md:hidden">
-        {rows.map((gallery) => {
+        {rows.map((gallery, index) => {
           const deletedAt = gallery.deletedAt ? new Date(gallery.deletedAt) : null;
           const canRestore = deletedAt
             ? (nowMs - deletedAt.getTime()) / (1000 * 60 * 60 * 24) <= 7
             : false;
           return (
-            <div key={gallery.id} className="rounded-lg border border-slate-200 bg-white p-3">
+            <div
+              key={`${gallery.id}-${gallery.deletedAt ?? "active"}-${index}`}
+              className="rounded-lg border border-slate-200 bg-white p-3"
+            >
               <p className="text-sm font-semibold text-slate-900">{gallery.name}</p>
               <p className="mt-1 text-xs text-slate-500">{getMetaLine(gallery)}</p>
               <div className="mt-2 flex items-center gap-3 text-xs text-slate-600">
@@ -146,7 +149,7 @@ export default function TrashTable({
         {rows.length === 0 ? (
           <div className="px-4 py-10 text-sm text-gray-500">No galleries in trash.</div>
         ) : (
-          rows.map((gallery) => {
+          rows.map((gallery, index) => {
             const deletedAt = gallery.deletedAt ? new Date(gallery.deletedAt) : null;
             const canRestore = deletedAt
               ? (nowMs - deletedAt.getTime()) / (1000 * 60 * 60 * 24) <= 7
@@ -154,7 +157,7 @@ export default function TrashTable({
 
             return (
               <div
-                key={gallery.id}
+                key={`${gallery.id}-${gallery.deletedAt ?? "active"}-${index}`}
                 className="grid min-w-230 grid-cols-[minmax(220px,1fr)_70px_84px_132px_132px_220px_44px] items-center gap-3 border-b border-gray-100 px-3 py-3 text-sm last:border-b-0 md:px-4"
               >
                 <div>

@@ -1,3 +1,4 @@
+import { getPrismaUnavailableMessage, isPrismaUnavailableError } from "@/lib/prisma-errors";
 import { verifyOtp } from "@/lib/otp-store";
 import prisma from "@/lib/prisma";
 import { NextResponse } from "next/server";
@@ -37,7 +38,14 @@ export async function POST(req: Request) {
     });
 
     return response;
-  } catch {
+  } catch (error) {
+    if (isPrismaUnavailableError(error)) {
+      return NextResponse.json(
+        { ok: false, message: getPrismaUnavailableMessage() },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json({ ok: false }, { status: 400 });
   }
 }
