@@ -180,12 +180,6 @@ function syncDashboardFavorites(
       : [...parsedLists, { name: profile.name, description: profile.email }];
     window.localStorage.setItem(`${FAVORITES_LIST_STORAGE_PREFIX}${galleryId}`, JSON.stringify(nextLists));
 
-    const rawFolders = window.localStorage.getItem(`${FOLDER_STORAGE_PREFIX}${galleryId}`);
-    const parsedFolders = rawFolders ? (JSON.parse(rawFolders) as Array<{ name: string; description: string }>) : [];
-    const folderExists = parsedFolders.some((folder) => folder.name === profile.name);
-    const nextFolders = folderExists ? parsedFolders : [...parsedFolders, { name: profile.name, description: "" }];
-    window.localStorage.setItem(`${FOLDER_STORAGE_PREFIX}${galleryId}`, JSON.stringify(nextFolders));
-
     const selectionCompletedCount = selections.filter((entry) => entry.photoIds.length > 0).length;
     const meta = getGalleryMeta(galleryId);
     saveGalleryMeta(galleryId, {
@@ -220,11 +214,14 @@ export default function DiskGalleryClient({
   const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [favoritesEnabled, setFavoritesEnabled] = useState(false);
+  const [favoritesLimitSelected, setFavoritesLimitSelected] = useState(false);
+  const [favoritesMaxSelected, setFavoritesMaxSelected] = useState<number | null>(null);
   const [clientProfile, setClientProfile] = useState<ClientIdentity | null>(null);
   const [isIdentityModalOpen, setIsIdentityModalOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [emailDraft, setEmailDraft] = useState("");
   const [pendingLikePhotoId, setPendingLikePhotoId] = useState<string | null>(null);
+  const [favoritesLimitMessage, setFavoritesLimitMessage] = useState<string | null>(null);
   const [clientKey, setClientKey] = useState("");
   const [photos, setPhotos] = useState<GalleryPhoto[]>(initialPhotos);
   const [nextCursor, setNextCursor] = useState<string | null>(initialCursor);
@@ -235,6 +232,7 @@ export default function DiskGalleryClient({
   const [folderPhotosMap, setFolderPhotosMap] = useState<Record<string, string[]>>({});
 
   const likedCount = useMemo(() => Object.values(liked).filter(Boolean).length, [liked]);
+  const selectionLimit = favoritesLimitSelected ? Math.max(1, favoritesMaxSelected ?? 1) : null;
   const hiddenPhotoIds = useMemo(() => {
     if (hiddenFolderIds.size === 0) return new Set<string>();
     const ids = new Set<string>();
@@ -263,8 +261,20 @@ export default function DiskGalleryClient({
   const hasMorePhotos = photos.length < totalPhotos;
 
   useEffect(() => {
-    const meta = getGalleryMeta(galleryId);
-    setFavoritesEnabled(Boolean(meta?.favoritesEnabled));
+    const syncGalleryMeta = () => {
+      const meta = getGalleryMeta(galleryId);
+      setFavoritesEnabled(Boolean(meta?.favoritesEnabled));
+      setFavoritesLimitSelected(Boolean(meta?.favoritesLimitSelected));
+      setFavoritesMaxSelected(meta?.favoritesMaxSelected ?? null);
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === "wf_gallery_meta") {
+        syncGalleryMeta();
+      }
+    };
+
+    syncGalleryMeta();
+    window.addEventListener("storage", handleStorage);
 
     let key = window.localStorage.getItem(`${CLIENT_KEY_PREFIX}${galleryId}`) ?? "";
     if (!key) {
@@ -278,18 +288,30 @@ export default function DiskGalleryClient({
     setClientKey(key);
 
     const profile = readClientProfile(galleryId);
-    if (!profile) return;
-    setClientProfile(profile);
+    if (profile) {
+      setClientProfile(profile);
 
-    const selections = readClientSelections(galleryId);
-    const entry = selections.find((item) => item.name === profile.name);
-    if (!entry) return;
-    const likedMap: Record<string, boolean> = {};
-    entry.photoIds.forEach((id) => {
-      likedMap[id] = true;
-    });
-    setLiked(likedMap);
+      const selections = readClientSelections(galleryId);
+      const entry = selections.find((item) => item.name === profile.name);
+      if (entry) {
+        const likedMap: Record<string, boolean> = {};
+        entry.photoIds.forEach((id) => {
+          likedMap[id] = true;
+        });
+        setLiked(likedMap);
+      }
+    }
+
+    return () => window.removeEventListener("storage", handleStorage);
   }, [galleryId]);
+
+  useEffect(() => {
+    if (selectionLimit !== null && likedCount > selectionLimit) {
+      setFavoritesLimitMessage(`You can only select ${selectionLimit} photo${selectionLimit === 1 ? "" : "s"} in this gallery.`);
+    } else if ((selectionLimit === null || likedCount < selectionLimit) && favoritesLimitMessage) {
+      setFavoritesLimitMessage(null);
+    }
+  }, [likedCount, selectionLimit, favoritesLimitMessage]);
 
   useEffect(() => {
     const syncFolderState = () => {
@@ -358,6 +380,7 @@ export default function DiskGalleryClient({
 
   const toggleLike = (id: string) => {
     if (!favoritesEnabled) return;
+    setFavoritesLimitMessage(null);
     if (!clientProfile) {
       setPendingLikePhotoId(id);
       setIsIdentityModalOpen(true);
@@ -372,6 +395,11 @@ export default function DiskGalleryClient({
     }
 
     const nextValue = !liked[id];
+    if (nextValue && selectionLimit !== null && likedCount >= selectionLimit) {
+      setFavoritesLimitMessage(`You can only select ${selectionLimit} photo${selectionLimit === 1 ? "" : "s"} in this gallery.`);
+      return;
+    }
+
     setLiked((prev) => {
       const next = { ...prev, [id]: nextValue };
       persistLikes(next, clientProfile);
@@ -403,6 +431,11 @@ export default function DiskGalleryClient({
     setEmailDraft("");
 
     if (pendingLikePhotoId) {
+      if (!liked[pendingLikePhotoId] && selectionLimit !== null && likedCount >= selectionLimit) {
+        setFavoritesLimitMessage(`You can only select ${selectionLimit} photo${selectionLimit === 1 ? "" : "s"} in this gallery.`);
+        setPendingLikePhotoId(null);
+        return;
+      }
       void recordClientActions([
         {
           photoId: pendingLikePhotoId,
@@ -574,7 +607,7 @@ export default function DiskGalleryClient({
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-end gap-4 px-4 py-4 sm:px-8">
           {favoritesEnabled ? (
             <button className="inline-flex items-center gap-2 text-sm text-[#5f5b55] hover:text-[#15161a]">
-              <span>{likedCount}</span>
+              <span>{selectionLimit === null ? likedCount : `${likedCount}/${selectionLimit}`}</span>
               <HeartSolidIcon className="h-4 w-4" />
             </button>
           ) : null}
@@ -623,6 +656,23 @@ export default function DiskGalleryClient({
             ) : null}
           </div>
         </div>
+        {favoritesEnabled && selectionLimit !== null ? (
+          <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 pb-4 text-sm text-[#5f5b55] sm:px-8">
+            <span>
+              Select up to {selectionLimit} photo{selectionLimit === 1 ? "" : "s"}.
+            </span>
+            <span>
+              Chosen {likedCount} of {selectionLimit}
+            </span>
+          </div>
+        ) : null}
+        {favoritesLimitMessage ? (
+          <div className="mx-auto w-full max-w-7xl px-4 pb-4 sm:px-8">
+            <div className="rounded-2xl border border-[#d97757]/25 bg-[#fff1eb] px-4 py-3 text-sm text-[#9a4428]">
+              {favoritesLimitMessage}
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-8 sm:py-10">
@@ -631,6 +681,7 @@ export default function DiskGalleryClient({
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
               {visiblePhotos.map((photo, idx) => {
                 const isLiked = Boolean(liked[photo.id]);
+                const disableLike = !isLiked && selectionLimit !== null && likedCount >= selectionLimit;
                 return (
                   <figure key={photo.id} className="group relative overflow-hidden rounded-[18px] bg-white shadow-sm">
                     <button
@@ -648,7 +699,26 @@ export default function DiskGalleryClient({
                         decoding="async"
                       />
                     </button>
-                      <div className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-black/25" />
+                    <div className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-black/25" />
+                    {favoritesEnabled ? (
+                      <div className="absolute right-3 top-3 z-10">
+                        <button
+                          type="button"
+                          className={`rounded-full p-2 text-white shadow-sm backdrop-blur-sm ${
+                            isLiked ? "bg-[#d97757]" : "bg-black/60"
+                          } ${disableLike ? "cursor-not-allowed opacity-60" : ""}`}
+                          onClick={() => toggleLike(photo.id)}
+                          disabled={disableLike}
+                          aria-label="Favorite photo"
+                        >
+                          {isLiked ? (
+                            <HeartSolidIcon className="h-3.5 w-3.5" />
+                          ) : (
+                            <HeartOutlineIcon className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    ) : null}
                     <div className="absolute bottom-3 right-3 flex gap-2 opacity-0 transition group-hover:opacity-100">
                       <button
                         type="button"
@@ -675,20 +745,6 @@ export default function DiskGalleryClient({
                       >
                         <ArrowDownTrayIcon className="h-3.5 w-3.5" />
                       </button>
-                      {favoritesEnabled ? (
-                        <button
-                        type="button"
-                        className={`rounded-full p-2 text-white ${isLiked ? "bg-[#d97757]" : "bg-black/60"}`}
-                        onClick={() => toggleLike(photo.id)}
-                        aria-label="Favorite photo"
-                      >
-                          {isLiked ? (
-                            <HeartSolidIcon className="h-3.5 w-3.5" />
-                          ) : (
-                            <HeartOutlineIcon className="h-3.5 w-3.5" />
-                          )}
-                        </button>
-                      ) : null}
                     </div>
                   </figure>
                 );
@@ -733,7 +789,12 @@ export default function DiskGalleryClient({
                 <button
                   type="button"
                   onClick={() => toggleLike(activePhoto.id)}
-                  className={liked[activePhoto.id] ? "text-rose-400" : "text-white"}
+                  disabled={!liked[activePhoto.id] && selectionLimit !== null && likedCount >= selectionLimit}
+                  className={`${liked[activePhoto.id] ? "text-rose-400" : "text-white"} ${
+                    !liked[activePhoto.id] && selectionLimit !== null && likedCount >= selectionLimit
+                      ? "cursor-not-allowed opacity-60"
+                      : ""
+                  }`}
                   aria-label="Favorite photo"
                 >
                   {liked[activePhoto.id] ? (
@@ -801,7 +862,9 @@ export default function DiskGalleryClient({
             </button>
             <h3 className="font-display text-center text-2xl font-semibold text-[#15161a]">sample</h3>
             <p className="mt-1.5 text-center text-base text-[#8a7f73]">
-              Available for selection: {visiblePhotos.length}
+              {selectionLimit === null
+                ? `Available for selection: ${visiblePhotos.length}`
+                : `Select up to ${selectionLimit} photo${selectionLimit === 1 ? "" : "s"}`}
             </p>
             <form className="mx-auto mt-5 max-w-md space-y-3.5" onSubmit={onSubmitIdentity}>
               <input
