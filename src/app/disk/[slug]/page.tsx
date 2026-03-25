@@ -1,4 +1,4 @@
-import { getPrismaUnavailableMessage, isPrismaUnavailableError } from "@/lib/prisma-errors";
+﻿import { getPrismaUnavailableMessage, isPrismaUnavailableError } from "@/lib/prisma-errors";
 import prisma from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import DiskGalleryClient from "./DiskGalleryClient";
@@ -95,7 +95,7 @@ export default async function DiskGalleryPage({ params }: DiskGalleryPageProps) 
 
     return (
       <main className="flex min-h-screen items-center justify-center px-6 py-16">
-        <div className="w-full max-w-xl rounded-[32px] border border-black/10 bg-white/80 p-8 text-center shadow-xl shadow-black/5 backdrop-blur">
+        <div className="w-full max-w-xl rounded-4xl border border-black/10 bg-white/80 p-8 text-center shadow-xl shadow-black/5 backdrop-blur">
           <p className="text-xs uppercase tracking-[0.3em] text-black/45">Pixora Drive</p>
           <h1 className="mt-4 text-3xl font-semibold tracking-tight text-black">Gallery unavailable</h1>
           <p className="mt-3 text-sm text-black/65">
