@@ -39,7 +39,7 @@ export function saveGalleryMeta(galleryId: string, meta: GalleryMeta) {
     ...prev,
     expiresAt: meta.expiresAt ?? null,
     storageTimeLabel: meta.storageTimeLabel ?? null,
-    favoritesEnabled: meta.favoritesEnabled ?? prev.favoritesEnabled ?? false,
+    favoritesEnabled: meta.favoritesEnabled ?? prev.favoritesEnabled ?? true,
     favoritesLimitSelected: meta.favoritesLimitSelected ?? prev.favoritesLimitSelected ?? false,
     favoritesName: meta.favoritesName ?? prev.favoritesName ?? null,
     favoritesListsCount: meta.favoritesListsCount ?? prev.favoritesListsCount ?? 0,
@@ -48,3 +48,4 @@ export function saveGalleryMeta(galleryId: string, meta: GalleryMeta) {
   };
   writeAllMeta(all);
 }
+

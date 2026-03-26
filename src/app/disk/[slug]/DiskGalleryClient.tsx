@@ -60,6 +60,7 @@ const FOLDER_STORAGE_PREFIX = "wf_gallery_folders:";
 const FOLDER_PHOTOS_PREFIX = "wf_gallery_folder_photos:";
 const CLIENT_DOWNLOADS_PREFIX = "wf_client_downloads:";
 const CLIENT_KEY_PREFIX = "wf_client_key:";
+const REVIEWS_STORAGE_KEY = "wf_gallery_reviews";
 
 function formatDateLabel(iso: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -230,6 +231,15 @@ export default function DiskGalleryClient({
   const [folderFilterId, setFolderFilterId] = useState<string | null>(null);
   const [hiddenFolderIds, setHiddenFolderIds] = useState<Set<string>>(new Set());
   const [folderPhotosMap, setFolderPhotosMap] = useState<Record<string, string[]>>({});
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState("");
+  const [shareCopied, setShareCopied] = useState(false);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [reviewName, setReviewName] = useState("");
+  const [reviewSocialLink, setReviewSocialLink] = useState("");
+  const [reviewText, setReviewText] = useState("");
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
 
   const likedCount = useMemo(() => Object.values(liked).filter(Boolean).length, [liked]);
   const selectionLimit = favoritesLimitSelected ? Math.max(1, favoritesMaxSelected ?? 1) : null;
@@ -256,6 +266,11 @@ export default function DiskGalleryClient({
     });
   }, [photos, hiddenPhotoIds, folderFilterSet]);
 
+  const activeFolderDescription = useMemo(() => {
+    if (!folderFilterId) return "";
+    return readFolders(galleryId).find((folder) => folder.id === folderFilterId)?.description?.trim() ?? "";
+  }, [folderFilterId, galleryId, hiddenFolderIds, folderPhotosMap]);
+
   const activePhoto = activeIndex === null ? null : visiblePhotos[activeIndex] ?? null;
   const hasPhotos = visiblePhotos.length > 0;
   const hasMorePhotos = photos.length < totalPhotos;
@@ -263,7 +278,7 @@ export default function DiskGalleryClient({
   useEffect(() => {
     const syncGalleryMeta = () => {
       const meta = getGalleryMeta(galleryId);
-      setFavoritesEnabled(Boolean(meta?.favoritesEnabled));
+      setFavoritesEnabled(meta?.favoritesEnabled ?? true);
       setFavoritesLimitSelected(Boolean(meta?.favoritesLimitSelected));
       setFavoritesMaxSelected(meta?.favoritesMaxSelected ?? null);
     };
@@ -305,6 +320,65 @@ export default function DiskGalleryClient({
     return () => window.removeEventListener("storage", handleStorage);
   }, [galleryId]);
 
+  useEffect(() => {
+    if (!clientKey) return;
+    let active = true;
+
+    const loadServerFavorites = async () => {
+      try {
+        const response = await fetch(
+          `/api/galleries/${galleryId}/client-actions?clientKey=${encodeURIComponent(clientKey)}&action=favorite`
+        );
+        if (!response.ok) return;
+        const data = (await response.json()) as {
+          photoIds?: string[];
+          clientName?: string | null;
+          clientEmail?: string | null;
+        };
+        if (!active) return;
+
+        const ids = Array.isArray(data.photoIds) ? data.photoIds : [];
+        if (ids.length === 0 && !data.clientName && !data.clientEmail) return;
+
+        const storedProfile = readClientProfile(galleryId);
+        let profile: ClientIdentity | null = null;
+        if (data.clientName?.trim() && data.clientEmail?.trim()) {
+          profile = {
+            name: data.clientName.trim(),
+            email: data.clientEmail.trim().toLowerCase(),
+          };
+          if (!storedProfile) {
+            setClientProfile(profile);
+            writeClientProfile(galleryId, profile);
+          }
+        } else if (storedProfile) {
+          profile = storedProfile;
+        }
+
+        if (ids.length > 0) {
+          const likedFromServer: Record<string, boolean> = {};
+          ids.forEach((id) => {
+            likedFromServer[id] = true;
+          });
+
+          setLiked((prev) => {
+            const next = { ...prev, ...likedFromServer };
+            if (profile) {
+              persistLikes(next, profile);
+            }
+            return next;
+          });
+        }
+      } catch {
+        // Ignore fetch errors.
+      }
+    };
+
+    void loadServerFavorites();
+    return () => {
+      active = false;
+    };
+  }, [clientKey, galleryId]);
   useEffect(() => {
     if (selectionLimit !== null && likedCount > selectionLimit) {
       setFavoritesLimitMessage(`You can only select ${selectionLimit} photo${selectionLimit === 1 ? "" : "s"} in this gallery.`);
@@ -379,7 +453,6 @@ export default function DiskGalleryClient({
   };
 
   const toggleLike = (id: string) => {
-    if (!favoritesEnabled) return;
     setFavoritesLimitMessage(null);
     if (!clientProfile) {
       setPendingLikePhotoId(id);
@@ -456,27 +529,125 @@ export default function DiskGalleryClient({
     setPendingLikePhotoId(null);
   };
 
-  const onShare = async (url: string) => {
+  const openShareModal = (url: string) => {
+    setShareUrl(url);
+    setShareCopied(false);
+    setIsShareModalOpen(true);
+  };
+
+  const copyShareLink = async () => {
     try {
-      if (navigator.share) {
-        await navigator.share({
-          title: galleryName,
-          text: galleryName,
-          url,
-        });
-        return;
-      }
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(shareUrl);
+      setShareCopied(true);
     } catch {
-      // Ignore failed share attempts to keep UI flow smooth.
+      setShareCopied(false);
     }
   };
 
+  const openShareWindow = (targetUrl: string) => {
+    window.open(targetUrl, "_blank", "noopener,noreferrer,width=720,height=640");
+  };
+
+  const submitReview = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedName = reviewName.trim();
+    const trimmedReview = reviewText.trim();
+    const trimmedSocial = reviewSocialLink.trim();
+
+    if (!trimmedName) {
+      setReviewError("Please enter your name.");
+      return;
+    }
+    if (trimmedReview.length < 30) {
+      setReviewError("Minimum review length is 30 characters.");
+      return;
+    }
+    if (trimmedSocial && !/^https?:\/\//i.test(trimmedSocial)) {
+      setReviewError("Add a full social media link starting with http:// or https://");
+      return;
+    }
+
+    setReviewError(null);
+    setReviewSubmitted(true);
+
+    const captureAndSave = async () => {
+      let clientIp: string | null = null;
+      let clientLocation: string | null = null;
+      let userAgent = typeof navigator !== "undefined" ? navigator.userAgent : null;
+
+      try {
+        const res = await fetch("/api/reviews/metadata");
+        if (res.ok) {
+          const data = (await res.json()) as {
+            ip?: string | null;
+            location?: string | null;
+            userAgent?: string | null;
+          };
+          clientIp = data.ip ?? null;
+          clientLocation = data.location ?? null;
+          userAgent = data.userAgent ?? userAgent;
+        }
+      } catch {
+        // Ignore metadata fetch failures.
+      }
+
+      if (!clientLocation) {
+        try {
+          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          clientLocation = tz || null;
+        } catch {
+          clientLocation = null;
+        }
+      }
+
+      try {
+        const raw = window.localStorage.getItem(REVIEWS_STORAGE_KEY);
+        const parsed = raw ? (JSON.parse(raw) as Array<{
+          id: string;
+          galleryId: string;
+          galleryName: string;
+          reviewerName: string;
+          socialLink?: string;
+          text: string;
+          createdAt: string;
+          published: boolean;
+          clientIp?: string | null;
+          clientLocation?: string | null;
+          userAgent?: string | null;
+        }>) : [];
+        const next = Array.isArray(parsed) ? parsed : [];
+        next.unshift({
+          id: `${galleryId}-${Date.now()}`,
+          galleryId,
+          galleryName,
+          reviewerName: trimmedName,
+          socialLink: trimmedSocial || undefined,
+          text: trimmedReview,
+          createdAt: new Date().toISOString(),
+          published: true,
+          clientIp,
+          clientLocation,
+          userAgent,
+        });
+        window.localStorage.setItem(REVIEWS_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // Ignore review storage failures.
+      }
+    };
+
+    void captureAndSave();
+    setReviewName("");
+    setReviewSocialLink("");
+    setReviewText("");
+  };
+
+  const registerDownloadedPhotos = (photoIds: string[]) => {
+    if (photoIds.length === 0) return;
+    markDownloaded(galleryId, photoIds);
+  };
+
   const onDownloadAll = () => {
-    markDownloaded(
-      galleryId,
-      visiblePhotos.map((photo) => photo.id)
-    );
+    registerDownloadedPhotos(visiblePhotos.map((photo) => photo.id));
     void recordClientActions(
       visiblePhotos.map((photo) => ({
         photoId: photo.id,
@@ -489,10 +660,7 @@ export default function DiskGalleryClient({
 
   const onDownloadFavorites = () => {
     const selected = visiblePhotos.filter((photo) => liked[photo.id]);
-    markDownloaded(
-      galleryId,
-      selected.map((photo) => photo.id)
-    );
+    registerDownloadedPhotos(selected.map((photo) => photo.id));
     void recordClientActions(
       selected.map((photo) => ({
         photoId: photo.id,
@@ -606,19 +774,34 @@ export default function DiskGalleryClient({
       <section className="sticky top-0 z-20 border-b border-white/40 bg-white/80 backdrop-blur">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-end gap-4 px-4 py-4 sm:px-8">
           {favoritesEnabled ? (
-            <button className="inline-flex items-center gap-2 text-sm text-[#5f5b55] hover:text-[#15161a]">
-              <span>{selectionLimit === null ? likedCount : `${likedCount}/${selectionLimit}`}</span>
-              <HeartSolidIcon className="h-4 w-4" />
+            <button
+              type="button"
+              className="inline-flex items-center text-[#5f5b55] hover:text-[#15161a]"
+              onClick={() => setIsIdentityModalOpen(true)}
+              aria-label="Favorites"
+            >
+              <HeartOutlineIcon className="h-6 w-6" />
             </button>
           ) : null}
           <button
+            type="button"
             className="inline-flex items-center text-[#5f5b55] hover:text-[#15161a]"
-            onClick={() => onShare(window.location.href)}
+            onClick={() => openShareModal(window.location.href)}
+            aria-label="Share gallery"
           >
-            <ShareIcon className="h-4 w-4" />
+            <ShareIcon className="h-6 w-6" />
           </button>
-          <button className="inline-flex items-center text-[#5f5b55] hover:text-[#15161a]">
-            <ChatBubbleOvalLeftEllipsisIcon className="h-4 w-4" />
+          <button
+            type="button"
+            className="inline-flex items-center text-[#5f5b55] hover:text-[#15161a]"
+            onClick={() => {
+              setReviewSubmitted(false);
+              setReviewError(null);
+              setIsReviewModalOpen(true);
+            }}
+            aria-label="Leave review"
+          >
+            <ChatBubbleOvalLeftEllipsisIcon className="h-6 w-6" />
           </button>
           <span className="text-sm text-[#5f5b55]">Expires on {formatDateLabel(expiresAt)}</span>
           <div className="relative">
@@ -675,15 +858,21 @@ export default function DiskGalleryClient({
         ) : null}
       </section>
 
+      {activeFolderDescription ? (
+        <section className="mx-auto w-full max-w-5xl px-4 pt-10 text-center sm:px-8">
+          <p className="text-base leading-8 text-[#4f4a44] sm:text-lg">{activeFolderDescription}</p>
+        </section>
+      ) : null}
+
       <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-8 sm:py-10">
         {hasPhotos ? (
           <>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-              {visiblePhotos.map((photo, idx) => {
-                const isLiked = Boolean(liked[photo.id]);
-                const disableLike = !isLiked && selectionLimit !== null && likedCount >= selectionLimit;
-                return (
-                  <figure key={photo.id} className="group relative overflow-hidden rounded-[18px] bg-white shadow-sm">
+                {visiblePhotos.map((photo, idx) => {
+                  const isLiked = Boolean(liked[photo.id]);
+                  const disableLike = !isLiked && selectionLimit !== null && likedCount >= selectionLimit;
+                  return (
+                    <figure key={photo.id} className="group relative overflow-hidden rounded-[18px] bg-white shadow-sm">
                     <button
                       type="button"
                       className="block w-full"
@@ -700,30 +889,11 @@ export default function DiskGalleryClient({
                       />
                     </button>
                     <div className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-black/25" />
-                    {favoritesEnabled ? (
-                      <div className="absolute right-3 top-3 z-10">
-                        <button
-                          type="button"
-                          className={`rounded-full p-2 text-white shadow-sm backdrop-blur-sm ${
-                            isLiked ? "bg-[#d97757]" : "bg-black/60"
-                          } ${disableLike ? "cursor-not-allowed opacity-60" : ""}`}
-                          onClick={() => toggleLike(photo.id)}
-                          disabled={disableLike}
-                          aria-label="Favorite photo"
-                        >
-                          {isLiked ? (
-                            <HeartSolidIcon className="h-3.5 w-3.5" />
-                          ) : (
-                            <HeartOutlineIcon className="h-3.5 w-3.5" />
-                          )}
-                        </button>
-                      </div>
-                    ) : null}
                     <div className="absolute bottom-3 right-3 flex gap-2 opacity-0 transition group-hover:opacity-100">
                       <button
                         type="button"
                         className="rounded-full bg-black/60 p-2 text-white"
-                        onClick={() => onShare(photo.url)}
+                        onClick={() => openShareModal(photo.url)}
                         aria-label="Share photo"
                       >
                         <ShareIcon className="h-3.5 w-3.5" />
@@ -732,7 +902,7 @@ export default function DiskGalleryClient({
                         type="button"
                         className="rounded-full bg-black/60 p-2 text-white"
                         onClick={() => {
-                          markDownloaded(galleryId, [photo.id]);
+                          registerDownloadedPhotos([photo.id]);
                           void recordClientActions([
                             {
                               photoId: photo.id,
@@ -744,6 +914,21 @@ export default function DiskGalleryClient({
                         aria-label="Download photo"
                       >
                         <ArrowDownTrayIcon className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className={`rounded-full p-2 text-white ${
+                          isLiked ? "bg-[#d97757]" : "bg-black/60"
+                        } ${disableLike ? "cursor-not-allowed opacity-60" : ""}`}
+                        onClick={() => toggleLike(photo.id)}
+                        disabled={disableLike}
+                        aria-label="Favorite photo"
+                      >
+                        {isLiked ? (
+                          <HeartSolidIcon className="h-3.5 w-3.5" />
+                        ) : (
+                          <HeartOutlineIcon className="h-3.5 w-3.5" />
+                        )}
                       </button>
                     </div>
                   </figure>
@@ -771,7 +956,7 @@ export default function DiskGalleryClient({
               type="button"
               className="inline-flex items-center gap-2 text-lg"
               onClick={() => {
-                markDownloaded(galleryId, [activePhoto.id]);
+                registerDownloadedPhotos([activePhoto.id]);
                 void recordClientActions([
                   {
                     photoId: activePhoto.id,
@@ -785,26 +970,24 @@ export default function DiskGalleryClient({
               Download
             </button>
             <div className="flex items-center gap-6">
-              {favoritesEnabled ? (
-                <button
-                  type="button"
-                  onClick={() => toggleLike(activePhoto.id)}
-                  disabled={!liked[activePhoto.id] && selectionLimit !== null && likedCount >= selectionLimit}
-                  className={`${liked[activePhoto.id] ? "text-rose-400" : "text-white"} ${
-                    !liked[activePhoto.id] && selectionLimit !== null && likedCount >= selectionLimit
-                      ? "cursor-not-allowed opacity-60"
-                      : ""
-                  }`}
-                  aria-label="Favorite photo"
-                >
-                  {liked[activePhoto.id] ? (
-                    <HeartSolidIcon className="h-6 w-6" />
-                  ) : (
-                    <HeartOutlineIcon className="h-6 w-6" />
-                  )}
-                </button>
-              ) : null}
-              <button type="button" onClick={() => onShare(activePhoto.url)} aria-label="Share photo">
+              <button
+                type="button"
+                onClick={() => toggleLike(activePhoto.id)}
+                disabled={!liked[activePhoto.id] && selectionLimit !== null && likedCount >= selectionLimit}
+                className={`${liked[activePhoto.id] ? "text-rose-400" : "text-white"} ${
+                  !liked[activePhoto.id] && selectionLimit !== null && likedCount >= selectionLimit
+                    ? "cursor-not-allowed opacity-60"
+                    : ""
+                }`}
+                aria-label="Favorite photo"
+              >
+                {liked[activePhoto.id] ? (
+                  <HeartSolidIcon className="h-6 w-6" />
+                ) : (
+                  <HeartOutlineIcon className="h-6 w-6" />
+                )}
+              </button>
+              <button type="button" onClick={() => openShareModal(activePhoto.url)} aria-label="Share photo">
                 <ShareIcon className="h-6 w-6" />
               </button>
               <button type="button" aria-label="Fit image">
@@ -894,6 +1077,116 @@ export default function DiskGalleryClient({
           </div>
         </div>
       ) : null}
+
+      {isShareModalOpen ? (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4">
+          <div className="relative w-full max-w-xl rounded-[28px] bg-white px-5 py-8 shadow-2xl sm:px-7">
+            <button
+              type="button"
+              className="absolute right-4 top-4 rounded-full bg-[#ece7e1] p-2 text-[#7a736d]"
+              onClick={() => setIsShareModalOpen(false)}
+              aria-label="Close share modal"
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+            <h3 className="text-center text-2xl font-semibold text-[#15161a]">Share link</h3>
+            <div className="mx-auto mt-7 rounded-[18px] border border-[#e6ddd3] bg-white px-5 py-4 text-base text-[#6b645c]">
+              <p className="break-all">{shareUrl}</p>
+            </div>
+            <div className="mt-6 flex justify-center">
+              <button
+                type="button"
+                className="rounded-2xl bg-[#101114] px-8 py-3 text-base font-semibold text-white"
+                onClick={() => void copyShareLink()}
+              >
+                {shareCopied ? "Copied" : "Copy the link"}
+              </button>
+            </div>
+            <p className="mt-7 text-center text-base text-[#7a736d]">Or share via social media</p>
+            <div className="mt-5 flex items-center justify-center gap-4">
+              <button
+                type="button"
+                className="text-2xl font-semibold text-[#15161a]"
+                onClick={() =>
+                  openShareWindow(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`)
+                }
+                aria-label="Share on Facebook"
+              >
+                f
+              </button>
+              <button
+                type="button"
+                className="rounded-full border border-[#15161a] px-3 py-1.5 text-xs font-semibold text-[#15161a]"
+                onClick={() => openShareWindow(`https://wa.me/?text=${encodeURIComponent(shareUrl)}`)}
+                aria-label="Share on WhatsApp"
+              >
+                WA
+              </button>
+              <button
+                type="button"
+                className="rounded-full bg-[#15161a] px-3 py-1.5 text-xs font-semibold text-white"
+                onClick={() => openShareWindow(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}`)}
+                aria-label="Share on Telegram"
+              >
+                TG
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isReviewModalOpen ? (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4">
+          <div className="relative w-full max-w-2xl rounded-[28px] bg-white px-5 py-8 shadow-2xl sm:px-8">
+            <button
+              type="button"
+              className="absolute right-4 top-4 rounded-full bg-[#ece7e1] p-2 text-[#7a736d]"
+              onClick={() => setIsReviewModalOpen(false)}
+              aria-label="Close review modal"
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+            <h3 className="text-center text-2xl font-semibold text-[#15161a]">Leave review</h3>
+            <p className="mt-3 text-center text-base text-[#7a736d]">Please write your review</p>
+            <form className="mx-auto mt-7 max-w-xl" onSubmit={submitReview}>
+              <div className="space-y-4">
+                <input
+                  className="h-14 w-full rounded-[18px] border border-[#e6ddd3] px-5 text-base text-[#15161a] outline-none"
+                  placeholder="Your name"
+                  value={reviewName}
+                  onChange={(event) => setReviewName(event.target.value)}
+                />
+                <input
+                  className="h-14 w-full rounded-[18px] border border-[#e6ddd3] px-5 text-base text-[#15161a] outline-none"
+                  placeholder="Social media link (optional)"
+                  value={reviewSocialLink}
+                  onChange={(event) => setReviewSocialLink(event.target.value)}
+                />
+                <textarea
+                  className="min-h-36 w-full rounded-[18px] border border-[#e6ddd3] px-5 py-4 text-base text-[#15161a] outline-none"
+                  placeholder="Your review"
+                  value={reviewText}
+                  onChange={(event) => setReviewText(event.target.value)}
+                />
+              </div>
+              <p className="mt-5 text-lg text-[#7a736d]">Minimum review length — 30 characters</p>
+              {reviewError ? <p className="mt-3 text-sm text-[#c2410c]">{reviewError}</p> : null}
+              {reviewSubmitted ? (
+                <p className="mt-3 text-sm text-emerald-700">Thanks. Your review has been captured locally.</p>
+              ) : null}
+              <div className="mt-7 flex justify-center">
+                <button
+                  type="submit"
+                  className="rounded-2xl bg-[#101114] px-10 py-3 text-base font-semibold text-white"
+                >
+                  Submit
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
+

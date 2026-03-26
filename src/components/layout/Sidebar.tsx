@@ -2,8 +2,18 @@
 
 import Link from "next/link";
 import React from "react";
+import {
+  BarChart3,
+  CreditCard,
+  Database,
+  MessageCircleMore,
+  Settings,
+  ShoppingCart,
+} from "lucide-react";
 
 export default function Sidebar() {
+  const navIconClass = "h-[18px] w-[18px] text-[#4a433d]";
+
   return (
     <aside className="fixed inset-y-0 left-0 z-50 hidden w-56 flex-col border-r border-[#e3d8cc] bg-[#f7f3ee] text-[#15161a] shadow-lg md:flex">
       <div className="px-6 py-6">
@@ -21,8 +31,8 @@ export default function Sidebar() {
               href="/dashboard/drive"
               className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-[#4a433d] hover:bg-white"
             >
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#efe6dc] text-[11px] text-[#4a433d]">
-                DR
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#efe6dc]">
+                <Database className={navIconClass} />
               </span>
               <span>Drive</span>
             </Link>
@@ -33,8 +43,8 @@ export default function Sidebar() {
               href="/dashboard/card"
               className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-[#4a433d] hover:bg-white"
             >
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#efe6dc] text-[11px] text-[#4a433d]">
-                CD
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#efe6dc]">
+                <CreditCard className={navIconClass} />
               </span>
               <span>Card</span>
             </Link>
@@ -42,47 +52,47 @@ export default function Sidebar() {
 
           <li>
             <a className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-[#4a433d] hover:bg-white">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#efe6dc] text-[11px] text-[#4a433d]">
-                SH
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#efe6dc]">
+                <ShoppingCart className={navIconClass} />
               </span>
               <span>Shop</span>
             </a>
           </li>
 
           <li>
-            <a className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-[#4a433d] hover:bg-white">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#efe6dc] text-[11px] text-[#4a433d]">
-                RV
+            <Link
+              href="/dashboard/reviews"
+              className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-[#4a433d] hover:bg-white"
+            >
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#efe6dc]">
+                <MessageCircleMore className={navIconClass} />
               </span>
               <span>Reviews</span>
-            </a>
+            </Link>
           </li>
 
           <li>
             <a className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-[#4a433d] hover:bg-white">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#efe6dc] text-[11px] text-[#4a433d]">
-                AN
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#efe6dc]">
+                <BarChart3 className={navIconClass} />
               </span>
               <span>Analytics</span>
             </a>
           </li>
 
           <li>
-            <a className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-[#4a433d] hover:bg-white">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#efe6dc] text-[11px] text-[#4a433d]">
-                ST
+            <Link
+              href="/dashboard/settings"
+              className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-[#4a433d] hover:bg-white"
+            >
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#efe6dc]">
+                <Settings className={navIconClass} />
               </span>
               <span>Settings</span>
-            </a>
+            </Link>
           </li>
         </ul>
       </nav>
-
-      <div className="px-6 py-6">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#efe6dc] text-xs text-[#4a433d]">
-          N
-        </div>
-      </div>
     </aside>
   );
 }

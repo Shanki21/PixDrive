@@ -32,6 +32,53 @@ function normalizeActions(body: unknown): ClientActionPayload[] {
     .filter(Boolean) as ClientActionPayload[];
 }
 
+function normalizeActionParam(value: string | null) {
+  if (value === "favorite" || value === "download") return value;
+  if (!value) return "favorite";
+  return null;
+}
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const url = new URL(req.url);
+  const action = normalizeActionParam(url.searchParams.get("action"));
+  const clientKey = url.searchParams.get("clientKey")?.trim();
+
+  if (!clientKey) {
+    return NextResponse.json({ error: "clientKey is required" }, { status: 400 });
+  }
+  if (!action) {
+    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+  }
+
+  const gallery = await prisma.gallery.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+  if (!gallery) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const items = await prisma.clientPhotoAction.findMany({
+    where: {
+      galleryId: id,
+      clientKey,
+      action,
+    },
+    select: {
+      photoId: true,
+      clientName: true,
+      clientEmail: true,
+    },
+  });
+
+  const photoIds = Array.from(new Set(items.map((item) => item.photoId)));
+  const clientName = items.find((item) => item.clientName)?.clientName ?? null;
+  const clientEmail = items.find((item) => item.clientEmail)?.clientEmail ?? null;
+
+  return NextResponse.json({ photoIds, clientName, clientEmail });
+}
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
@@ -131,3 +178,4 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   return NextResponse.json({ ok: true });
 }
+

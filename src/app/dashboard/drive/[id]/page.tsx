@@ -12,6 +12,7 @@ import {
   Eye,
   ExternalLink,
   FolderPlus,
+  Heart,
   Link as LinkIcon,
   Lock,
   MoreVertical,
@@ -62,6 +63,7 @@ const FOLDER_STORAGE_PREFIX = "wf_gallery_folders:";
 const FOLDER_PHOTOS_PREFIX = "wf_gallery_folder_photos:";
 const FOLDER_ORDER_PREFIX = "wf_gallery_folder_order:";
 const CLIENT_FAVORITES_PREFIX = "wf_client_favorites:";
+const CLIENT_DOWNLOADS_PREFIX = "wf_client_downloads:";
 const FAVORITE_FOLDER_STORAGE_PREFIX = "wf_gallery_favorite_folders:";
 const ACTIVE_TAB_STORAGE_PREFIX = "wf_drive_active_tab:";
 const MAX_UPLOAD_DATA_URL_LENGTH = 5_500_000;
@@ -249,6 +251,17 @@ function writeClientSelections(galleryId: string, selections: ClientFavoritesSel
   window.localStorage.setItem(`${CLIENT_FAVORITES_PREFIX}${galleryId}`, JSON.stringify(selections));
 }
 
+function readClientDownloads(galleryId: string) {
+  try {
+    const raw = window.localStorage.getItem(`${CLIENT_DOWNLOADS_PREFIX}${galleryId}`);
+    if (!raw) return new Set<string>();
+    const parsed = JSON.parse(raw) as string[];
+    return Array.isArray(parsed) ? new Set(parsed) : new Set<string>();
+  } catch {
+    return new Set<string>();
+  }
+}
+
 function readFavoriteFolderMeta(galleryId: string) {
   try {
     const raw = window.localStorage.getItem(`${FAVORITE_FOLDER_STORAGE_PREFIX}${galleryId}`);
@@ -291,6 +304,7 @@ export default function DriveDetailPage() {
   const [folderOrder, setFolderOrder] = useState<string[]>(["photos"]);
 
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [downloadedIds, setDownloadedIds] = useState<Set<string>>(new Set());
   const [clientSelections, setClientSelections] = useState<ClientFavoritesSelection[]>([]);
   const [favoriteFolderMeta, setFavoriteFolderMeta] = useState<Record<string, FavoriteFolderMeta>>({});
   const [selectedFavoriteFolderKey, setSelectedFavoriteFolderKey] = useState<string | null>(null);
@@ -324,7 +338,7 @@ export default function DriveDetailPage() {
       name: gallery.name,
       createdAt: gallery.createdAt ?? null,
       filesCount: gallery.photosCount ?? photos.length,
-      favoritesEnabled: meta?.favoritesEnabled ?? false,
+      favoritesEnabled: meta?.favoritesEnabled ?? true,
       favoritesLimitSelected: meta?.favoritesLimitSelected ?? false,
       favoritesName: meta?.favoritesName ?? undefined,
       favoritesListsCount: meta?.favoritesListsCount ?? 0,
@@ -392,6 +406,7 @@ export default function DriveDetailPage() {
     setFolderPhotos(readFolderPhotos(galleryId));
     setFolderOrder(normalizeFolderOrder(readFolderOrder(galleryId), nextFolders));
     setFavoriteIds(readFavoriteIds(galleryId));
+    setDownloadedIds(readClientDownloads(galleryId));
     setClientSelections(readClientSelections(galleryId));
     setFavoriteFolderMeta(readFavoriteFolderMeta(galleryId));
     const savedTab = window.localStorage.getItem(`${ACTIVE_TAB_STORAGE_PREFIX}${galleryId}`);
@@ -405,6 +420,7 @@ export default function DriveDetailPage() {
 
     const syncFavorites = () => {
       setFavoriteIds(readFavoriteIds(galleryId));
+      setDownloadedIds(readClientDownloads(galleryId));
       setClientSelections(readClientSelections(galleryId));
       const nextFolders = readFolders(galleryId);
       setFolders(nextFolders);
@@ -417,6 +433,7 @@ export default function DriveDetailPage() {
       if (!event.key) return;
       if (
         event.key === `${CLIENT_FAVORITES_PREFIX}${galleryId}` ||
+        event.key === `${CLIENT_DOWNLOADS_PREFIX}${galleryId}` ||
         event.key === `${FOLDER_STORAGE_PREFIX}${galleryId}` ||
         event.key === `${FOLDER_PHOTOS_PREFIX}${galleryId}` ||
         event.key === `${FOLDER_ORDER_PREFIX}${galleryId}` ||
@@ -514,6 +531,11 @@ export default function DriveDetailPage() {
       favoriteFolders[0]
     );
   }, [favoriteFolders, selectedFavoriteFolderKey]);
+
+  const selectedFolderDescription = useMemo(() => {
+    if (selectedFolderId === "photos") return "";
+    return folders.find((folder) => folder.id === selectedFolderId)?.description?.trim() ?? "";
+  }, [folders, selectedFolderId]);
 
   useEffect(() => {
     if (favoriteFolders.length === 0) {
@@ -1270,7 +1292,7 @@ export default function DriveDetailPage() {
                     <p className="mt-1 text-xs text-[#8a7f73]">
                       {isPhotos
                         ? `${photos.length} files ${photos.length ? "??" : ""} ${photos.length ? `${(photos.length * 1.2).toFixed(1)} MB` : ""}`
-                        : folder?.description || "No description"}
+                        : `${getFolderPhotoList(folderId).length} files`}
                     </p>
                   </button>
                   <button
@@ -1356,19 +1378,6 @@ export default function DriveDetailPage() {
               </p>
               <div className="flex flex-wrap gap-3">
                 <button
-                  className="rounded-full border border-[#d9cfc4] px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-[#4a433d]"
-                  type="button"
-                  onClick={() => {
-                    setEditingFolderId(null);
-                    setFolderName("");
-                    setFolderDescription("");
-                    setFolderHidden(false);
-                    setShowFolderModal(true);
-                  }}
-                >
-                  Add folder
-                </button>
-                <button
                   className="rounded-full bg-[#101114] px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-white"
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -1378,6 +1387,10 @@ export default function DriveDetailPage() {
                 </button>
               </div>
             </div>
+
+            {selectedFolderDescription ? (
+              <p className="mt-6 text-center text-sm text-[#8a7f73]">{selectedFolderDescription}</p>
+            ) : null}
 
             <input
               ref={fileInputRef}
@@ -1402,7 +1415,10 @@ export default function DriveDetailPage() {
               </div>
             ) : (
               <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {activeFolderPhotos.map((photo) => (
+                {activeFolderPhotos.map((photo) => {
+                  const isDownloaded = downloadedIds.has(photo.id);
+                  const isLiked = favoriteIds.has(photo.id);
+                  return (
                   <div key={photo.id} className="group relative">
                     <div className="relative">
                       <div className="mb-2 flex items-center overflow-visible rounded-full border border-[#e3d8cc] bg-white/90 opacity-0 shadow transition group-hover:opacity-100">
@@ -1483,9 +1499,23 @@ export default function DriveDetailPage() {
                       <p className="truncate text-xs font-semibold uppercase tracking-[0.2em] text-[#6b645c]">
                         {photo.name}
                       </p>
+                      {isDownloaded || isLiked ? (
+                        <div className="mt-2 flex items-center justify-center gap-1">
+                          {isDownloaded ? (
+                            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#f5f3ef] text-[#3b3430]">
+                              <ArrowDownToLine className="h-2.5 w-2.5" />
+                            </span>
+                          ) : null}
+                          {isLiked ? (
+                            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#fdf1f4] text-[#e11d48]">
+                              <Heart className="h-2.5 w-2.5 fill-current" />
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             )}
           </div>
@@ -1528,121 +1558,80 @@ export default function DriveDetailPage() {
                       Favorites folder · {activeFavoriteFolder.items.length} files
                     </p>
                     <div className="flex flex-wrap gap-3">
-                      <button
-                        className="rounded-full border border-[#d9cfc4] px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-[#4a433d]"
-                        type="button"
-                        onClick={() => {
-                          setPendingFavoriteFolderKey(getFavoriteSelectionKey(activeFavoriteFolder));
-                          setFavoriteFolderName(activeFavoriteFolder.folderName);
-                          setFavoriteFolderDescription(activeFavoriteFolder.folderDescription);
-                          setShowFavoriteFolderModal(true);
-                        }}
-                      >
-                        <span className="inline-flex items-center gap-2">
-                          <FolderPlus className="h-4 w-4" />
-                          Edit folder
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (previewPath) {
-                            window.open(previewPath, "_blank", "noopener,noreferrer");
-                          }
-                        }}
-                        className="rounded-full border border-[#d9cfc4] px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-[#4a433d]"
-                      >
-                        Preview gallery
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void downloadFavoriteSelection(activeFavoriteFolder)}
-                        disabled={folderZipBusy === `favorite:${getFavoriteSelectionKey(activeFavoriteFolder)}`}
-                        className="rounded-full bg-[#101114] px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-white disabled:opacity-60"
-                      >
-                        {folderZipBusy === `favorite:${getFavoriteSelectionKey(activeFavoriteFolder)}`
-                          ? "Downloading..."
-                          : "Download folder"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeFavoriteSelection(activeFavoriteFolder)}
-                        className="rounded-full border border-[#f2c9d1] px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-[#e11d48]"
-                      >
-                        Remove folder
-                      </button>
                     </div>
                   </div>
 
                   <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    {activeFavoriteFolder.items.map((photo) => (
-                      <div key={photo.id} className="group relative">
-                        <div className="relative">
-                          <div className="mb-2 flex w-25 items-center overflow-visible rounded-full border border-[#e3d8cc] bg-white/90 opacity-0 shadow transition group-hover:opacity-100">
-                            {[
-                              {
-                                label: "Preview",
-                                icon: ExternalLink,
-                                onClick: () => {
-                                  if (!previewPath) return;
-                                  const url = new URL(previewPath, window.location.origin);
-                                  url.searchParams.set("photo", photo.id);
-                                  window.open(url.toString(), "_blank", "noopener,noreferrer");
+                    {activeFavoriteFolder.items.map((photo) => {
+                      return (
+                        <div key={photo.id} className="group relative">
+                          <div className="relative">
+                            <div className="mb-2 flex w-25 items-center overflow-visible rounded-full border border-[#e3d8cc] bg-white/90 opacity-0 shadow transition group-hover:opacity-100">
+                              {[
+                                {
+                                  label: "Preview",
+                                  icon: ExternalLink,
+                                  onClick: () => {
+                                    if (!previewPath) return;
+                                    const url = new URL(previewPath, window.location.origin);
+                                    url.searchParams.set("photo", photo.id);
+                                    window.open(url.toString(), "_blank", "noopener,noreferrer");
+                                  },
+                                  active: false,
+                                  danger: false,
                                 },
-                                active: false,
-                                danger: false,
-                              },
-                              {
-                                label: "Download photo",
-                                icon: ArrowDownToLine,
-                                onClick: () => downloadPhoto(photo),
-                                active: false,
-                                danger: false,
-                              },
-                              {
-                                label: "Remove from favorites",
-                                icon: HeartMinusIcon,
-                                onClick: () => removeFavoritePhoto(activeFavoriteFolder, photo.id),
-                                active: true,
-                                danger: true,
-                              },
-                            ].map((action) => {
-                              const Icon = action.icon;
-                              return (
-                                <div key={action.label} className="group/action relative">
-                                  <button
-                                    type="button"
-                                    onClick={action.onClick}
-                                    className={`flex h-8 w-8 items-center justify-center transition ${
-                                      action.danger
-                                        ? "text-[#e11d48] hover:bg-[#fde8ee]"
-                                        : action.active
-                                          ? "text-[#d97757] hover:bg-[#f2ece4]"
-                                          : "text-[#4a433d] hover:bg-[#f2ece4]"
-                                    }`}
-                                  >
-                                    <Icon className={`h-4 w-4 ${action.active ? "fill-current" : ""}`} />
-                                  </button>
-                                  <div className="pointer-events-none absolute -top-12 left-1/2 z-20 -translate-x-1/2 rounded-lg bg-[#2a2928] px-3 py-2 text-xs font-semibold text-white opacity-0 shadow-lg transition group-hover/action:opacity-100">
-                                    {action.label}
-                                    <span className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-[#2a2928]" />
+                                {
+                                  label: "Download photo",
+                                  icon: ArrowDownToLine,
+                                  onClick: () => downloadPhoto(photo),
+                                  active: false,
+                                  danger: false,
+                                },
+                                {
+                                  label: "Remove from favorites",
+                                  icon: HeartMinusIcon,
+                                  onClick: () => removeFavoritePhoto(activeFavoriteFolder, photo.id),
+                                  active: true,
+                                  danger: true,
+                                },
+                              ].map((action) => {
+                                const Icon = action.icon;
+                                return (
+                                  <div key={action.label} className="group/action relative">
+                                    <button
+                                      type="button"
+                                      onClick={action.onClick}
+                                      className={`flex h-8 w-8 items-center justify-center transition ${
+                                        action.danger
+                                          ? "text-[#e11d48] hover:bg-[#fde8ee]"
+                                          : action.active
+                                            ? "text-[#d97757] hover:bg-[#f2ece4]"
+                                            : "text-[#4a433d] hover:bg-[#f2ece4]"
+                                      }`}
+                                    >
+                                      <Icon className={`h-4 w-4 ${action.active ? "fill-current" : ""}`} />
+                                    </button>
+                                    <div className="pointer-events-none absolute -top-12 left-1/2 z-20 -translate-x-1/2 rounded-lg bg-[#2a2928] px-3 py-2 text-xs font-semibold text-white opacity-0 shadow-lg transition group-hover/action:opacity-100">
+                                      {action.label}
+                                      <span className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-[#2a2928]" />
+                                    </div>
                                   </div>
-                                </div>
-                              );
-                            })}
+                                );
+                              })}
+                            </div>
+                            <div className="h-56 w-full overflow-hidden rounded-[14px] shadow-sm">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={photo.url} alt={photo.name} className="h-full w-full object-cover" />
+                            </div>
                           </div>
-                          <div className="h-56 w-full overflow-hidden rounded-[14px] shadow-sm">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={photo.url} alt={photo.name} className="h-full w-full object-cover" />
+                          <div className="pt-2">
+                            <p className="truncate text-xs font-semibold uppercase tracking-[0.2em] text-[#6b645c]">
+                              {photo.name}
+                            </p>
                           </div>
                         </div>
-                        <div className="pt-2">
-                          <p className="truncate text-xs font-semibold uppercase tracking-[0.2em] text-[#6b645c]">
-                            {photo.name}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ) : null}
@@ -1866,3 +1855,4 @@ export default function DriveDetailPage() {
     </div>
   );
 }
+

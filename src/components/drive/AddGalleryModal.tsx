@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { MinimalGallery } from "@/types/DriveTableTypes";
@@ -91,7 +91,7 @@ export default function AddGalleryModal({
     );
 
     // FAVORITES
-    const [enableFavorites, setEnableFavorites] = useState(initialGallery?.favoritesEnabled ?? false);
+    const [enableFavorites, setEnableFavorites] = useState(initialGallery?.favoritesEnabled ?? true);
     const [favoritesName, setFavoritesName] = useState(initialGallery?.favoritesName ?? "Selecting photos");
     const [limitFavorites, setLimitFavorites] = useState(initialGallery?.favoritesLimitSelected ?? false);
     const [maxSelectedPhotos, setMaxSelectedPhotos] = useState(initialGallery?.favoritesMaxSelected ?? 1);
@@ -132,7 +132,7 @@ export default function AddGalleryModal({
         setDiscountRows([]);
         setSpecifyLifetime(initialGallery?.storageTimeLabel !== "Indefinite");
         setStorageTime(normalizeStorageDuration(initialGallery?.storageTimeLabel));
-        setEnableFavorites(initialGallery?.favoritesEnabled ?? false);
+        setEnableFavorites(initialGallery?.favoritesEnabled ?? true);
         setFavoritesName(initialGallery?.favoritesName ?? "Selecting photos");
         setLimitFavorites(initialGallery?.favoritesLimitSelected ?? false);
         setMaxSelectedPhotos(initialGallery?.favoritesMaxSelected ?? 1);
@@ -829,6 +829,7 @@ function Toggle({
         </div>
     );
 }
+
 
 
 

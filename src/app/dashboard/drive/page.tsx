@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -79,7 +79,7 @@ export default function DrivePage() {
           visitors: visitsMap[row.id] ?? row.visitors ?? 0,
           expiresAt: meta?.expiresAt ?? row.expiresAt ?? undefined,
           storageTimeLabel: meta?.storageTimeLabel ?? row.storageTimeLabel ?? undefined,
-          favoritesEnabled: meta?.favoritesEnabled ?? row.favoritesEnabled ?? false,
+          favoritesEnabled: meta?.favoritesEnabled ?? row.favoritesEnabled ?? true,
           favoritesLimitSelected: meta?.favoritesLimitSelected ?? row.favoritesLimitSelected ?? false,
           favoritesName: meta?.favoritesName ?? row.favoritesName ?? undefined,
           favoritesListsCount: meta?.favoritesListsCount ?? row.favoritesListsCount ?? 0,
@@ -274,3 +274,4 @@ export default function DrivePage() {
     </>
   );
 }
+
