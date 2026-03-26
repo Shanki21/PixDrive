@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
+type GeoInfo = {
+  city?: string;
+  region?: string;
+  country?: string;
+};
+
 function getClientIp(req: NextRequest) {
   const forwarded = req.headers.get("x-forwarded-for") ?? "";
   if (forwarded) {
@@ -14,7 +20,7 @@ function getClientIp(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const ip = getClientIp(req);
   const ua = req.headers.get("user-agent") ?? null;
-  const geo = req.geo ?? null;
+  const geo = (req as NextRequest & { geo?: GeoInfo }).geo ?? null;
 
   return NextResponse.json({
     ip,
