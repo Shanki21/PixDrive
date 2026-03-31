@@ -12,20 +12,21 @@ type AuthShellProps = {
 
 export default function AuthShell({ children, right, bottom }: AuthShellProps) {
   return (
-    <div className="font-body min-h-screen bg-[#f7f3ee]">
+    <div className="font-body min-h-screen bg-[#FAFAF8]">
       <div className="grid min-h-screen lg:grid-cols-2">
-        <section className="relative flex min-h-screen flex-col bg-[#f7f3ee]">
+        <section className="relative flex min-h-screen flex-col bg-[#FAFAF8]">
+          <div className="pointer-events-none absolute left-[-140px] top-[120px] h-[320px] w-[320px] rounded-full bg-[#9bd6c3]/25 blur-3xl" />
           <motion.div
             initial={{ opacity: 0, y: -12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="flex items-center justify-between px-9 pt-8"
+            className="relative z-10 flex items-center justify-between px-9 pt-8"
           >
-            <Link href="/" className="font-display text-3xl font-semibold leading-none tracking-tight text-black">
-              pixora
+            <Link href="/" className="text-3xl font-semibold leading-none tracking-tight text-[#111111]">
+              Pixora
             </Link>
-            <Link href="/" className="text-2xl font-light text-[#8f99a8] transition hover:text-[#4b5563]">
-              x
+            <Link href="/" className="rounded-full border border-[#E5E5E5] px-3 py-1 text-sm font-medium text-[#666666] transition hover:text-[#111111]">
+              Home
             </Link>
           </motion.div>
 
@@ -33,7 +34,7 @@ export default function AuthShell({ children, right, bottom }: AuthShellProps) {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.65, delay: 0.08 }}
-            className="mx-auto flex w-full max-w-[420px] flex-1 flex-col justify-center px-6"
+            className="relative z-10 mx-auto flex w-full max-w-[460px] flex-1 flex-col justify-center px-6"
           >
             {children}
           </motion.div>
@@ -41,7 +42,7 @@ export default function AuthShell({ children, right, bottom }: AuthShellProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.18 }}
-            className="pb-10 text-center text-base font-medium text-[#101522]"
+            className="relative z-10 pb-10 text-center text-[14px] font-medium text-[#666666]"
           >
             {bottom}
           </motion.div>

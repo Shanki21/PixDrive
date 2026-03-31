@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
@@ -82,31 +82,32 @@ export default function LoginPage() {
         step === "email" ? (
           <p>
             Don&apos;t have an account yet?{" "}
-            <Link href="/signup" className="underline">
+            <Link href="/signup" className="font-semibold text-[#0f766e] hover:text-[#115e59]">
               Sign up
             </Link>
           </p>
         ) : (
-          <button className="underline" onClick={() => setStep("email")}>
-            {"<-"} Back
+          <button className="font-semibold text-[#0f766e] hover:text-[#115e59]" onClick={() => setStep("email")}>
+            Back
           </button>
         )
       }
     >
       {step === "email" ? (
-        <motion.form initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} onSubmit={onEmailSubmit} className="space-y-6">
-          <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="font-display text-5xl font-semibold text-[#111320]">
-            Login
+        <motion.form initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} onSubmit={onEmailSubmit} className="pix-card space-y-6 p-8 md:p-10">
+          <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="pix-heading-xl">
+            Log in
           </motion.h1>
+          <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="text-[16px] text-[#666666]">
+            Continue to your Pixora dashboard with a secure one-time code.
+          </motion.p>
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
-            <label className="mb-2 block text-sm font-semibold text-[#151821]">Email</label>
+            <label className="mb-2 block text-sm font-semibold text-[#111111]">Email</label>
             <input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Your email"
-              className={`h-12 w-full rounded-full border bg-white px-5 text-sm outline-none transition focus:-translate-y-0.5 focus:shadow-[0_0_0_4px_rgba(17,19,32,0.08)] ${
-                error ? "border-red-400" : "border-[#d7d7d7]"
-              }`}
+              className={`pix-input ${error ? "border-red-400 focus:border-red-400 focus:shadow-[0_0_0_4px_rgba(239,68,68,0.15)]" : ""}`}
             />
             {error ? <p className="mt-2 text-sm text-[#ef4444]">{error}</p> : null}
           </motion.div>
@@ -116,26 +117,26 @@ export default function LoginPage() {
             transition={{ delay: 0.14 }}
             whileHover={{ scale: 1.01, y: -2 }}
             whileTap={{ scale: 0.99 }}
-            className="h-11 w-full rounded-full bg-[#101114] text-sm font-semibold text-white"
+            className="pix-btn pix-btn-primary w-full"
             disabled={loading}
           >
             {loading ? "Checking..." : "Next"}
           </motion.button>
         </motion.form>
       ) : (
-        <motion.form initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} onSubmit={onOtpSubmit} className="space-y-6">
-          <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="font-display text-5xl font-semibold text-[#111320]">
-            Login
+        <motion.form initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} onSubmit={onOtpSubmit} className="pix-card space-y-6 p-8 md:p-10">
+          <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="pix-heading-xl">
+            Verify Code
           </motion.h1>
-          <motion.p initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="text-base leading-relaxed text-[#101218]">
-            Access code sent to <strong>{email}</strong>.
+          <motion.p initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="text-base leading-relaxed text-[#666666]">
+            Access code sent to <strong className="text-[#111111]">{email}</strong>.
           </motion.p>
           <OtpCodeInput value={otp} onChange={setOtp} />
           {error ? <p className="text-sm text-[#ef4444]">{error}</p> : null}
           <motion.button
             whileHover={{ scale: 1.01, y: -2 }}
             whileTap={{ scale: 0.99 }}
-            className="h-11 w-full rounded-full bg-[#101114] text-sm font-semibold text-white disabled:opacity-40"
+            className="pix-btn pix-btn-primary w-full disabled:opacity-40"
             disabled={loading || otp.length !== 6}
           >
             {loading ? "Verifying..." : "Log in"}
