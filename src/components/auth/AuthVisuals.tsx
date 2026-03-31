@@ -25,9 +25,9 @@ const tutorialImages = [
 export default function AuthVisuals({ mode, tutorialStep = 0 }: AuthVisualsProps) {
   if (mode === "contactCard") {
     return (
-      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,#f3e8d6,#d4b496,#a98467)] p-10">
-        <div className="absolute inset-0 bg-white/70" />
-        <div className="relative w-full max-w-md overflow-hidden rounded-[36px] bg-white/85 p-10 shadow-2xl">
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,#d6efe8,#cfe2ff,#f1f5f3)] p-10">
+        <div className="absolute inset-0 bg-white/60" />
+        <div className="relative w-full max-w-md overflow-hidden rounded-[28px] border border-[#E5E5E5] bg-white/90 p-10 shadow-2xl">
           <div className="absolute inset-x-0 top-0 h-40 overflow-hidden">
             <Image
               src="/Img/pexels-hatice-baran-153179658-14783579.webp"
@@ -47,12 +47,12 @@ export default function AuthVisuals({ mode, tutorialStep = 0 }: AuthVisualsProps
               sizes="96px"
             />
           </div>
-          <h3 className="text-center text-3xl font-semibold text-[#1e1f22]">Anna Smith</h3>
-          <p className="mt-2 text-center text-base text-[#52555d]">Wedding photographer</p>
-          <p className="mt-7 text-center text-3xl font-semibold text-[#15161a]">+44 (207) 123 40 00</p>
+          <h3 className="text-center text-3xl font-semibold text-[#111111]">Anna Smith</h3>
+          <p className="mt-2 text-center text-base text-[#666666]">Wedding photographer</p>
+          <p className="mt-7 text-center text-3xl font-semibold text-[#111111]">+44 (207) 123 40 00</p>
           <div className="mt-8 space-y-4">
-            <div className="rounded-xl border border-[#dbdbdb] py-4 text-center text-[#8e8e8e]">WhatsApp</div>
-            <div className="rounded-xl border border-[#dbdbdb] py-4 text-center text-[#8e8e8e]">Telegram</div>
+            <div className="rounded-xl border border-[#E5E5E5] py-4 text-center text-[#666666]">WhatsApp</div>
+            <div className="rounded-xl border border-[#E5E5E5] py-4 text-center text-[#666666]">Telegram</div>
           </div>
         </div>
       </div>
@@ -62,21 +62,21 @@ export default function AuthVisuals({ mode, tutorialStep = 0 }: AuthVisualsProps
   if (mode === "tutorial") {
     const stepTitle = ["Client galleries", "Projects", "Shop"][tutorialStep] ?? "Client galleries";
     return (
-      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,#f4f0ea,#d6c3ae,#9ba9b2)] p-10">
-        <div className="absolute inset-0 bg-white/75" />
-        <div className="relative w-full max-w-4xl overflow-hidden rounded-sm border border-[#d6d6d6] bg-[#f4f4f4] shadow-xl">
-          <div className="grid grid-cols-[220px_1fr]">
-            <aside className="bg-[#1c1d20] p-6 text-white">
-              <p className="text-4xl font-black">pixora</p>
-              <div className="mt-8 space-y-4 text-base text-[#d8d8d8]">
-                <p>Galleries</p>
-                <p>Shop</p>
-                <p>Card</p>
-              </div>
-            </aside>
-            <main className="p-8">
-              <h3 className="text-4xl font-semibold text-[#191c21]">{stepTitle}</h3>
-              <p className="mt-2 text-base text-[#8c8f96]">Project management</p>
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,#d8eee8,#dce9fb,#ecf2ef)] p-10">
+          <div className="absolute inset-0 bg-white/72" />
+          <div className="relative w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E5E5] bg-[#f8f9f7] shadow-xl">
+            <div className="grid grid-cols-[220px_1fr]">
+              <aside className="bg-[#0f766e] p-6 text-white">
+                <p className="text-4xl font-black">Pixora</p>
+                <div className="mt-8 space-y-4 text-base text-white/85">
+                  <p>Galleries</p>
+                  <p>Shop</p>
+                  <p>Card</p>
+                </div>
+              </aside>
+              <main className="p-8">
+                <h3 className="text-4xl font-semibold text-[#111111]">{stepTitle}</h3>
+                <p className="mt-2 text-base text-[#666666]">Project management</p>
               <div className="mt-8 grid grid-cols-3 gap-4">
                 {tutorialImages.map((src, index) => (
                   <div key={src} className="relative h-32 overflow-hidden rounded bg-white">
@@ -98,19 +98,19 @@ export default function AuthVisuals({ mode, tutorialStep = 0 }: AuthVisualsProps
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,#3d2b24,#17161b,#0d0d11)] p-14">
-      <div className="absolute inset-0 bg-black/55" />
-      <div className="absolute top-10 z-10 text-center text-white">
-        <div className="font-display inline-flex flex-col gap-1 rounded-full border border-white/25 bg-white/10 px-6 py-3 text-xl font-semibold tracking-tight shadow-lg backdrop-blur-md md:text-2xl">
-          <span className="drop-shadow">Website and photo gallery for smart</span>
-          <span className="drop-shadow">photographers</span>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,#cee8ff,#bbe5d8,#edf3ef)] p-14">
+      <div className="absolute inset-0 bg-[#0f766e]/20" />
+      <div className="absolute top-10 z-10 text-center text-[#111111]">
+        <div className="inline-flex flex-col gap-1 rounded-full border border-[#d8e3e0] bg-white/90 px-6 py-3 text-xl font-semibold tracking-tight shadow-lg backdrop-blur-md md:text-2xl">
+          <span>Website and photo gallery for smart</span>
+          <span>photographers</span>
         </div>
       </div>
 
       <div className="relative mt-24 h-[560px] w-[720px]">
-        <div className="absolute inset-0 rounded-[34px] border border-white/25 bg-black/20 shadow-2xl" />
+        <div className="absolute inset-0 rounded-[34px] border border-[#dce8e5] bg-white/40 shadow-2xl" />
 
-        <div className="absolute left-4 top-4 h-[420px] w-[640px] overflow-hidden rounded-[30px] border border-white/30 bg-white/10 shadow-2xl">
+        <div className="absolute left-4 top-4 h-[420px] w-[640px] overflow-hidden rounded-[30px] border border-[#dce8e5] bg-white/90 shadow-2xl">
           <div className="relative h-[300px]">
             <Image
               src={authGalleryImages[0]}
@@ -135,7 +135,7 @@ export default function AuthVisuals({ mode, tutorialStep = 0 }: AuthVisualsProps
           </div>
         </div>
 
-        <div className="absolute -bottom-2 right-8 h-[360px] w-[240px] overflow-hidden rounded-[32px] border border-white/30 bg-white shadow-2xl">
+        <div className="absolute -bottom-2 right-8 h-[360px] w-[240px] overflow-hidden rounded-[32px] border border-[#dce8e5] bg-white shadow-2xl">
           <div className="relative h-56">
             <Image
               src={authGalleryImages[1]}
@@ -146,8 +146,8 @@ export default function AuthVisuals({ mode, tutorialStep = 0 }: AuthVisualsProps
             />
           </div>
           <div className="p-4 text-center">
-            <p className="text-xs font-semibold tracking-[0.2em] text-[#111320]">PORTFOLIO</p>
-            <p className="mt-2 text-[10px] uppercase tracking-[0.25em] text-[#6b7280]">See more</p>
+            <p className="text-xs font-semibold tracking-[0.2em] text-[#111111]">PORTFOLIO</p>
+            <p className="mt-2 text-[10px] uppercase tracking-[0.25em] text-[#666666]">See more</p>
           </div>
         </div>
       </div>

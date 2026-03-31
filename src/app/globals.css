@@ -17,8 +17,8 @@ body {
   margin: 0;
   font-family: var(--font-body), "Segoe UI", system-ui, -apple-system, sans-serif;
   line-height: 1.5;
-  background: radial-gradient(circle at 10% 10%, #f4efe7 0%, #f7f3ee 35%, #f3f5f8 100%);
-  color: #16161a;
+  background: var(--pix-bg);
+  color: var(--pix-text-primary);
 }
 
 img,
@@ -54,6 +54,12 @@ select {
   --accent-strong: #b5553a;
   --deep: #101114;
   --soft: #f4efe7;
+  --pix-bg: #fafaf8;
+  --pix-text-primary: #111111;
+  --pix-text-secondary: #666666;
+  --pix-border: #e5e5e5;
+  --pix-accent: #0f766e;
+  --pix-accent-strong: #115e59;
 }
 
 .font-display {
@@ -63,4 +69,124 @@ select {
 
 .font-body {
   font-family: var(--font-body), "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+.pixora-container {
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+}
+
+.pixora-text-primary {
+  color: var(--pix-text-primary);
+}
+
+.pixora-text-secondary {
+  color: var(--pix-text-secondary);
+}
+
+.pixora-border {
+  border-color: var(--pix-border);
+}
+
+.pixora-bg-accent {
+  background: var(--pix-accent);
+}
+
+.pix-heading-xl {
+  font-size: 48px;
+  line-height: 1.05;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--pix-text-primary);
+}
+
+.pix-card {
+  border: 1px solid var(--pix-border);
+  border-radius: 20px;
+  background: #ffffff;
+}
+
+.pix-input {
+  height: 48px;
+  width: 100%;
+  border-radius: 9999px;
+  border: 1px solid var(--pix-border);
+  background: #ffffff;
+  padding-inline: 20px;
+  font-size: 14px;
+  color: var(--pix-text-primary);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.pix-input:focus {
+  border-color: var(--pix-accent);
+  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.15);
+}
+
+.pix-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  height: 44px;
+  padding-inline: 24px;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.pix-btn-primary {
+  background: var(--pix-accent);
+  color: #ffffff;
+}
+
+.pix-btn-primary:hover {
+  background: var(--pix-accent-strong);
+  transform: translateY(-1px);
+}
+
+.pix-btn-secondary {
+  border: 1px solid var(--pix-border);
+  background: #ffffff;
+  color: var(--pix-text-primary);
+}
+
+.pix-btn-secondary:hover {
+  border-color: var(--pix-accent);
+  transform: translateY(-1px);
+}
+
+@keyframes pixora-float {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -10px, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes pixora-slide {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-pixora-float {
+  animation: pixora-float 5s ease-in-out infinite;
+}
+
+.animate-pixora-float-delayed {
+  animation: pixora-float 6.5s ease-in-out 0.8s infinite;
+}
+
+.animate-pixora-slide {
+  animation: pixora-slide 24s linear infinite;
 }

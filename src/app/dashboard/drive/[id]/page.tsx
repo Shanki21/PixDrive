@@ -11,6 +11,8 @@ import {
   ChevronRight,
   Eye,
   ExternalLink,
+  FolderPlus,
+  Heart,
   Link as LinkIcon,
   Lock,
   MoreVertical,
@@ -18,6 +20,7 @@ import {
   Settings,
   Star,
   Trash2,
+  HeartMinusIcon,
 } from "lucide-react";
 
 type GalleryDetail = {
@@ -48,12 +51,75 @@ type ClientFavoritesSelection = {
   photoIds: string[];
 };
 
+type FavoriteFolderMeta = {
+  name: string;
+  description: string;
+  createdAt: string;
+};
+
 const CLIENT_GALLERY_BASE_URL =
-  process.env.NEXT_PUBLIC_CLIENT_GALLERY_BASE_URL?.trim() || "https://vowgraphy.pixora.pro";
+  process.env.NEXT_PUBLIC_CLIENT_GALLERY_BASE_URL?.trim() || "https://xyz.pixora.pro";
 const FOLDER_STORAGE_PREFIX = "wf_gallery_folders:";
 const FOLDER_PHOTOS_PREFIX = "wf_gallery_folder_photos:";
 const FOLDER_ORDER_PREFIX = "wf_gallery_folder_order:";
 const CLIENT_FAVORITES_PREFIX = "wf_client_favorites:";
+const CLIENT_DOWNLOADS_PREFIX = "wf_client_downloads:";
+const FAVORITE_FOLDER_STORAGE_PREFIX = "wf_gallery_favorite_folders:";
+const ACTIVE_TAB_STORAGE_PREFIX = "wf_drive_active_tab:";
+const MAX_UPLOAD_DATA_URL_LENGTH = 5_500_000;
+const MAX_UPLOAD_DIMENSION = 2400;
+const JPEG_QUALITY_STEPS = [0.9, 0.82, 0.74, 0.66, 0.58];
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(dataUrl: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Failed to load image for upload"));
+    image.src = dataUrl;
+  });
+}
+
+async function preparePhotoUpload(file: File) {
+  const originalDataUrl = await readFileAsDataUrl(file);
+  if (originalDataUrl.length <= MAX_UPLOAD_DATA_URL_LENGTH) {
+    return originalDataUrl;
+  }
+
+  const image = await loadImage(originalDataUrl);
+  const longestSide = Math.max(image.width, image.height);
+  const scale = longestSide > MAX_UPLOAD_DIMENSION ? MAX_UPLOAD_DIMENSION / longestSide : 1;
+  const width = Math.max(1, Math.round(image.width * scale));
+  const height = Math.max(1, Math.round(image.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Unable to prepare image for upload");
+  }
+
+  context.drawImage(image, 0, 0, width, height);
+
+  const preferredMimeType = file.type === "image/png" || file.type === "image/webp" ? "image/webp" : "image/jpeg";
+  for (const quality of JPEG_QUALITY_STEPS) {
+    const compressedDataUrl = canvas.toDataURL(preferredMimeType, quality);
+    if (compressedDataUrl.length <= MAX_UPLOAD_DATA_URL_LENGTH) {
+      return compressedDataUrl;
+    }
+  }
+
+  throw new Error(`${file.name} is too large to upload. Try a smaller image or compress it first.`);
+}
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
@@ -92,7 +158,7 @@ function readFolders(galleryId: string): Folder[] {
     const raw = window.localStorage.getItem(`${FOLDER_STORAGE_PREFIX}${galleryId}`);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Folder[];
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.filter((folder) => !folder.id.startsWith("favorite-")) : [];
   } catch {
     return [];
   }
@@ -170,6 +236,47 @@ function readFavoriteIds(galleryId: string) {
   }
 }
 
+function readClientSelections(galleryId: string) {
+  try {
+    const raw = window.localStorage.getItem(`${CLIENT_FAVORITES_PREFIX}${galleryId}`);
+    if (!raw) return [] as ClientFavoritesSelection[];
+    const parsed = JSON.parse(raw) as ClientFavoritesSelection[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [] as ClientFavoritesSelection[];
+  }
+}
+
+function writeClientSelections(galleryId: string, selections: ClientFavoritesSelection[]) {
+  window.localStorage.setItem(`${CLIENT_FAVORITES_PREFIX}${galleryId}`, JSON.stringify(selections));
+}
+
+function readClientDownloads(galleryId: string) {
+  try {
+    const raw = window.localStorage.getItem(`${CLIENT_DOWNLOADS_PREFIX}${galleryId}`);
+    if (!raw) return new Set<string>();
+    const parsed = JSON.parse(raw) as string[];
+    return Array.isArray(parsed) ? new Set(parsed) : new Set<string>();
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function readFavoriteFolderMeta(galleryId: string) {
+  try {
+    const raw = window.localStorage.getItem(`${FAVORITE_FOLDER_STORAGE_PREFIX}${galleryId}`);
+    if (!raw) return {} as Record<string, FavoriteFolderMeta>;
+    const parsed = JSON.parse(raw) as Record<string, FavoriteFolderMeta>;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {} as Record<string, FavoriteFolderMeta>;
+  }
+}
+
+function writeFavoriteFolderMeta(galleryId: string, next: Record<string, FavoriteFolderMeta>) {
+  window.localStorage.setItem(`${FAVORITE_FOLDER_STORAGE_PREFIX}${galleryId}`, JSON.stringify(next));
+}
+
 export default function DriveDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -197,6 +304,14 @@ export default function DriveDetailPage() {
   const [folderOrder, setFolderOrder] = useState<string[]>(["photos"]);
 
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [downloadedIds, setDownloadedIds] = useState<Set<string>>(new Set());
+  const [clientSelections, setClientSelections] = useState<ClientFavoritesSelection[]>([]);
+  const [favoriteFolderMeta, setFavoriteFolderMeta] = useState<Record<string, FavoriteFolderMeta>>({});
+  const [selectedFavoriteFolderKey, setSelectedFavoriteFolderKey] = useState<string | null>(null);
+  const [showFavoriteFolderModal, setShowFavoriteFolderModal] = useState(false);
+  const [pendingFavoriteFolderKey, setPendingFavoriteFolderKey] = useState<string | null>(null);
+  const [favoriteFolderName, setFavoriteFolderName] = useState("");
+  const [favoriteFolderDescription, setFavoriteFolderDescription] = useState("");
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
   const [folderZipBusy, setFolderZipBusy] = useState<string | null>(null);
   const [coverPhotoId, setCoverPhotoId] = useState<string | null>(null);
@@ -223,7 +338,7 @@ export default function DriveDetailPage() {
       name: gallery.name,
       createdAt: gallery.createdAt ?? null,
       filesCount: gallery.photosCount ?? photos.length,
-      favoritesEnabled: meta?.favoritesEnabled ?? false,
+      favoritesEnabled: meta?.favoritesEnabled ?? true,
       favoritesLimitSelected: meta?.favoritesLimitSelected ?? false,
       favoritesName: meta?.favoritesName ?? undefined,
       favoritesListsCount: meta?.favoritesListsCount ?? 0,
@@ -291,6 +406,45 @@ export default function DriveDetailPage() {
     setFolderPhotos(readFolderPhotos(galleryId));
     setFolderOrder(normalizeFolderOrder(readFolderOrder(galleryId), nextFolders));
     setFavoriteIds(readFavoriteIds(galleryId));
+    setDownloadedIds(readClientDownloads(galleryId));
+    setClientSelections(readClientSelections(galleryId));
+    setFavoriteFolderMeta(readFavoriteFolderMeta(galleryId));
+    const savedTab = window.localStorage.getItem(`${ACTIVE_TAB_STORAGE_PREFIX}${galleryId}`);
+    if (savedTab === "gallery" || savedTab === "favorites" || savedTab === "settings" || savedTab === "design") {
+      setActiveTab(savedTab);
+    }
+  }, [galleryId]);
+
+  useEffect(() => {
+    if (!galleryId) return;
+
+    const syncFavorites = () => {
+      setFavoriteIds(readFavoriteIds(galleryId));
+      setDownloadedIds(readClientDownloads(galleryId));
+      setClientSelections(readClientSelections(galleryId));
+      const nextFolders = readFolders(galleryId);
+      setFolders(nextFolders);
+      setFolderPhotos(readFolderPhotos(galleryId));
+      setFolderOrder(normalizeFolderOrder(readFolderOrder(galleryId), nextFolders));
+      setFavoriteFolderMeta(readFavoriteFolderMeta(galleryId));
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (!event.key) return;
+      if (
+        event.key === `${CLIENT_FAVORITES_PREFIX}${galleryId}` ||
+        event.key === `${CLIENT_DOWNLOADS_PREFIX}${galleryId}` ||
+        event.key === `${FOLDER_STORAGE_PREFIX}${galleryId}` ||
+        event.key === `${FOLDER_PHOTOS_PREFIX}${galleryId}` ||
+        event.key === `${FOLDER_ORDER_PREFIX}${galleryId}` ||
+        event.key === `${FAVORITE_FOLDER_STORAGE_PREFIX}${galleryId}`
+      ) {
+        syncFavorites();
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
   }, [galleryId]);
 
   useEffect(() => {
@@ -298,6 +452,11 @@ export default function DriveDetailPage() {
       setSettingsOpen(true);
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    if (!galleryId) return;
+    window.localStorage.setItem(`${ACTIVE_TAB_STORAGE_PREFIX}${galleryId}`, activeTab);
+  }, [activeTab, galleryId]);
 
   useEffect(() => {
     if (!menuOpenFor) return;
@@ -345,6 +504,64 @@ export default function DriveDetailPage() {
     return photos.filter((photo) => favoriteIds.has(photo.id));
   }, [photos, favoriteIds]);
 
+  const favoriteFolders = useMemo(() => {
+    return clientSelections
+      .map((selection) => {
+        const ids = Array.from(new Set(selection.photoIds ?? []));
+        const idSet = new Set(ids);
+        const items = photos.filter((photo) => idSet.has(photo.id));
+        const selectionKey = `${selection.name}::${selection.email}`;
+        const meta = favoriteFolderMeta[selectionKey];
+        return {
+          ...selection,
+          folderName: meta?.name ?? selection.name,
+          folderDescription: meta?.description ?? selection.email,
+          items,
+        };
+      })
+      .filter((selection) => selection.items.length > 0);
+  }, [clientSelections, favoriteFolderMeta, photos]);
+
+  const getFavoriteSelectionKey = (selection: ClientFavoritesSelection) => `${selection.name}::${selection.email}`;
+
+  const activeFavoriteFolder = useMemo(() => {
+    if (favoriteFolders.length === 0) return null;
+    return (
+      favoriteFolders.find((selection) => getFavoriteSelectionKey(selection) === selectedFavoriteFolderKey) ??
+      favoriteFolders[0]
+    );
+  }, [favoriteFolders, selectedFavoriteFolderKey]);
+
+  const selectedFolderDescription = useMemo(() => {
+    if (selectedFolderId === "photos") return "";
+    return folders.find((folder) => folder.id === selectedFolderId)?.description?.trim() ?? "";
+  }, [folders, selectedFolderId]);
+
+  useEffect(() => {
+    if (favoriteFolders.length === 0) {
+      setSelectedFavoriteFolderKey(null);
+      return;
+    }
+
+    const hasSelected = favoriteFolders.some(
+      (selection) => getFavoriteSelectionKey(selection) === selectedFavoriteFolderKey
+    );
+    if (!hasSelected) {
+      setSelectedFavoriteFolderKey(getFavoriteSelectionKey(favoriteFolders[0]));
+    }
+  }, [favoriteFolders, selectedFavoriteFolderKey]);
+
+  useEffect(() => {
+    if (activeTab !== "favorites" || showFavoriteFolderModal) return;
+    const missing = favoriteFolders.find((selection) => !favoriteFolderMeta[getFavoriteSelectionKey(selection)]);
+    if (!missing) return;
+
+    setPendingFavoriteFolderKey(getFavoriteSelectionKey(missing));
+    setFavoriteFolderName(missing.name);
+    setFavoriteFolderDescription(missing.email);
+    setShowFavoriteFolderModal(true);
+  }, [activeTab, favoriteFolders, favoriteFolderMeta, showFavoriteFolderModal]);
+
   const orderedFolderIds = useMemo(() => normalizeFolderOrder(folderOrder, folders), [folderOrder, folders]);
 
   const activeFolderPhotos = useMemo(() => {
@@ -369,14 +586,10 @@ export default function DriveDetailPage() {
     if (!galleryId || files.length === 0) return;
 
     setUploading(true);
+    setError(null);
     try {
       for (const file of files) {
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result ?? ""));
-          reader.onerror = () => reject(new Error("Failed to read file"));
-          reader.readAsDataURL(file);
-        });
+        const dataUrl = await preparePhotoUpload(file);
 
         const res = await fetch(`/api/galleries/${galleryId}/photos`, {
           method: "POST",
@@ -385,7 +598,10 @@ export default function DriveDetailPage() {
         });
 
         if (!res.ok) {
-          throw new Error("Unable to upload photo");
+          if (res.status === 413) {
+            throw new Error(`${file.name} is too large to upload. Try a smaller image or compress it first.`);
+          }
+          throw new Error(`Unable to upload ${file.name}`);
         }
 
         const photo = (await res.json()) as GalleryPhoto;
@@ -639,6 +855,75 @@ export default function DriveDetailPage() {
     }
   };
 
+  const removeFavoriteSelection = (selection: ClientFavoritesSelection) => {
+    if (!galleryId) return;
+
+    const nextSelections = clientSelections.filter(
+      (entry) => !(entry.name === selection.name && entry.email === selection.email)
+    );
+    setClientSelections(nextSelections);
+    writeClientSelections(galleryId, nextSelections);
+    setFavoriteIds(readFavoriteIds(galleryId));
+
+    const nextMeta = { ...favoriteFolderMeta };
+    delete nextMeta[getFavoriteSelectionKey(selection)];
+    setFavoriteFolderMeta(nextMeta);
+    writeFavoriteFolderMeta(galleryId, nextMeta);
+
+    if (selectedFavoriteFolderKey === getFavoriteSelectionKey(selection)) {
+      const nextActive = nextSelections[0];
+      setSelectedFavoriteFolderKey(nextActive ? getFavoriteSelectionKey(nextActive) : null);
+    }
+  };
+
+  const removeFavoritePhoto = (selection: ClientFavoritesSelection, photoId: string) => {
+    if (!galleryId) return;
+
+    const nextSelections = clientSelections
+      .map((entry) =>
+        entry.name === selection.name && entry.email === selection.email
+          ? { ...entry, photoIds: entry.photoIds.filter((id) => id !== photoId) }
+          : entry
+      )
+      .filter((entry) => entry.photoIds.length > 0);
+
+    setClientSelections(nextSelections);
+    writeClientSelections(galleryId, nextSelections);
+    setFavoriteIds(readFavoriteIds(galleryId));
+
+    const stillExists = nextSelections.some(
+      (entry) => entry.name === selection.name && entry.email === selection.email
+    );
+    if (!stillExists) {
+      const nextMeta = { ...favoriteFolderMeta };
+      delete nextMeta[getFavoriteSelectionKey(selection)];
+      setFavoriteFolderMeta(nextMeta);
+      writeFavoriteFolderMeta(galleryId, nextMeta);
+    }
+  };
+
+  const createFavoriteFolder = () => {
+    if (!galleryId || !pendingFavoriteFolderKey) return;
+    const name = favoriteFolderName.trim();
+    if (!name) return;
+
+    const nextMeta = {
+      ...favoriteFolderMeta,
+      [pendingFavoriteFolderKey]: {
+        name,
+        description: favoriteFolderDescription.trim(),
+        createdAt: favoriteFolderMeta[pendingFavoriteFolderKey]?.createdAt ?? new Date().toISOString(),
+      },
+    };
+    setFavoriteFolderMeta(nextMeta);
+    writeFavoriteFolderMeta(galleryId, nextMeta);
+    setSelectedFavoriteFolderKey(pendingFavoriteFolderKey);
+    setPendingFavoriteFolderKey(null);
+    setFavoriteFolderName("");
+    setFavoriteFolderDescription("");
+    setShowFavoriteFolderModal(false);
+  };
+
   const sanitizeFileName = (value: string) =>
     value.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim();
 
@@ -676,6 +961,53 @@ export default function DriveDetailPage() {
       link.href = url;
       const folder = folders.find(f => f.id === folderId);
       link.download = `${folder?.name || "photos"}.zip`; document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch {
+      // Ignore zip failures.
+    } finally {
+      setFolderZipBusy(null);
+    }
+  };
+
+  const downloadFavoriteSelection = async (selection: ClientFavoritesSelection) => {
+    const items =
+      favoriteFolders.find((entry) => entry.name === selection.name && entry.email === selection.email)?.items ?? [];
+    if (items.length === 0 || folderZipBusy) return;
+
+    const busyKey = `favorite:${getFavoriteSelectionKey(selection)}`;
+    setFolderZipBusy(busyKey);
+    try {
+      const { default: JSZip } = await import("jszip");
+      const zip = new JSZip();
+      const usedNames = new Set<string>();
+
+      await Promise.all(
+        items.map(async (photo, index) => {
+          const response = await fetch(photo.url);
+          const blob = await response.blob();
+          const baseName = sanitizeFileName(photo.name || `photo-${index + 1}`);
+          const extMatch = baseName.match(/\.[a-z0-9]+$/i);
+          const ext = extMatch ? "" : blob.type === "image/png" ? ".png" : blob.type === "image/jpeg" ? ".jpg" : "";
+          let fileName = `${baseName}${ext}`;
+          let counter = 1;
+          while (usedNames.has(fileName)) {
+            counter += 1;
+            fileName = `${baseName}-${counter}${ext}`;
+          }
+          usedNames.add(fileName);
+          zip.file(fileName, blob);
+        })
+      );
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const link = document.createElement("a");
+      const folderLabel = favoriteFolderMeta[getFavoriteSelectionKey(selection)]?.name || selection.name || "favorites";
+      link.href = url;
+      link.download = `${sanitizeFileName(folderLabel)}.zip`;
+      document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
@@ -960,7 +1292,7 @@ export default function DriveDetailPage() {
                     <p className="mt-1 text-xs text-[#8a7f73]">
                       {isPhotos
                         ? `${photos.length} files ${photos.length ? "??" : ""} ${photos.length ? `${(photos.length * 1.2).toFixed(1)} MB` : ""}`
-                        : folder?.description || "No description"}
+                        : `${getFolderPhotoList(folderId).length} files`}
                     </p>
                   </button>
                   <button
@@ -1046,19 +1378,6 @@ export default function DriveDetailPage() {
               </p>
               <div className="flex flex-wrap gap-3">
                 <button
-                  className="rounded-full border border-[#d9cfc4] px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-[#4a433d]"
-                  type="button"
-                  onClick={() => {
-                    setEditingFolderId(null);
-                    setFolderName("");
-                    setFolderDescription("");
-                    setFolderHidden(false);
-                    setShowFolderModal(true);
-                  }}
-                >
-                  Add folder
-                </button>
-                <button
                   className="rounded-full bg-[#101114] px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-white"
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -1068,6 +1387,10 @@ export default function DriveDetailPage() {
                 </button>
               </div>
             </div>
+
+            {selectedFolderDescription ? (
+              <p className="mt-6 text-center text-sm text-[#8a7f73]">{selectedFolderDescription}</p>
+            ) : null}
 
             <input
               ref={fileInputRef}
@@ -1092,7 +1415,10 @@ export default function DriveDetailPage() {
               </div>
             ) : (
               <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {activeFolderPhotos.map((photo) => (
+                {activeFolderPhotos.map((photo) => {
+                  const isDownloaded = downloadedIds.has(photo.id);
+                  const isLiked = favoriteIds.has(photo.id);
+                  return (
                   <div key={photo.id} className="group relative">
                     <div className="relative">
                       <div className="mb-2 flex items-center overflow-visible rounded-full border border-[#e3d8cc] bg-white/90 opacity-0 shadow transition group-hover:opacity-100">
@@ -1173,9 +1499,23 @@ export default function DriveDetailPage() {
                       <p className="truncate text-xs font-semibold uppercase tracking-[0.2em] text-[#6b645c]">
                         {photo.name}
                       </p>
+                      {isDownloaded || isLiked ? (
+                        <div className="mt-2 flex items-center justify-center gap-1">
+                          {isDownloaded ? (
+                            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#f5f3ef] text-[#3b3430]">
+                              <ArrowDownToLine className="h-2.5 w-2.5" />
+                            </span>
+                          ) : null}
+                          {isLiked ? (
+                            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#fdf1f4] text-[#e11d48]">
+                              <Heart className="h-2.5 w-2.5 fill-current" />
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             )}
           </div>
@@ -1183,33 +1523,119 @@ export default function DriveDetailPage() {
       )}
 
       {activeTab === "favorites" && (
-        <div className="mt-10">
-          {favoritePhotos.length === 0 ? (
+        <div className="mt-8 space-y-8">
+          {favoriteFolders.length === 0 ? (
             <div className="rounded-[26px] border border-[#e3d8cc] bg-white p-10 text-center text-[#8a7f73]">
               No favorites yet. Favorites will appear here when clients like photos in the gallery.
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {favoritePhotos.map((photo) => (
-                <div
-                  key={photo.id}
-                  className="group relative rounded-[20px] border border-[#e3d8cc] bg-white"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photo.url} alt={photo.name} className="h-52 w-full rounded-t-[20px] object-cover" />
-                  <div className="pointer-events-none absolute inset-x-0 top-0 h-52 rounded-t-[20px] bg-black/20 opacity-0 transition group-hover:opacity-100" />
+            <>
+              <div className="relative z-20 flex flex-wrap items-stretch gap-4">
+                {favoriteFolders.map((selection) => {
+                  const selectionKey = getFavoriteSelectionKey(selection);
+                  return (
+                    <button
+                      key={selectionKey}
+                      type="button"
+                      onClick={() => setSelectedFavoriteFolderKey(selectionKey)}
+                      className={`min-w-48 rounded-xl border px-4 py-3 text-left text-sm ${
+                        activeFavoriteFolder && getFavoriteSelectionKey(activeFavoriteFolder) === selectionKey
+                          ? "border-[#15161a] bg-white text-[#15161a]"
+                          : "border-[#e3d8cc] bg-white/60 text-[#6b645c]"
+                      }`}
+                    >
+                      <p className="font-semibold">{selection.folderName}</p>
+                      <p className="mt-1 text-xs text-[#8a7f73]">{selection.folderDescription}</p>
+                    </button>
+                  );
+                })}
+              </div>
 
-                  <div className="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-[#101114]">
-                    <span className="tulip-bar">
-                      <TulipIcon />
-                    </span>
+              {activeFavoriteFolder ? (
+                <div>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm font-medium text-[#8a7f73]">
+                      Favorites folder · {activeFavoriteFolder.items.length} files
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                    </div>
                   </div>
-                  <div className="p-3">
-                    <p className="truncate text-sm font-semibold text-[#15161a]">{photo.name}</p>
+
+                  <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {activeFavoriteFolder.items.map((photo) => {
+                      return (
+                        <div key={photo.id} className="group relative">
+                          <div className="relative">
+                            <div className="mb-2 flex w-25 items-center overflow-visible rounded-full border border-[#e3d8cc] bg-white/90 opacity-0 shadow transition group-hover:opacity-100">
+                              {[
+                                {
+                                  label: "Preview",
+                                  icon: ExternalLink,
+                                  onClick: () => {
+                                    if (!previewPath) return;
+                                    const url = new URL(previewPath, window.location.origin);
+                                    url.searchParams.set("photo", photo.id);
+                                    window.open(url.toString(), "_blank", "noopener,noreferrer");
+                                  },
+                                  active: false,
+                                  danger: false,
+                                },
+                                {
+                                  label: "Download photo",
+                                  icon: ArrowDownToLine,
+                                  onClick: () => downloadPhoto(photo),
+                                  active: false,
+                                  danger: false,
+                                },
+                                {
+                                  label: "Remove from favorites",
+                                  icon: HeartMinusIcon,
+                                  onClick: () => removeFavoritePhoto(activeFavoriteFolder, photo.id),
+                                  active: true,
+                                  danger: true,
+                                },
+                              ].map((action) => {
+                                const Icon = action.icon;
+                                return (
+                                  <div key={action.label} className="group/action relative">
+                                    <button
+                                      type="button"
+                                      onClick={action.onClick}
+                                      className={`flex h-8 w-8 items-center justify-center transition ${
+                                        action.danger
+                                          ? "text-[#e11d48] hover:bg-[#fde8ee]"
+                                          : action.active
+                                            ? "text-[#d97757] hover:bg-[#f2ece4]"
+                                            : "text-[#4a433d] hover:bg-[#f2ece4]"
+                                      }`}
+                                    >
+                                      <Icon className={`h-4 w-4 ${action.active ? "fill-current" : ""}`} />
+                                    </button>
+                                    <div className="pointer-events-none absolute -top-12 left-1/2 z-20 -translate-x-1/2 rounded-lg bg-[#2a2928] px-3 py-2 text-xs font-semibold text-white opacity-0 shadow-lg transition group-hover/action:opacity-100">
+                                      {action.label}
+                                      <span className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-[#2a2928]" />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <div className="h-56 w-full overflow-hidden rounded-[14px] shadow-sm">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={photo.url} alt={photo.name} className="h-full w-full object-cover" />
+                            </div>
+                          </div>
+                          <div className="pt-2">
+                            <p className="truncate text-xs font-semibold uppercase tracking-[0.2em] text-[#6b645c]">
+                              {photo.name}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              ))}
-            </div>
+              ) : null}
+            </>
           )}
         </div>
       )}
@@ -1273,6 +1699,69 @@ export default function DriveDetailPage() {
             // No-op: settings modal only.
           }}
         />
+      ) : null}
+
+      {showFavoriteFolderModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-xl rounded-2xl bg-white p-8 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-2xl font-semibold text-[#15161a]">Create favorites folder</h3>
+              <button
+                type="button"
+                className="h-9 w-9 rounded-full bg-[#f0e6db] text-[#6b645c]"
+                onClick={() => {
+                  setShowFavoriteFolderModal(false);
+                  setPendingFavoriteFolderKey(null);
+                  setFavoriteFolderName("");
+                  setFavoriteFolderDescription("");
+                }}
+              >
+                Ã—
+              </button>
+            </div>
+            <div className="mt-6 space-y-4 rounded-xl bg-[#f8f4ee] p-6">
+              <label className="block text-sm font-semibold text-[#15161a]">
+                Folder name
+                <input
+                  value={favoriteFolderName}
+                  onChange={(e) => setFavoriteFolderName(e.target.value)}
+                  placeholder="For example: Bride selection"
+                  className="mt-2 h-11 w-full rounded-md border border-[#e3d8cc] bg-white px-3"
+                />
+              </label>
+              <label className="block text-sm font-semibold text-[#15161a]">
+                Description
+                <textarea
+                  value={favoriteFolderDescription}
+                  onChange={(e) => setFavoriteFolderDescription(e.target.value)}
+                  placeholder="Add a short note for this favorites folder"
+                  className="mt-2 h-28 w-full rounded-md border border-[#e3d8cc] bg-white px-3 py-2"
+                />
+              </label>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowFavoriteFolderModal(false);
+                  setPendingFavoriteFolderKey(null);
+                  setFavoriteFolderName("");
+                  setFavoriteFolderDescription("");
+                }}
+                className="rounded-md border border-[#d9cfc4] px-6 py-2 text-sm font-semibold text-[#4a433d]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={createFavoriteFolder}
+                className="rounded-md bg-[#101114] px-6 py-2 text-sm font-semibold text-white"
+              >
+                Save folder
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {showFolderModal ? (
@@ -1366,3 +1855,4 @@ export default function DriveDetailPage() {
     </div>
   );
 }
+
