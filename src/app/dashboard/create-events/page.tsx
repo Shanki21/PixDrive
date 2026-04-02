@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   BadgeCheck,
@@ -121,7 +121,7 @@ function ControlToggleRow({
   );
 }
 
-export default function CreateEventsPage() {
+function CreateEventsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editGalleryId = (searchParams.get("edit") ?? "").trim();
@@ -721,5 +721,21 @@ export default function CreateEventsPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function CreateEventsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto w-full max-w-6xl space-y-6">
+          <section className="rounded-[28px] border border-[#d7e8e1] bg-white p-6 shadow-[0_20px_55px_rgba(16,39,32,0.08)] md:p-8">
+            <p className="text-sm font-medium text-[#5f7c73]">Loading create event tools...</p>
+          </section>
+        </div>
+      }
+    >
+      <CreateEventsPageContent />
+    </Suspense>
   );
 }
