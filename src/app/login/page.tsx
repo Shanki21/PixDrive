@@ -9,6 +9,25 @@ import AuthVisuals from "@/components/auth/AuthVisuals";
 import OtpCodeInput from "@/components/auth/OtpCodeInput";
 import { loadProfile, saveProfile } from "@/lib/profile-storage";
 
+type AuthJson = {
+  ok?: boolean;
+  exists?: boolean;
+  message?: string;
+};
+
+async function parseJsonSafe(res: Response): Promise<AuthJson | null> {
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    return null;
+  }
+
+  try {
+    return (await res.json()) as AuthJson;
+  } catch {
+    return null;
+  }
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -27,9 +46,18 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-      const checkData = await checkRes.json();
-      if (!checkData.exists) {
+
+      const checkData = await parseJsonSafe(checkRes);
+      const canSkipCheckUser =
+        (!checkRes.ok && checkRes.status === 404) || (!checkRes.ok && checkRes.status === 503);
+
+      if (checkRes.ok && checkData?.exists === false) {
         setError("Email address not found");
+        return;
+      }
+
+      if (!checkRes.ok && !canSkipCheckUser) {
+        setError(checkData?.message ?? "Unable to validate your email right now");
         return;
       }
 
@@ -38,12 +66,15 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-      const otpData = await otpRes.json();
-      if (!otpRes.ok || !otpData.ok) {
-        setError(otpData.message ?? "Unable to send OTP email");
+
+      const otpData = await parseJsonSafe(otpRes);
+      if (!otpRes.ok || !otpData?.ok) {
+        setError(otpData?.message ?? "Unable to send OTP email");
         return;
       }
       setStep("otp");
+    } catch {
+      setError("Network error. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -59,9 +90,9 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, code: otp }),
       });
-      const verifyData = await verifyRes.json();
-      if (!verifyData.ok) {
-        setError("Invalid or expired OTP");
+      const verifyData = await parseJsonSafe(verifyRes);
+      if (!verifyRes.ok || !verifyData?.ok) {
+        setError(verifyData?.message ?? "Invalid or expired OTP");
         return;
       }
       const current = loadProfile();
@@ -70,6 +101,8 @@ export default function LoginPage() {
         email: email.trim().toLowerCase(),
       });
       router.push("/dashboard");
+    } catch {
+      setError("Network error. Please try again.");
     } finally {
       setLoading(false);
     }

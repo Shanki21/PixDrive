@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpDown, Info, MessageCircleMore, MoreVertical, PencilLine, Search, Trash2 } from "lucide-react";
 import { MinimalGallery } from "@/types/DriveTableTypes";
+import { buildClientGalleryUrl } from "@/lib/client-gallery-url";
 
 type ReviewRecord = {
   id: string;
@@ -176,7 +177,7 @@ export default function ReviewsPage() {
   const infoLocation =
     editing?.clientLocation ||
     (editing && typeof window !== "undefined"
-      ? `${window.location.origin}/disk/${editing.galleryId}`
+      ? buildClientGalleryUrl(editing.galleryId, window.location.origin)
       : "-");
   const infoUserAgent = editing?.userAgent ?? "-";
   const infoIp = editing?.clientIp ?? "Unavailable";

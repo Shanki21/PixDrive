@@ -178,7 +178,7 @@ function GalleryRow({
 
             {!showHeartIcon ? (
               <div className="bg-white border border-gray-200 shadow-lg rounded-lg px-5 py-4 whitespace-nowrap text-lg font-semibold text-gray-800">
-                Client gallery
+                Client event
               </div>
             ) : (
               <div className="bg-white border border-gray-200 shadow-lg rounded-lg p-5 min-w-50 text-sm text-gray-700">
@@ -222,7 +222,7 @@ function GalleryRow({
           </button>
           {!showShareMenu ? (
             <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-800 px-3 py-1.5 text-sm font-semibold text-white shadow-md group-hover:block">
-              Share gallery
+              Share event
               <span className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-gray-800" />
             </span>
           ) : null}
@@ -273,7 +273,7 @@ function GalleryRow({
             />
             <ActionRow
               icon={<Pin size={18} />}
-              label={gallery.pinned ? "Unpin gallery" : "Pin gallery"}
+              label={gallery.pinned ? "Unpin event" : "Pin event"}
               onClick={() => {
                 setShowActionMenu(false);
                 onPinToggle();
@@ -281,7 +281,7 @@ function GalleryRow({
             />
             <ActionRow
               icon={<Copy size={18} />}
-              label="Duplicate gallery"
+              label="Duplicate event"
               onClick={() => {
                 setShowActionMenu(false);
                 onDuplicate();
@@ -289,7 +289,7 @@ function GalleryRow({
             />
             <ActionRow
               icon={<Trash2 size={18} className="text-red-500" />}
-              label="Delete gallery"
+              label="Delete event"
               className="text-red-500"
               onClick={() => {
                 setShowActionMenu(false);

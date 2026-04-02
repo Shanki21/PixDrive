@@ -4,7 +4,7 @@ import DriveTabs from "./DriveTabs";
 export default function EmptyDriveHero({ onAdd }: { onAdd: () => void }) {
     return (
         <>
-            <DriveHeader />
+            <DriveHeader totalEvents={0} />
             <DriveTabs active="galleries" showTrash={false} />
             <div className="text-center py-20">
                 <h2 className="text-3xl font-semibold mb-3">

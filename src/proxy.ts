@@ -17,10 +17,6 @@ export async function proxy(req: NextRequest) {
 
       const galleries = await res.json();
 
-      if (req.nextUrl.pathname === "/dashboard" && Array.isArray(galleries) && galleries.length > 0) {
-        return NextResponse.redirect(new URL("/dashboard/drive", req.url));
-      }
-
       if (req.nextUrl.pathname === "/dashboard/drive" && (!Array.isArray(galleries) || galleries.length === 0)) {
         return NextResponse.redirect(new URL("/dashboard", req.url));
       }

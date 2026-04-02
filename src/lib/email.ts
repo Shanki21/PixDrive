@@ -7,6 +7,20 @@ type SendOtpResult =
   | { ok: true; provider: "resend" | "smtp" }
   | { ok: false; message: string; reason: string };
 
+function isConfigured(value?: string) {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return false;
+
+  return (
+    normalized !== "replace-me" &&
+    normalized !== "change-me" &&
+    normalized !== "changeme" &&
+    normalized !== "your-key-here" &&
+    normalized !== "undefined" &&
+    normalized !== "null"
+  );
+}
+
 function buildOtpHtml(otp: string) {
   return `
     <div style="font-family:Arial,sans-serif;color:#111">
@@ -19,9 +33,9 @@ function buildOtpHtml(otp: string) {
 }
 
 async function sendWithResend({ to, otp }: SendOtpParams): Promise<SendOtpResult> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL;
-  if (!apiKey || !from) {
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  const from = process.env.RESEND_FROM_EMAIL?.trim();
+  if (!isConfigured(apiKey) || !isConfigured(from)) {
     return {
       ok: false,
       reason: "missing_resend_env",
@@ -64,12 +78,12 @@ async function sendWithResend({ to, otp }: SendOtpParams): Promise<SendOtpResult
 }
 
 async function sendWithSmtp({ to, otp }: SendOtpParams): Promise<SendOtpResult> {
-  const host = process.env.SMTP_HOST;
+  const host = process.env.SMTP_HOST?.trim();
   const port = Number(process.env.SMTP_PORT ?? 0);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  const from = process.env.SMTP_FROM_EMAIL;
-  if (!host || !port || !user || !pass || !from) {
+  const user = process.env.SMTP_USER?.trim();
+  const pass = process.env.SMTP_PASS?.trim();
+  const from = process.env.SMTP_FROM_EMAIL?.trim();
+  if (!isConfigured(host) || !port || !isConfigured(user) || !isConfigured(pass) || !isConfigured(from)) {
     return {
       ok: false,
       reason: "missing_smtp_env",

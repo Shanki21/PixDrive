@@ -1,5 +1,7 @@
-﻿import { getPrismaUnavailableMessage, isPrismaUnavailableError } from "@/lib/prisma-errors";
+import { getClientGalleryHostLabel } from "@/lib/client-gallery-url";
+import { getPrismaUnavailableMessage, isPrismaUnavailableError } from "@/lib/prisma-errors";
 import prisma from "@/lib/prisma";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import DiskGalleryClient from "./DiskGalleryClient";
 
@@ -21,6 +23,12 @@ function formatHeaderDate(value: Date) {
 
 export default async function DiskGalleryPage({ params }: DiskGalleryPageProps) {
   try {
+    const requestHeaders = await headers();
+    const forwardedHost = requestHeaders.get("x-forwarded-host");
+    const host = forwardedHost || requestHeaders.get("host");
+    const protocol = requestHeaders.get("x-forwarded-proto") || "https";
+    const fallbackOrigin = host ? `${protocol}://${host}` : undefined;
+
     const { slug } = await params;
     const initialTake = 60;
 
@@ -84,7 +92,7 @@ export default async function DiskGalleryPage({ params }: DiskGalleryPageProps) 
         initialPhotos={photos}
         totalPhotos={totalPhotos}
         initialCursor={nextCursor}
-        hostLabel="pixora.pro"
+        hostLabel={getClientGalleryHostLabel(fallbackOrigin)}
         formatHeaderDate={formatHeaderDate(gallery.createdAt)}
       />
     );

@@ -82,8 +82,8 @@ export default function SignupPage() {
         body: JSON.stringify({ email, code: otp }),
       });
       const data = await res.json();
-      if (!data.ok) {
-        setError("Invalid or expired OTP");
+      if (!res.ok || !data.ok) {
+        setError(data.message ?? "Invalid or expired OTP");
         return;
       }
       setStep("language");

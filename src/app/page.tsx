@@ -8,9 +8,9 @@ import HomeFooter from "@/components/marketing/HomeFooter";
 
 export default function Home() {
   return (
-    <>
+    <div className="w-full overflow-x-hidden">
       <HomeNavbar />
-      <main className="overflow-x-hidden bg-[#FAFAF8]">
+      <main className="relative w-full overflow-x-hidden bg-[#FAFAF8]">
         <Hero />
         <Features />
         <Workflow />
@@ -18,6 +18,6 @@ export default function Home() {
         <CTA />
       </main>
       <HomeFooter />
-    </>
+    </div>
   );
 }

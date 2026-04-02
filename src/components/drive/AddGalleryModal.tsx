@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getClientGalleryBasePathForDisplay } from "@/lib/client-gallery-url";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 
 type Tab = "main" | "favorites" | "products" | "reviews" | "contacts" | "privacy";
@@ -20,9 +21,6 @@ const PRODUCT_CATALOG = [
     { id: "album-premium", name: "Premium Photo Album", price: "INR 2,400" },
     { id: "canvas-20x30", name: "20 x 30 Canvas Print", price: "INR 3,200" },
 ];
-
-const CLIENT_GALLERY_BASE_URL =
-    process.env.NEXT_PUBLIC_CLIENT_GALLERY_BASE_URL?.trim() || "https://vowgraphy.pixora.pro";
 
 function normalizeStorageDuration(value?: string | null): StorageDuration {
     if (value === "14 days" || value === "1 month" || value === "3 months" || value === "6 months" || value === "1 year") {
@@ -72,7 +70,8 @@ export default function AddGalleryModal({
     onUpdated?: (g: MinimalGallery) => void;
     initialGallery?: MinimalGallery | null;
 }) {
-    const displayGalleryBaseUrl = CLIENT_GALLERY_BASE_URL.replace(/\/+$/, "") + "/";
+    const runtimeOrigin = typeof window === "undefined" ? undefined : window.location.origin;
+    const displayGalleryBaseUrl = getClientGalleryBasePathForDisplay(runtimeOrigin);
     const isEditMode = Boolean(initialGallery);
     const [tab, setTab] = useState<Tab>("main");
     const [isSaving, setIsSaving] = useState(false);
@@ -165,7 +164,7 @@ export default function AddGalleryModal({
     async function handleAdd() {
         const trimmedName = name.trim();
         if (!trimmedName) {
-            alert("Gallery name is required.");
+            alert("Event name is required.");
             return;
         }
 
@@ -194,7 +193,7 @@ export default function AddGalleryModal({
                 });
 
                 if (!res.ok) {
-                    alert("Unable to update gallery settings. Please try again.");
+                    alert("Unable to update event settings. Please try again.");
                     return;
                 }
 
@@ -215,7 +214,7 @@ export default function AddGalleryModal({
             });
 
             if (!res.ok) {
-                alert("Unable to create gallery. Please try again.");
+                alert("Unable to create event. Please try again.");
                 return;
             }
 
@@ -241,7 +240,7 @@ export default function AddGalleryModal({
 
                 {/* HEADER */}
                 <div className="flex justify-between items-center px-3 py-4 border-b">
-                    <h2 className="text-lg font-semibold">{isEditMode ? "Gallery settings" : "New gallery"}</h2>
+                    <h2 className="text-lg font-semibold">{isEditMode ? "Event settings" : "New event"}</h2>
                     <button type="button" onClick={onClose} aria-label="Close">
                         x
                     </button>
@@ -271,7 +270,7 @@ export default function AddGalleryModal({
 
                             {/* BASIC INFO */}
                             <Section>
-                                <Field label="Gallery name">
+                                <Field label="Event name">
                                     <input
                                         className="w-full border rounded px-3 py-2"
                                         placeholder="e.g. wedding"
@@ -283,7 +282,7 @@ export default function AddGalleryModal({
                                 </Field>
 
                                 {isEditMode && initialGallery ? (
-                                    <Field label="Gallery link">
+                                    <Field label="Event link">
                                         <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr]">
                                             <input
                                                 className="w-full border rounded px-3 py-2 bg-gray-50 text-gray-500"
@@ -350,11 +349,11 @@ export default function AddGalleryModal({
                             {/* GALLERY TYPE */}
                             <Section>
                                 <div>
-                                    <p className="text-sm font-medium mb-2">Gallery type</p>
+                                    <p className="text-sm font-medium mb-2">Event type</p>
 
                                     <div className="grid grid-cols-2 gap-2 rounded-md bg-gray-100 p-1">
                                         <OptionButton active={galleryType === "client"} onClick={() => setGalleryType("client")}>
-                                            Client gallery
+                                            Client delivery
                                         </OptionButton>
                                         <OptionButton active={galleryType === "sales"} onClick={() => setGalleryType("sales")}>
                                             Photo sales
@@ -450,7 +449,7 @@ export default function AddGalleryModal({
                             <Section>
                                 <div className="flex justify-between items-center">
                                     <div>
-                                        <p className="text-sm font-medium">Gallery language</p>
+                                        <p className="text-sm font-medium">Event language</p>
                                         <p className="text-xs text-gray-500">English (default)</p>
                                     </div>
 
@@ -544,7 +543,7 @@ export default function AddGalleryModal({
                                     <div className="flex justify-between items-center">
                                         <div>
                                             <p className="text-sm font-medium">Client name</p>
-                                            <p className="text-xs text-blue-600">Name format is set in the Drive settings.</p>
+                                            <p className="text-xs text-blue-600">Name format is set in Event settings.</p>
                                         </div>
 
                                         <div className="flex items-center gap-1 text-xs text-gray-500">Required</div>
@@ -582,12 +581,12 @@ export default function AddGalleryModal({
                     {/* PRODUCTS */}
                     {tab === "products" && (
                         <Section>
-                            <Toggle label="Show products in gallery" value={showProducts} onChange={setShowProducts} />
+                            <Toggle label="Show products in event" value={showProducts} onChange={setShowProducts} />
                             {showProducts && (
                                 <div className="space-y-3">
                                     <div>
                                         <p className="text-sm font-medium">Products</p>
-                                        <p className="text-xs text-gray-500">Up to 4 products can be shown in the gallery.</p>
+                                        <p className="text-xs text-gray-500">Up to 4 products can be shown in the event.</p>
                                     </div>
 
                                     <div className="relative">
@@ -829,7 +828,4 @@ function Toggle({
         </div>
     );
 }
-
-
-
 

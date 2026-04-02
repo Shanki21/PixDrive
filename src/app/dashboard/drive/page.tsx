@@ -2,17 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import AddGalleryModal from "@/components/drive/AddGalleryModal";
 import DriveHeader from "@/components/drive/DriveHeader";
 import DriveTable from "@/components/drive/DriveTable";
-import DriveTabs from "@/components/drive/DriveTabs";
-import DriveToolbar from "@/components/drive/DriveToolbar";
 import TrashTable from "@/components/drive/TrashTable";
 import TrashWarning from "@/components/drive/TrashWarning";
-import { getGalleryMeta, saveGalleryMeta } from "@/lib/gallery-meta-storage";
+import { getGalleryMeta } from "@/lib/gallery-meta-storage";
+import { getEventSettings, saveEventSettings } from "@/lib/event-settings-storage";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 
 const VISITS_STORAGE_KEY = "wf_gallery_visits";
+const CLIENT_DOWNLOADS_PREFIX = "wf_client_downloads:";
 const GALLERIES_CACHE_KEY = "wf_drive_galleries_cache_v1";
 const GALLERIES_CACHE_TTL = 60 * 1000;
 
@@ -23,30 +22,25 @@ function insertAfterPinned(list: MinimalGallery[], item: MinimalGallery) {
 
 export default function DrivePage() {
   const router = useRouter();
-  const [galleries, setGalleries] = useState<MinimalGallery[]>([]);
-  const [trash, setTrash] = useState<MinimalGallery[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [hasMounted, setHasMounted] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingGallery, setEditingGallery] = useState<MinimalGallery | null>(null);
-  const [tab, setTab] = useState<"galleries" | "trash">("galleries");
+  const [galleries, setGalleries] = useState<MinimalGallery[]>(() => {
+    if (typeof window === "undefined") {
+      return [];
+    }
 
-  useEffect(() => {
-    setHasMounted(true);
-  }, []);
-
-  useEffect(() => {
     try {
       const raw = window.sessionStorage.getItem(GALLERIES_CACHE_KEY);
-      if (!raw) return;
+      if (!raw) return [];
       const parsed = JSON.parse(raw) as { ts: number; data: MinimalGallery[] };
-      if (!parsed?.ts || !Array.isArray(parsed.data)) return;
-      if (Date.now() - parsed.ts > GALLERIES_CACHE_TTL) return;
-      setGalleries(parsed.data);
+      if (!parsed?.ts || !Array.isArray(parsed.data)) return [];
+      if (Date.now() - parsed.ts > GALLERIES_CACHE_TTL) return [];
+      return parsed.data;
     } catch {
-      // Ignore cache read failures.
+      return [];
     }
-  }, []);
+  });
+  const [trash, setTrash] = useState<MinimalGallery[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<"galleries" | "trash">("galleries");
 
   useEffect(() => {
     const load = async () => {
@@ -57,8 +51,7 @@ export default function DrivePage() {
       }
 
       const rows = (await res.json()) as MinimalGallery[];
-      if (!Array.isArray(rows) || rows.length === 0) {
-        router.replace("/dashboard");
+      if (!Array.isArray(rows)) {
         return;
       }
 
@@ -74,10 +67,29 @@ export default function DrivePage() {
 
       const rowsWithVisits = rows.map((row) => {
         const meta = getGalleryMeta(row.id);
+        const eventSettings = getEventSettings(row.id);
+        const settingsExpiry =
+          eventSettings?.expiryDate ? new Date(`${eventSettings.expiryDate}T00:00:00`).toISOString() : undefined;
+        let downloadsCount = row.downloads ?? 0;
+        try {
+          const rawDownloads = localStorage.getItem(`${CLIENT_DOWNLOADS_PREFIX}${row.id}`);
+          const parsedDownloads = rawDownloads ? (JSON.parse(rawDownloads) as string[]) : [];
+          downloadsCount = Array.isArray(parsedDownloads) ? parsedDownloads.length : downloadsCount;
+        } catch {
+          downloadsCount = row.downloads ?? 0;
+        }
         return {
           ...row,
           visitors: visitsMap[row.id] ?? row.visitors ?? 0,
-          expiresAt: meta?.expiresAt ?? row.expiresAt ?? undefined,
+          downloads: downloadsCount,
+          startDate: eventSettings?.startDate ?? null,
+          endDate: eventSettings?.endDate ?? null,
+          eventType: eventSettings?.eventType ?? null,
+          eventLocation: eventSettings?.eventLocation ?? null,
+          description: eventSettings?.description ?? null,
+          published: eventSettings?.published ?? true,
+          photoSellingEnabled: eventSettings?.photoSellingEnabled ?? false,
+          expiresAt: meta?.expiresAt ?? row.expiresAt ?? settingsExpiry ?? undefined,
           storageTimeLabel: meta?.storageTimeLabel ?? row.storageTimeLabel ?? undefined,
           favoritesEnabled: meta?.favoritesEnabled ?? row.favoritesEnabled ?? true,
           favoritesLimitSelected: meta?.favoritesLimitSelected ?? row.favoritesLimitSelected ?? false,
@@ -131,41 +143,52 @@ export default function DrivePage() {
   }, [galleries]);
 
   const trashCount = useMemo(() => trash.length, [trash]);
+  const totalFiles = useMemo(
+    () => galleries.reduce((sum, gallery) => sum + (gallery.filesCount ?? 0), 0),
+    [galleries]
+  );
+  const pinnedCount = useMemo(
+    () => galleries.filter((gallery) => gallery.pinned).length,
+    [galleries]
+  );
 
-  if (!hasMounted || (loading && galleries.length === 0)) {
+  if (loading && galleries.length === 0) {
     return (
-      <div className="mx-auto w-full max-w-6xl px-6 py-20 text-center text-[#8a7f73]">
-        Loading your galleries...
+      <div className="mx-auto w-full max-w-6xl px-6 py-20 text-center text-[#5f7e9a]">
+        Loading your events...
       </div>
     );
   }
 
   return (
     <>
-      <DriveHeader />
+      <DriveHeader totalEvents={galleries.length} />
 
-      <DriveTabs
-        active={tab}
-        showTrash
-        trashCount={trashCount}
-        onChange={setTab}
-      />
-
-      {tab === "galleries" && (
-        <DriveToolbar
-          onAdd={() => {
-            setEditingGallery(null);
-            setModalOpen(true);
-          }}
-        />
-      )}
+      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <article className="rounded-2xl border border-[#d3e8df] bg-white p-4">
+          <p className="text-xs uppercase tracking-[0.14em] text-[#5f7f74]">Active Events</p>
+          <p className="mt-2 text-2xl font-semibold text-[#142924]">{galleries.length}</p>
+        </article>
+        <article className="rounded-2xl border border-[#d3e8df] bg-white p-4">
+          <p className="text-xs uppercase tracking-[0.14em] text-[#5f7f74]">Files Managed</p>
+          <p className="mt-2 text-2xl font-semibold text-[#142924]">{totalFiles}</p>
+        </article>
+        <article className="rounded-2xl border border-[#d3e8df] bg-white p-4">
+          <p className="text-xs uppercase tracking-[0.14em] text-[#5f7f74]">Pinned Priority</p>
+          <p className="mt-2 text-2xl font-semibold text-[#142924]">{pinnedCount}</p>
+        </article>
+      </div>
 
       {tab === "galleries" && (
         <DriveTable
           galleries={galleries}
+          trashCount={trashCount}
+          onAdd={() => {
+            router.push("/dashboard/create-events");
+          }}
+          onOpenBin={() => setTab("trash")}
           onSettings={(gallery) => {
-            setEditingGallery(gallery);
-            setModalOpen(true);
+            router.push(`/dashboard/create-events?edit=${encodeURIComponent(gallery.id)}`);
           }}
           onPreview={(gallery) => {
             router.push(`/dashboard/drive/${gallery.id}`);
@@ -179,6 +202,22 @@ export default function DrivePage() {
               const regular = toggled.filter((g) => !g.pinned);
               return [...pinned, ...regular];
             });
+          }}
+          onPublishToggle={(gallery) => {
+            const nextPublished = !(gallery.published ?? true);
+            saveEventSettings(gallery.id, { published: nextPublished });
+            setGalleries((prev) =>
+              prev.map((item) => (item.id === gallery.id ? { ...item, published: nextPublished } : item))
+            );
+          }}
+          onPhotoSellingToggle={(gallery) => {
+            const nextPhotoSelling = !(gallery.photoSellingEnabled ?? false);
+            saveEventSettings(gallery.id, { photoSellingEnabled: nextPhotoSelling });
+            setGalleries((prev) =>
+              prev.map((item) =>
+                item.id === gallery.id ? { ...item, photoSellingEnabled: nextPhotoSelling } : item
+              )
+            );
           }}
           onDuplicate={(gallery) => {
             const copy: MinimalGallery = {
@@ -215,11 +254,18 @@ export default function DrivePage() {
               return next;
             });
           }}
-        />
-      )}
+          />
+        )}
 
       {tab === "trash" && (
         <div className="mt-6 space-y-4">
+          <button
+            type="button"
+            onClick={() => setTab("galleries")}
+            className="rounded-xl border border-[#d2e7de] bg-white px-4 py-2 text-sm font-semibold text-[#25493f] transition hover:border-[#0f766e] hover:text-[#0f766e]"
+          >
+            Back to My Events
+          </button>
           <TrashWarning />
           <TrashTable
             galleries={trash}
@@ -235,43 +281,6 @@ export default function DrivePage() {
         </div>
       )}
 
-      {modalOpen && (
-        <AddGalleryModal
-          open={modalOpen}
-          onClose={() => {
-            setModalOpen(false);
-            setEditingGallery(null);
-          }}
-          initialGallery={editingGallery}
-          onUpdated={(updated) => {
-            saveGalleryMeta(updated.id, {
-              expiresAt: updated.expiresAt ?? null,
-              storageTimeLabel: updated.storageTimeLabel ?? null,
-              favoritesEnabled: updated.favoritesEnabled ?? false,
-              favoritesLimitSelected: updated.favoritesLimitSelected ?? false,
-              favoritesName: updated.favoritesName ?? null,
-              favoritesListsCount: updated.favoritesListsCount ?? 0,
-              selectionCompletedCount: updated.selectionCompletedCount ?? 0,
-              favoritesMaxSelected: updated.favoritesMaxSelected ?? null,
-            });
-            setGalleries((prev) => prev.map((g) => (g.id === updated.id ? { ...g, ...updated } : g)));
-          }}
-          onCreated={(g) => {
-            saveGalleryMeta(g.id, {
-              expiresAt: g.expiresAt ?? null,
-              storageTimeLabel: g.storageTimeLabel ?? null,
-              favoritesEnabled: g.favoritesEnabled ?? false,
-              favoritesLimitSelected: g.favoritesLimitSelected ?? false,
-              favoritesName: g.favoritesName ?? null,
-              favoritesListsCount: g.favoritesListsCount ?? 0,
-              selectionCompletedCount: g.selectionCompletedCount ?? 0,
-              favoritesMaxSelected: g.favoritesMaxSelected ?? null,
-            });
-            setGalleries((prev) => insertAfterPinned(prev, g));
-          }}
-        />
-      )}
     </>
   );
 }
-

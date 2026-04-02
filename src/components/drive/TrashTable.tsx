@@ -81,7 +81,7 @@ export default function TrashTable({
               className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-blue-500"
             />
             <input
-              placeholder="Search"
+              placeholder="Search archived events"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="h-9 w-full rounded-full border border-gray-200 bg-white pl-4 pr-9 text-sm text-gray-800 outline-none transition focus:border-blue-400"
@@ -147,7 +147,7 @@ export default function TrashTable({
 
       <div className="hidden h-50 overflow-x-auto md:block">
         {rows.length === 0 ? (
-          <div className="px-4 py-10 text-sm text-gray-500">No galleries in trash.</div>
+          <div className="px-4 py-10 text-sm text-gray-500">No events in archive.</div>
         ) : (
           rows.map((gallery, index) => {
             const deletedAt = gallery.deletedAt ? new Date(gallery.deletedAt) : null;

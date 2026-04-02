@@ -9,5 +9,5 @@ export function isPrismaUnavailableError(error: unknown) {
 }
 
 export function getPrismaUnavailableMessage() {
-  return "Database unavailable";
+  return "Database unavailable. Ensure PostgreSQL is running and DATABASE_URL is correct.";
 }

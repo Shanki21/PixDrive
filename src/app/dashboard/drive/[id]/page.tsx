@@ -4,6 +4,7 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AddGalleryModal from "@/components/drive/AddGalleryModal";
 import { getGalleryMeta, saveGalleryMeta } from "@/lib/gallery-meta-storage";
+import { buildClientGalleryUrl } from "@/lib/client-gallery-url";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 import {
   ArrowDownToLine,
@@ -11,15 +12,17 @@ import {
   ChevronRight,
   Eye,
   ExternalLink,
-  FolderPlus,
   Heart,
   Link as LinkIcon,
   Lock,
   MoreVertical,
   PencilLine,
+  Search,
   Settings,
+  SlidersHorizontal,
   Star,
   Trash2,
+  UploadCloud,
   HeartMinusIcon,
 } from "lucide-react";
 
@@ -57,8 +60,6 @@ type FavoriteFolderMeta = {
   createdAt: string;
 };
 
-const CLIENT_GALLERY_BASE_URL =
-  process.env.NEXT_PUBLIC_CLIENT_GALLERY_BASE_URL?.trim() || "https://xyz.pixora.pro";
 const FOLDER_STORAGE_PREFIX = "wf_gallery_folders:";
 const FOLDER_PHOTOS_PREFIX = "wf_gallery_folder_photos:";
 const FOLDER_ORDER_PREFIX = "wf_gallery_folder_order:";
@@ -316,19 +317,19 @@ export default function DriveDetailPage() {
   const [folderZipBusy, setFolderZipBusy] = useState<string | null>(null);
   const [coverPhotoId, setCoverPhotoId] = useState<string | null>(null);
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const [photoSearch, setPhotoSearch] = useState("");
+  const [sortMode, setSortMode] = useState<"latest" | "name">("latest");
 
   const publicLink = useMemo(() => {
     if (!gallery) return null;
-    const base = CLIENT_GALLERY_BASE_URL.replace(/\/+$/, "");
     const slug = gallery.slug || gallery.id;
-    return `${base}/${slug}`;
+    const runtimeOrigin = typeof window === "undefined" ? undefined : window.location.origin;
+    return buildClientGalleryUrl(slug, runtimeOrigin);
   }, [gallery]);
 
   const previewPath = useMemo(() => {
-    if (!gallery) return null;
-    const slug = gallery.slug || gallery.id;
-    return `/disk/${slug}`;
-  }, [gallery]);
+    return publicLink;
+  }, [publicLink]);
 
   const initialGallery = useMemo(() => {
     if (!gallery) return null;
@@ -581,8 +582,20 @@ export default function DriveDetailPage() {
 
   }, [photos, selectedFolderId, folderPhotos, folders]);
 
-  const onUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
+  const sortedFolderPhotos = useMemo(() => {
+    if (sortMode === "latest") {
+      return activeFolderPhotos;
+    }
+    return [...activeFolderPhotos].sort((a, b) => a.name.localeCompare(b.name));
+  }, [activeFolderPhotos, sortMode]);
+
+  const visibleFolderPhotos = useMemo(() => {
+    const query = photoSearch.trim().toLowerCase();
+    if (!query) return sortedFolderPhotos;
+    return sortedFolderPhotos.filter((photo) => photo.name.toLowerCase().includes(query));
+  }, [sortedFolderPhotos, photoSearch]);
+
+  const uploadFiles = async (files: File[]) => {
     if (!galleryId || files.length === 0) return;
 
     setUploading(true);
@@ -627,6 +640,11 @@ export default function DriveDetailPage() {
         fileInputRef.current.value = "";
       }
     }
+  };
+
+  const onUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    await uploadFiles(files);
   };
 
   const getFolderPhotoList = (folderId: string) => {
@@ -1147,117 +1165,151 @@ export default function DriveDetailPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-10">
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <button
-            type="button"
-            className="text-sm font-semibold text-[#8a7f73] hover:text-[#4a433d]"
-            onClick={() => router.push("/dashboard/drive")}
-          >
-            ← All galleries
-          </button>
-          <h1 className="font-display mt-4 text-4xl font-semibold text-[#15161a]">{gallery.name}</h1>
-          <p className="mt-2 text-sm text-[#8a7f73]">
-            Saved until {formatDate(initialGallery?.expiresAt ?? null)} · {gallery.photosCount ?? photos.length} files
-          </p>
-        </div>
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 md:px-6 md:py-8">
+      <section className="relative overflow-hidden rounded-[30px] border border-[#d7e8e1] bg-white shadow-[0_22px_44px_rgba(12,46,38,0.08)]">
+        <div className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-[radial-gradient(circle,rgba(15,118,110,0.2)_0%,rgba(15,118,110,0)_70%)]" />
+        <div className="pointer-events-none absolute -left-28 bottom-0 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(37,99,235,0.16)_0%,rgba(37,99,235,0)_72%)]" />
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative" ref={shareMenuRef}>
+        <div className="relative flex flex-col gap-6 px-5 pb-6 pt-7 md:px-8 lg:flex-row lg:items-start lg:justify-between">
+          <div>
             <button
-              className="rounded-full border border-[#d9cfc4] px-5 py-2.5 text-sm font-semibold text-[#4a433d]"
               type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                setShareMenuOpen((prev) => !prev);
-              }}
+              className="inline-flex items-center gap-2 text-sm font-semibold text-[#5f7b73] transition hover:text-[#153730]"
+              onClick={() => router.push("/dashboard/drive")}
             >
-              Share gallery
+              <span aria-hidden="true">&larr;</span>
+              Back to My Events
             </button>
-            {shareMenuOpen ? (
-              <div
-                className="absolute right-0 top-full z-50 mt-3 w-72 overflow-hidden rounded-2xl border border-[#e3d8cc] bg-white shadow-2xl"
-                onClick={(event) => event.stopPropagation()}
+
+            <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#0f766e]">Pixora Upload Studio</p>
+            <h1 className="mt-2 text-3xl font-bold tracking-[-0.03em] text-[#122520] md:text-4xl">{gallery.name}</h1>
+            <p className="mt-2 text-sm text-[#58726a]">
+              Saved until {formatDate(initialGallery?.expiresAt ?? null)} - {gallery.photosCount ?? photos.length} files
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="rounded-full border border-[#cfe4db] bg-[#f4fbf8] px-3 py-1 text-xs font-semibold text-[#145045]">
+                {photos.length} photos
+              </span>
+              <span className="rounded-full border border-[#d8e4fa] bg-[#f4f8ff] px-3 py-1 text-xs font-semibold text-[#1f4f93]">
+                {favoritePhotos.length} favorites
+              </span>
+              <span className="rounded-full border border-[#d7e7de] bg-[#f8fbfa] px-3 py-1 text-xs font-semibold text-[#49685f]">
+                {downloadedIds.size} downloads
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="inline-flex items-center gap-2 rounded-xl bg-[#0f766e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#115e59] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              <UploadCloud className="h-4 w-4" />
+              {uploading ? "Uploading..." : "Upload Photos"}
+            </button>
+
+            <div className="relative" ref={shareMenuRef}>
+              <button
+                className="rounded-xl border border-[#d0e5dc] bg-white px-4 py-2.5 text-sm font-semibold text-[#21453d] transition hover:border-[#0f766e] hover:text-[#0f766e]"
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setShareMenuOpen((prev) => !prev);
+                }}
               >
-                <div className="py-2 text-sm text-[#3b3430]">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void navigator.clipboard.writeText(publicLink ?? "");
-                      setShareMenuOpen(false);
-                    }}
-                    className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-[#f7f3ee]"
-                  >
-                    <LinkIcon className="h-5 w-5 text-[#9a9187]" />
-                    <span>Copy link</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      downloadGalleryQr();
-                      setShareMenuOpen(false);
-                    }}
-                    className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-[#f7f3ee]"
-                  >
-                    <div className="flex h-5 w-5 items-center justify-center rounded bg-[#f1ece5] text-[10px] font-bold text-[#7f776e]">
-                      QR
-                    </div>
-                    <span>Download QR code</span>
-                  </button>
-                </div>
-                <div className="border-t border-[#efe6dc] py-2 text-sm text-[#3b3430]">
-                  {[
-                    { id: "facebook", label: "Facebook", bg: "bg-[#4267B2]", text: "f" },
-                    { id: "whatsapp", label: "WhatsApp", bg: "bg-[#25D366]", text: "w" },
-                    { id: "telegram", label: "Telegram", bg: "bg-[#229ED9]", text: "t" },
-                    { id: "viber", label: "Viber", bg: "bg-[#7360F2]", text: "v" },
-                  ].map((item) => (
+                Share gallery
+              </button>
+              {shareMenuOpen ? (
+                <div
+                  className="absolute right-0 top-full z-50 mt-3 w-72 overflow-hidden rounded-2xl border border-[#d9e8e2] bg-white shadow-2xl"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="py-2 text-sm text-[#24433c]">
                     <button
-                      key={item.id}
                       type="button"
                       onClick={() => {
-                        shareGalleryTo(item.id as "facebook" | "whatsapp" | "telegram" | "viber");
+                        void navigator.clipboard.writeText(publicLink ?? "");
                         setShareMenuOpen(false);
                       }}
-                      className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-[#f7f3ee]"
+                      className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-[#f2faf7]"
                     >
-                      <span
-                        className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold uppercase text-white ${item.bg}`}
-                      >
-                        {item.text}
-                      </span>
-                      <span>{item.label}</span>
+                      <LinkIcon className="h-5 w-5 text-[#4f7b70]" />
+                      <span>Copy link</span>
                     </button>
-                  ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        downloadGalleryQr();
+                        setShareMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-[#f2faf7]"
+                    >
+                      <div className="flex h-5 w-5 items-center justify-center rounded bg-[#e8f3ef] text-[10px] font-bold text-[#2e6a5d]">
+                        QR
+                      </div>
+                      <span>Download QR code</span>
+                    </button>
+                  </div>
+                  <div className="border-t border-[#e6f0ec] py-2 text-sm text-[#24433c]">
+                    {[
+                      { id: "facebook", label: "Facebook", bg: "bg-[#4267B2]", text: "f" },
+                      { id: "whatsapp", label: "WhatsApp", bg: "bg-[#25D366]", text: "w" },
+                      { id: "telegram", label: "Telegram", bg: "bg-[#229ED9]", text: "t" },
+                      { id: "viber", label: "Viber", bg: "bg-[#7360F2]", text: "v" },
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          shareGalleryTo(item.id as "facebook" | "whatsapp" | "telegram" | "viber");
+                          setShareMenuOpen(false);
+                        }}
+                        className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-[#f2faf7]"
+                      >
+                        <span
+                          className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold uppercase text-white ${item.bg}`}
+                        >
+                          {item.text}
+                        </span>
+                        <span>{item.label}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : null}
+            </div>
+
+            {previewPath ? (
+              <button
+                type="button"
+                onClick={() => window.open(previewPath, "_blank", "noopener,noreferrer")}
+                className="rounded-xl border border-[#d0e5dc] bg-white px-4 py-2.5 text-sm font-semibold text-[#21453d] transition hover:border-[#0f766e] hover:text-[#0f766e]"
+              >
+                Preview
+              </button>
             ) : null}
           </div>
-          {previewPath ? (
-            <button
-              type="button"
-              onClick={() => window.open(previewPath, "_blank", "noopener,noreferrer")}
-              className="rounded-full bg-[#101114] px-6 py-2.5 text-sm font-semibold text-white"
-            >
-              Preview
-            </button>
-          ) : null}
         </div>
-      </div>
+      </section>
 
-      <div className="mt-8 flex flex-wrap items-center gap-6 border-b border-[#e3d8cc] text-sm font-semibold text-[#6b645c]">
+      <div className="mt-6 flex flex-wrap gap-2 rounded-2xl border border-[#d7e8e1] bg-white p-2">
         {[
           { id: "gallery", label: "Gallery" },
           { id: "favorites", label: `Favorites (${favoritePhotos.length})` },
           { id: "settings", label: "Settings" },
-          { id: "design", label: "Design and cover" },
+          
         ].map((tab) => (
           <button
             key={tab.id}
             type="button"
-            className={`pb-3 ${activeTab === tab.id ? "border-b-2 border-[#d97757] text-[#15161a]" : "border-b-2 border-transparent"
-              }`}
+            className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+              activeTab === tab.id
+                ? "bg-[linear-gradient(140deg,#0f766e_0%,#1d4ed8_120%)] text-white shadow-[0_8px_20px_rgba(15,118,110,0.25)]"
+                : "text-[#4e6b62] hover:bg-[#f2faf7] hover:text-[#173a31]"
+            }`}
             onClick={() => setActiveTab(tab.id as typeof activeTab)}
           >
             {tab.label}
@@ -1265,169 +1317,233 @@ export default function DriveDetailPage() {
         ))}
       </div>
 
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={onUpload}
+        className="hidden"
+      />
+
       {activeTab === "gallery" && (
-        <div className="mt-8 space-y-8">
-          <div className="relative z-20 flex flex-wrap items-stretch gap-4">
-            {orderedFolderIds.map((folderId) => {
-              const isPhotos = folderId === "photos";
-              const folder = isPhotos ? null : folders.find((item) => item.id === folderId);
-              if (!isPhotos && !folder) return null;
-              const menuId = `folder-${folderId}`;
-              const menu = getFolderMenuItems(folderId);
+        <div className="mt-6 space-y-6">
+          <section className="rounded-3xl border border-[#d7e8e1] bg-white p-4 shadow-[0_12px_28px_rgba(13,46,39,0.06)] md:p-5">
+            <div className="relative z-20 flex flex-wrap items-stretch gap-3">
+              {orderedFolderIds.map((folderId) => {
+                const isPhotos = folderId === "photos";
+                const folder = isPhotos ? null : folders.find((item) => item.id === folderId);
+                if (!isPhotos && !folder) return null;
+                const menuId = `folder-${folderId}`;
+                const menu = getFolderMenuItems(folderId);
 
-              return (
-                <div key={folderId} className="relative min-w-48 z-20">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedFolderId(folderId)}
-                    className={`w-full rounded-xl border px-4 py-3 text-left text-sm ${selectedFolderId === folderId
-                        ? "border-[#15161a] bg-white text-[#15161a]"
-                        : "border-[#e3d8cc] bg-white/60 text-[#6b645c]"
+                return (
+                  <div key={folderId} className="relative min-w-52 max-w-[260px] flex-1">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedFolderId(folderId)}
+                      className={`w-full rounded-2xl border px-4 py-3.5 pr-12 text-left text-sm transition ${
+                        selectedFolderId === folderId
+                          ? "border-[#0f766e] bg-[linear-gradient(150deg,#ebf8f4_0%,#f2f9ff_100%)] text-[#112c26]"
+                          : "border-[#dcebe5] bg-[#fbfdfc] text-[#4e6b62] hover:border-[#c4ddd3] hover:bg-white"
                       }`}
-                  >
-                    <p className="flex items-center gap-2 font-semibold">
-                      {!isPhotos && folder?.hidden ? <Lock className="h-4 w-4 text-[#8a7f73]" /> : null}
-                      <span>{isPhotos ? "Photos" : folder?.name}</span>
-                    </p>
-                    <p className="mt-1 text-xs text-[#8a7f73]">
-                      {isPhotos
-                        ? `${photos.length} files ${photos.length ? "??" : ""} ${photos.length ? `${(photos.length * 1.2).toFixed(1)} MB` : ""}`
-                        : `${getFolderPhotoList(folderId).length} files`}
-                    </p>
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Open folder actions"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setMenuOpenFor((prev) => (prev === menuId ? null : menuId));
-                    }}
-                    className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full border border-[#e3d8cc] bg-white text-[#15161a] shadow-sm transition hover:bg-[#f7f3ee]"
-                  >
-                    <MoreVertical className="h-4 w-4" />
-                  </button>
-                  {menuOpenFor === menuId ? (
-                    <div
-                      className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-[#e3d8cc] bg-white shadow-2xl"
-                      onClick={(event) => event.stopPropagation()}
                     >
-                      <div className="py-2 text-sm text-[#3b3430]">
-                        {menu.items.map((item) => (
-                          <button
-                            key={item.label}
-                            type="button"
-                            disabled={item.disabled}
-                            onClick={() => {
-                              setMenuOpenFor(null);
-                              item.onClick();
-                            }}
-                            className={`flex w-full items-center gap-3 px-4 py-2.5 text-left ${item.disabled ? "cursor-not-allowed opacity-60" : "hover:bg-[#f7f3ee]"
+                      <p className="flex items-center gap-2 font-semibold">
+                        {!isPhotos && folder?.hidden ? <Lock className="h-4 w-4 text-[#5b7a70]" /> : null}
+                        <span>{isPhotos ? "Photos" : folder?.name}</span>
+                      </p>
+                      <p className="mt-1 text-xs text-[#628178]">
+                        {isPhotos ? `${photos.length} files` : `${getFolderPhotoList(folderId).length} files`}
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      aria-label="Open folder actions"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setMenuOpenFor((prev) => (prev === menuId ? null : menuId));
+                      }}
+                      className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full border border-[#d8e9e2] bg-white text-[#2a4d44] shadow-sm transition hover:bg-[#eff8f4]"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+
+                    {menuOpenFor === menuId ? (
+                      <div
+                        className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-[#d9e8e2] bg-white shadow-2xl"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <div className="py-2 text-sm text-[#2a4a42]">
+                          {menu.items.map((item) => (
+                            <button
+                              key={item.label}
+                              type="button"
+                              disabled={item.disabled}
+                              onClick={() => {
+                                setMenuOpenFor(null);
+                                item.onClick();
+                              }}
+                              className={`flex w-full items-center gap-3 px-4 py-2.5 text-left ${
+                                item.disabled ? "cursor-not-allowed opacity-60" : "hover:bg-[#f2faf7]"
                               }`}
-                          >
-                            <item.icon className="h-4 w-4 text-[#9a9187]" />
-                            <span>{item.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                      {menu.destructive ? (
-                        <div className="border-t border-[#efe6dc]">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setMenuOpenFor(null);
-                              menu.destructive?.onClick();
-                            }}
-                            className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[#e11d48] hover:bg-[#fde8ee]"
-                          >
-                            {(() => {
-                              const destructive = menu.destructive;
-                              if (!destructive) return null;
-                              const Icon = destructive.icon;
-                              return <Icon className="h-4 w-4" />;
-                            })()}
-                            <span>{menu.destructive?.label}</span>
-                          </button>
+                            >
+                              <item.icon className="h-4 w-4 text-[#638178]" />
+                              <span>{item.label}</span>
+                            </button>
+                          ))}
                         </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
+                        {menu.destructive ? (
+                          <div className="border-t border-[#e6f0ec]">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMenuOpenFor(null);
+                                menu.destructive?.onClick();
+                              }}
+                              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[#e11d48] hover:bg-[#fff1f4]"
+                            >
+                              {(() => {
+                                const destructive = menu.destructive;
+                                if (!destructive) return null;
+                                const Icon = destructive.icon;
+                                return <Icon className="h-4 w-4" />;
+                              })()}
+                              <span>{menu.destructive?.label}</span>
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
 
-            <button
-              type="button"
-              className="min-w-48 rounded-xl border border-dashed border-[#d9cfc4] px-4 py-3 text-left text-sm text-[#6b645c]"
-              onClick={() => {
-                setEditingFolderId(null);
-                setFolderName("");
-                setFolderDescription("");
-                setFolderHidden(false);
-                setShowFolderModal(true);
-              }}
-            >
-              + Add folder
-            </button>
-          </div>
+              <button
+                type="button"
+                className="min-w-52 rounded-2xl border border-dashed border-[#bfd8ce] bg-[#f7fcfa] px-4 py-3.5 text-left text-sm font-semibold text-[#2f5a4f] transition hover:border-[#0f766e] hover:bg-white"
+                onClick={() => {
+                  setEditingFolderId(null);
+                  setFolderName("");
+                  setFolderDescription("");
+                  setFolderHidden(false);
+                  setShowFolderModal(true);
+                }}
+              >
+                + Add Folder
+              </button>
+            </div>
+          </section>
 
-          <div>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm font-medium text-[#8a7f73]">
-                {selectedFolderId === "photos" ? "All photos" : "Folder"} ·{" "}
-                {activeFolderPhotos.length} files
-              </p>
-              <div className="flex flex-wrap gap-3">
+          <section className="rounded-3xl border border-[#d7e8e1] bg-white p-5 shadow-[0_12px_28px_rgba(13,46,39,0.06)] md:p-6">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-[#173a31]">
+                  {selectedFolderId === "photos" ? "All Photos" : folders.find((folder) => folder.id === selectedFolderId)?.name ?? "Folder"}
+                  <span className="ml-2 text-[#67857c]">{visibleFolderPhotos.length} shown / {activeFolderPhotos.length} files</span>
+                </p>
+                {selectedFolderDescription ? (
+                  <p className="mt-1 text-sm text-[#5f7c73]">{selectedFolderDescription}</p>
+                ) : (
+                  <p className="mt-1 text-sm text-[#5f7c73]">Upload, organize, and publish with a clean workflow.</p>
+                )}
+              </div>
+
+              <div className="flex w-full flex-col gap-3 sm:flex-row xl:w-auto">
+                <label className="relative w-full sm:w-72">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6f8b83]" />
+                  <input
+                    value={photoSearch}
+                    onChange={(event) => setPhotoSearch(event.target.value)}
+                    placeholder="Search by filename"
+                    className="h-11 w-full rounded-xl border border-[#d5e7df] bg-white pl-9 pr-3 text-sm text-[#1e3b34] placeholder:text-[#7c988f] focus:border-[#0f766e] focus:outline-none"
+                  />
+                </label>
+
+                <label className="relative w-full sm:w-44">
+                  <SlidersHorizontal className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6f8b83]" />
+                  <select
+                    value={sortMode}
+                    onChange={(event) => setSortMode(event.target.value as "latest" | "name")}
+                    className="h-11 w-full appearance-none rounded-xl border border-[#d5e7df] bg-white pl-9 pr-3 text-sm font-medium text-[#1e3b34] focus:border-[#0f766e] focus:outline-none"
+                  >
+                    <option value="latest">Newest uploads</option>
+                    <option value="name">Name A-Z</option>
+                  </select>
+                </label>
+
                 <button
-                  className="rounded-full bg-[#101114] px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-white"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0f766e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#115e59] disabled:cursor-not-allowed disabled:opacity-70"
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
                 >
+                  <UploadCloud className="h-4 w-4" />
                   {uploading ? "Uploading..." : "Upload"}
                 </button>
               </div>
             </div>
 
-            {selectedFolderDescription ? (
-              <p className="mt-6 text-center text-sm text-[#8a7f73]">{selectedFolderDescription}</p>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-5 flex w-full flex-col items-center justify-center rounded-2xl border border-dashed border-[#bcd8ce] bg-[linear-gradient(145deg,#f5fbf8_0%,#f4f9ff_100%)] px-6 py-8 text-center transition hover:border-[#0f766e]"
+            >
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-white text-[#0f766e] shadow-sm">
+                <UploadCloud className="h-5 w-5" />
+              </span>
+              <span className="mt-3 text-sm font-semibold text-[#1a3d35]">Click to browse and upload photos</span>
+              <span className="mt-1 text-xs text-[#67857c]">Supports JPG, PNG, and WEBP formats</span>
+            </button>
+          </section>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={onUpload}
-              className="hidden"
-            />
-
-            {activeFolderPhotos.length === 0 ? (
-              <div className="mt-10 rounded-[26px] border border-[#e3d8cc] bg-white p-10 text-center">
-                <p className="text-lg font-semibold text-[#15161a]">There are no files in this folder yet</p>
-                <p className="mt-2 text-sm text-[#8a7f73]">Drag files here or click Upload</p>
+          {visibleFolderPhotos.length === 0 ? (
+            <div className="rounded-3xl border border-[#d7e8e1] bg-white px-6 py-14 text-center shadow-[0_12px_28px_rgba(13,46,39,0.06)]">
+              <p className="text-lg font-semibold text-[#173a31]">
+                {activeFolderPhotos.length === 0 ? "No files in this folder yet" : "No files match this search"}
+              </p>
+              <p className="mt-2 text-sm text-[#65837a]">
+                {activeFolderPhotos.length === 0
+                  ? "Start by uploading photos to build this gallery."
+                  : "Try another filename keyword or switch sort mode."}
+              </p>
+              {activeFolderPhotos.length === 0 ? (
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="mt-6 rounded-full bg-[#101114] px-6 py-2.5 text-sm font-semibold text-white"
+                  className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#0f766e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#115e59]"
                 >
-                  Upload
+                  <UploadCloud className="h-4 w-4" />
+                  Upload Photos
                 </button>
-              </div>
-            ) : (
-              <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {activeFolderPhotos.map((photo) => {
-                  const isDownloaded = downloadedIds.has(photo.id);
-                  const isLiked = favoriteIds.has(photo.id);
-                  return (
-                  <div key={photo.id} className="group relative">
-                    <div className="relative">
-                      <div className="mb-2 flex items-center overflow-visible rounded-full border border-[#e3d8cc] bg-white/90 opacity-0 shadow transition group-hover:opacity-100">
+              ) : null}
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {visibleFolderPhotos.map((photo) => {
+                const isDownloaded = downloadedIds.has(photo.id);
+                const isLiked = favoriteIds.has(photo.id);
+                const isCover = coverPhotoId === photo.id;
+                return (
+                  <article
+                    key={photo.id}
+                    className="group overflow-hidden rounded-2xl border border-[#d9e9e3] bg-white p-2 shadow-[0_10px_26px_rgba(16,39,32,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(16,39,32,0.09)]"
+                  >
+                    <div className="relative overflow-hidden rounded-xl">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photo.url}
+                        alt={photo.name}
+                        className="h-56 w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                      />
+
+                      <div className="absolute inset-x-2 top-1 flex flex-wrap items-center gap-1 rounded-xl bg-white/90 p-1.5 opacity-0 shadow-sm backdrop-blur transition group-hover:opacity-70">
                         {[
                           {
-                            label: coverPhotoId === photo.id ? "Cover selected" : "cover",
+                            label: isCover ? "Cover selected" : "Set cover",
                             icon: Star,
                             onClick: () => setPhotoAsCover(photo.id),
-                            active: coverPhotoId === photo.id,
+                            active: isCover,
                             danger: false,
                           },
                           {
@@ -1445,21 +1561,14 @@ export default function DriveDetailPage() {
                             danger: false,
                           },
                           {
-                            label: "Download file",
+                            label: "Download",
                             icon: ArrowDownToLine,
                             onClick: () => downloadPhoto(photo),
                             active: false,
                             danger: false,
                           },
                           {
-                            label: "Copy link",
-                            icon: LinkIcon,
-                            onClick: () => copyPhotoLink(photo.id),
-                            active: false,
-                            danger: false,
-                          },
-                          {
-                            label: "Delete photo",
+                            label: "Delete",
                             icon: Trash2,
                             onClick: () => deletePhoto(photo.id),
                             active: false,
@@ -1468,60 +1577,56 @@ export default function DriveDetailPage() {
                         ].map((action) => {
                           const Icon = action.icon;
                           return (
-                            <div key={action.label} className="group/action relative">
-                              <button
-                                type="button"
-                                onClick={action.onClick}
-                                className={`flex h-8 w-8 items-center justify-center transition ${
-                                  action.danger
-                                    ? "text-[#e11d48] hover:bg-[#fde8ee]"
-                                    : action.active
-                                      ? "text-[#d97757] hover:bg-[#f2ece4]"
-                                      : "text-[#4a433d] hover:bg-[#f2ece4]"
-                                }`}
-                              >
-                                <Icon className="h-4 w-4" />
-                              </button>
-                              <div className="pointer-events-none absolute -top-12 left-1/2 z-20 -translate-x-1/2 rounded-lg bg-[#2a2928] px-3 py-2 text-xs font-semibold text-white opacity-0 shadow-lg transition group-hover/action:opacity-100">
-                                {action.label}
-                                <span className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-[#2a2928]" />
-                              </div>
-                            </div>
+                            <button
+                              key={action.label}
+                              type="button"
+                              title={action.label}
+                              onClick={action.onClick}
+                              className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition ${
+                                action.danger
+                                  ? "text-[#e11d48] hover:bg-[#fff0f4]"
+                                  : action.active
+                                    ? "text-[#0f766e] hover:bg-[#e9f7f2]"
+                                    : "text-[#315a50] hover:bg-[#edf6f2]"
+                              }`}
+                            >
+                              <Icon className={`h-3.5 w-3.5 ${action.active ? "fill-current" : ""}`} />
+                            </button>
                           );
                         })}
                       </div>
-                      <div className="h-56 w-full overflow-hidden rounded-[14px] shadow-sm">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={photo.url} alt={photo.name} className="h-full w-full object-cover" />
-                      </div>
-                    </div>
-                    <div className="pt-2">
-                      <p className="truncate text-xs font-semibold uppercase tracking-[0.2em] text-[#6b645c]">
-                        {photo.name}
-                      </p>
-                      {isDownloaded || isLiked ? (
-                        <div className="mt-2 flex items-center justify-center gap-1">
-                          {isDownloaded ? (
-                            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#f5f3ef] text-[#3b3430]">
-                              <ArrowDownToLine className="h-2.5 w-2.5" />
-                            </span>
-                          ) : null}
-                          {isLiked ? (
-                            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#fdf1f4] text-[#e11d48]">
-                              <Heart className="h-2.5 w-2.5 fill-current" />
-                            </span>
-                          ) : null}
-                        </div>
+
+                      {isCover ? (
+                        <span className="absolute bottom-2 left-2 rounded-full bg-[#0f766e] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white">
+                          Cover
+                        </span>
                       ) : null}
                     </div>
-                  </div>
-                )})}
-              </div>
-            )}
-          </div>
+
+                    <div className="px-1 pb-1 pt-3">
+                      <p className="truncate text-sm font-semibold text-[#18352e]">{photo.name}</p>
+                      <div className="mt-2 flex items-center gap-1.5">
+                        {isDownloaded ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-[#edf6f2] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#2b6659]">
+                            <ArrowDownToLine className="h-3 w-3" />
+                            Downloaded
+                          </span>
+                        ) : null}
+                        {isLiked ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-[#fff1f4] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#d81b60]">
+                            <Heart className="h-3 w-3 fill-current" />
+                            Liked
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
-
       {activeTab === "favorites" && (
         <div className="mt-8 space-y-8">
           {favoriteFolders.length === 0 ? (
@@ -1555,7 +1660,7 @@ export default function DriveDetailPage() {
                 <div>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm font-medium text-[#8a7f73]">
-                      Favorites folder · {activeFavoriteFolder.items.length} files
+                      Favorites folder - {activeFavoriteFolder.items.length} files
                     </p>
                     <div className="flex flex-wrap gap-3">
                     </div>
@@ -1716,7 +1821,7 @@ export default function DriveDetailPage() {
                   setFavoriteFolderDescription("");
                 }}
               >
-                Ã—
+                x
               </button>
             </div>
             <div className="mt-6 space-y-4 rounded-xl bg-[#f8f4ee] p-6">
@@ -1782,7 +1887,7 @@ export default function DriveDetailPage() {
                   setFolderHidden(false);
                 }}
               >
-                ×
+                x
               </button>
             </div>
             <div className="mt-6 space-y-4 rounded-xl bg-[#f8f4ee] p-6">
@@ -1855,4 +1960,3 @@ export default function DriveDetailPage() {
     </div>
   );
 }
-
