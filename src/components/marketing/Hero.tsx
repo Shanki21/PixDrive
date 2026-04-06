@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -15,7 +15,7 @@ export default function Hero() {
         <div className="pointer-events-none absolute right-[-140px] top-[140px] h-[340px] w-[340px] rounded-full bg-[#9cc9ff]/30 blur-3xl" />
         <Container className="relative grid grid-cols-1 gap-12 pb-24 pt-16 md:grid-cols-12 md:gap-6 md:pt-24">
           <motion.div
-            className="md:col-span-6"
+            className="order-2 md:order-none md:col-span-6"
             initial="hidden"
             animate="show"
             variants={fadeUp}
@@ -53,7 +53,12 @@ export default function Hero() {
             </motion.div>
           </motion.div>
 
-          <motion.div className="relative md:col-span-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.15 }}>
+          <motion.div
+            className="relative order-1 md:order-none md:col-span-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.15 }}
+          >
             <motion.div
               className="absolute -left-4 -top-4 rounded-full border border-[#d2e9e2] bg-white px-4 py-2 text-[14px] font-medium text-[#0f766e] shadow-sm"
               animate={{ y: [0, -8, 0] }}
@@ -68,23 +73,69 @@ export default function Hero() {
             >
               4K Delivery
             </motion.div>
-            <div className="rounded-[20px] border border-[#E5E5E5] bg-white p-6 shadow-[0_22px_60px_rgba(17,17,17,0.1)]">
-              <div className="mb-5 h-8 w-44 rounded-lg bg-[#f4f4f2]" />
-              <div className="grid grid-cols-12 gap-4">
-                <div className="col-span-7 space-y-4">
-                  <div className="relative h-32 overflow-hidden rounded-xl">
-                    <Image src="/Img/pexels-ian-panelo-3049394.webp" alt="Wedding event cover" fill className="object-cover" />
+            <div className="relative mx-auto w-full max-w-[520px] md:max-w-none">
+              <div className="pointer-events-none absolute inset-0 -z-10 scale-105 rounded-[32px] bg-gradient-to-br from-[#0f766e]/12 via-transparent to-[#2563eb]/10 blur-2xl" />
+
+              <div className="relative min-h-[340px] sm:min-h-[380px] md:min-h-[420px]">
+                <motion.div
+                  className="absolute left-0 top-6 z-10 w-[58%] overflow-hidden rounded-2xl bg-white shadow-[0_20px_50px_rgba(0,0,0,0.14)] ring-1 ring-black/[0.07]"
+                  initial={{ opacity: 0, x: -24, rotate: -6 }}
+                  animate={{ opacity: 1, x: 0, rotate: -5 }}
+                  transition={{ duration: 0.65, delay: 0.2, type: "spring", stiffness: 120 }}
+                  whileHover={{ rotate: -3, y: -4 }}
+                >
+                  <div className="relative aspect-[4/5] w-full">
+                    <Image
+                      src="/Img/pexels-carlos-oratto-1115158-2111255.webp"
+                      alt="Portrait in client gallery"
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 55vw, 220px"
+                    />
                   </div>
-                  <div className="h-10 rounded-lg bg-[#f4f4f2]" />
-                  <div className="h-10 rounded-lg bg-[#f4f4f2]" />
-                </div>
-                <div className="col-span-5 space-y-4">
-                  <div className="relative h-20 overflow-hidden rounded-xl">
-                    <Image src="/Img/pexels-carlos-oratto-1115158-2111255.webp" alt="Portrait preview" fill className="object-cover" />
+                </motion.div>
+
+                <motion.div
+                  className="absolute right-0 top-0 z-20 w-[68%] overflow-hidden rounded-2xl bg-white shadow-[0_28px_70px_rgba(0,0,0,0.16)] ring-1 ring-black/[0.08]"
+                  initial={{ opacity: 0, y: 28, rotate: 4 }}
+                  animate={{ opacity: 1, y: 0, rotate: 3 }}
+                  transition={{ duration: 0.65, delay: 0.08, type: "spring", stiffness: 115 }}
+                  whileHover={{ rotate: 1, y: -6 }}
+                >
+                  <div className="relative aspect-[16/11] w-full">
+                    <Image
+                      src="/Img/pexels-apasaric-2464535.webp"
+                      alt="Featured event photograph"
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 70vw, 380px"
+                      priority
+                    />
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
                   </div>
-                  <div className="h-20 rounded-xl bg-[#eef6f5]" />
-                  <div className="h-20 rounded-xl bg-[#f4f4f2]" />
-                </div>
+                  <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between rounded-lg bg-white/92 px-3 py-2 text-[11px] text-[#444] shadow-sm backdrop-blur-sm md:bottom-4 md:left-4 md:right-4 md:px-4 md:text-xs">
+                    <span className="font-medium text-[#0f766e]">Selections</span>
+                    <span className="text-[#888]">Awaiting approval</span>
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  className="absolute bottom-2 left-[12%] z-30 w-[48%] overflow-hidden rounded-2xl bg-white shadow-[0_18px_45px_rgba(0,0,0,0.12)] ring-1 ring-black/[0.06]"
+                  initial={{ opacity: 0, y: 40, rotate: -2 }}
+                  animate={{ opacity: 1, y: 0, rotate: -2 }}
+                  transition={{ duration: 0.65, delay: 0.32, type: "spring", stiffness: 125 }}
+                  whileHover={{ y: -5, rotate: 0 }}
+                >
+                  <div className="relative aspect-[5/3] w-full">
+                    <Image
+                      src="/Img/pexels-ian-panelo-3049394.webp"
+                      alt="Wedding ceremony moment"
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 50vw, 240px"
+                    />
+                  </div>
+                </motion.div>
               </div>
             </div>
           </motion.div>

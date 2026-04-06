@@ -1,4 +1,4 @@
-﻿import Hero from "@/components/marketing/Hero";
+import Hero from "@/components/marketing/Hero";
 import Features from "@/components/marketing/Features";
 import Workflow from "@/components/marketing/Workflow";
 import Gallery from "@/components/marketing/Gallery";

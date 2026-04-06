@@ -1,4 +1,4 @@
-﻿import { Camera, Download, Folders, Share2, UploadCloud } from "lucide-react";
+import { Camera, Download, Folders, Share2, UploadCloud } from "lucide-react";
 
 export const NAV_LINKS = [
   { label: "Features", href: "#features" },
