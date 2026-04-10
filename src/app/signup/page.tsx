@@ -44,6 +44,17 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [tutorialStep, setTutorialStep] = useState(0);
 
+  const logout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // Ignore logout API failures and continue with redirect.
+    } finally {
+      router.push("/login");
+      router.refresh();
+    }
+  };
+
   const right = useMemo(() => {
     if (step === "contacts") return <AuthVisuals mode="contactCard" />;
     if (step === "tutorial") return <AuthVisuals mode="tutorial" tutorialStep={tutorialStep} />;
@@ -198,7 +209,9 @@ export default function SignupPage() {
               </motion.button>
             ))}
           </div>
-          <button className="text-sm font-medium text-[#666666] underline">Log out from this account</button>
+          <button className="text-sm font-medium text-[#666666] underline" onClick={() => void logout()}>
+            Log out from this account
+          </button>
         </motion.div>
       ) : null}
 
@@ -254,7 +267,9 @@ export default function SignupPage() {
           >
             Start
           </motion.button>
-          <button className="text-sm font-medium text-[#666666] underline">Log out from this account</button>
+          <button className="text-sm font-medium text-[#666666] underline" onClick={() => void logout()}>
+            Log out from this account
+          </button>
         </motion.div>
       ) : null}
 

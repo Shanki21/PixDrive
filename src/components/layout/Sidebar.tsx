@@ -3,15 +3,12 @@
 import Link from "next/link";
 import type { ComponentType } from "react";
 import {
-  BarChart3,
   CalendarDays,
   Crown,
   Home,
-  MessageSquareQuote,
   PlusSquare,
   QrCode,
   ScanLine,
-  Settings2,
   Sparkles,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -56,25 +53,6 @@ export default function Sidebar() {
       description: "Guest access + delivery",
       icon: QrCode,
       badge: { label: "NEW", tone: "new" },
-    },
-    {
-      href: "/dashboard/reviews",
-      label: "Reviews",
-      description: "Collect testimonials",
-      icon: MessageSquareQuote,
-      badge: { label: "BETA", tone: "beta" },
-    },
-    {
-      href: "/dashboard/analytics",
-      label: "Analytics",
-      description: "Track event performance",
-      icon: BarChart3,
-    },
-    {
-      href: "/dashboard/settings",
-      label: "Settings",
-      description: "Studio preferences",
-      icon: Settings2,
     },
   ];
 
@@ -167,11 +145,11 @@ export default function Sidebar() {
             Unlock branded microsites, automation flows, and higher upload limits for every event.
           </p>
           <Link
-            href="/dashboard/settings"
+            href="/dashboard/qr-code"
             className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#0f5e63] transition hover:bg-[#e8fcf6]"
           >
             <ScanLine className="h-3.5 w-3.5" />
-            Explore Plans
+            Open One QR
           </Link>
         </div>
       </div>

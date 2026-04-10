@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { getClientGalleryBasePathForDisplay } from "@/lib/client-gallery-url";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 
-type Tab = "main" | "favorites" | "products" | "reviews" | "contacts" | "privacy";
+type Tab = "main" | "products" | "reviews" | "contacts" | "privacy";
 type StorageDuration = "14 days" | "1 month" | "3 months" | "6 months" | "1 year";
 
 const STORAGE_OPTIONS: StorageDuration[] = [
@@ -89,16 +89,6 @@ export default function AddGalleryModal({
         normalizeStorageDuration(initialGallery?.storageTimeLabel)
     );
 
-    // FAVORITES
-    const [enableFavorites, setEnableFavorites] = useState(initialGallery?.favoritesEnabled ?? true);
-    const [favoritesName, setFavoritesName] = useState(initialGallery?.favoritesName ?? "Selecting photos");
-    const [limitFavorites, setLimitFavorites] = useState(initialGallery?.favoritesLimitSelected ?? false);
-    const [maxSelectedPhotos, setMaxSelectedPhotos] = useState(initialGallery?.favoritesMaxSelected ?? 1);
-    const [allowComments, setAllowComments] = useState(false);
-    const [requireEmail, setRequireEmail] = useState(true);
-    const [requirePhone, setRequirePhone] = useState(false);
-    const [requireAdditionalInfo, setRequireAdditionalInfo] = useState(false);
-
     // PRODUCTS
     const [showProducts, setShowProducts] = useState(false);
     const [productsDropdownOpen, setProductsDropdownOpen] = useState(false);
@@ -131,14 +121,6 @@ export default function AddGalleryModal({
         setDiscountRows([]);
         setSpecifyLifetime(initialGallery?.storageTimeLabel !== "Indefinite");
         setStorageTime(normalizeStorageDuration(initialGallery?.storageTimeLabel));
-        setEnableFavorites(initialGallery?.favoritesEnabled ?? true);
-        setFavoritesName(initialGallery?.favoritesName ?? "Selecting photos");
-        setLimitFavorites(initialGallery?.favoritesLimitSelected ?? false);
-        setMaxSelectedPhotos(initialGallery?.favoritesMaxSelected ?? 1);
-        setAllowComments(false);
-        setRequireEmail(true);
-        setRequirePhone(false);
-        setRequireAdditionalInfo(false);
         setShowProducts(false);
         setProductsDropdownOpen(false);
         setSelectedProducts([]);
@@ -176,12 +158,6 @@ export default function AddGalleryModal({
             shootDate,
             expiresAt,
             storageTimeLabel: specifyLifetime ? storageTime : "Indefinite",
-            favoritesEnabled: enableFavorites,
-            favoritesLimitSelected: limitFavorites,
-            favoritesName,
-            favoritesListsCount: enableFavorites ? (initialGallery?.favoritesListsCount ?? 0) : 0,
-            selectionCompletedCount: 0,
-            favoritesMaxSelected: limitFavorites ? maxSelectedPhotos : null,
         };
 
         try {
@@ -248,7 +224,7 @@ export default function AddGalleryModal({
 
                 {/* TABS */}
                 <div className="flex gap-3 px-6 pt-4 border-b text-sm">
-                    {["main", "favorites", "products", "reviews", "contacts", "privacy"].map(t => (
+                    {["main", "products", "reviews", "contacts", "privacy"].map(t => (
                         <button
                             type="button"
                             key={t}
@@ -458,122 +434,6 @@ export default function AddGalleryModal({
                                     </button>
                                 </div>
                             </Section>
-
-                        </div>
-                    )}
-
-                    {/* FAVORITES */}
-                    {tab === "favorites" && (
-                        <div className="space-y-6">
-
-                            {/* FAVORITES SETTINGS */}
-                            <Section>
-
-                                {/* Allow photo selection */}
-                                <ToggleRow
-                                    title="Allow photo selection"
-                                    description="Clients can add files to Favorites to select photos for retouching, printing, and more."
-                                    value={enableFavorites}
-                                    onChange={setEnableFavorites}
-                                />
-
-                                {enableFavorites && (
-                                    <div className="space-y-4 pt-3">
-
-                                        <Field label="Favorites name">
-                                            <input
-                                                className="w-full border rounded px-3 py-2"
-                                                value={favoritesName}
-                                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                                                    setFavoritesName(e.target.value)
-                                                }
-                                            />
-                                            <p className="text-xs text-gray-500 mt-1">
-                                                Clients will see this name when they create Favorites.
-                                            </p>
-                                        </Field>
-
-                                        <ToggleRow
-                                            title="Limit selected photos"
-                                            value={limitFavorites}
-                                            onChange={setLimitFavorites}
-                                        />
-
-                                        {limitFavorites && (
-                                            <div className="flex items-center justify-between">
-                                                <p className="text-sm font-medium">Max selected photos</p>
-
-                                                <div className="flex items-center justify-between border rounded px-3 py-2 w-44">
-                                                    <button
-                                                        type="button"
-                                                        className="text-lg leading-none px-2"
-                                                        onClick={() => setMaxSelectedPhotos(v => Math.max(1, v - 1))}
-                                                    >
-                                                        -
-                                                    </button>
-                                                    <span className="text-sm font-medium">
-                                                        {maxSelectedPhotos}
-                                                    </span>
-                                                    <button
-                                                        type="button"
-                                                        className="text-lg leading-none px-2"
-                                                        onClick={() => setMaxSelectedPhotos(v => v + 1)}
-                                                    >
-                                                        +
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <ToggleRow
-                                            title="Allow comments"
-                                            value={allowComments}
-                                            onChange={setAllowComments}
-                                        />
-
-                                    </div>
-                                )}
-
-                            </Section>
-
-                            {/* CLIENT INFO */}
-                            {enableFavorites && (
-                                <Section>
-
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <p className="text-sm font-medium">Client name</p>
-                                            <p className="text-xs text-blue-600">Name format is set in Event settings.</p>
-                                        </div>
-
-                                        <div className="flex items-center gap-1 text-xs text-gray-500">Required</div>
-                                    </div>
-
-                                    <ToggleRow
-                                        title="Require email"
-                                        description="Clients will receive an email with a link to their Favorites."
-                                        value={requireEmail}
-                                        onChange={setRequireEmail}
-                                    />
-
-                                    <ToggleRow
-                                        title="Require phone number"
-                                        value={requirePhone}
-                                        onChange={setRequirePhone}
-                                    />
-
-                                    <ToggleRow
-                                        title="Require additional info"
-                                        value={requireAdditionalInfo}
-                                        onChange={setRequireAdditionalInfo}
-                                    />
-
-                                    <p className="text-xs text-gray-500 pt-2">
-                                        Client name is required. Enable extra fields if you need more details from the client.
-                                    </p>
-
-                                </Section>
-                            )}
 
                         </div>
                     )}
@@ -828,4 +688,3 @@ function Toggle({
         </div>
     );
 }
-

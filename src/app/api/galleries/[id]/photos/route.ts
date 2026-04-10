@@ -1,19 +1,20 @@
+import { isCloudinaryConfigured, uploadImageDataUrl } from "@/lib/cloudinary";
 import prisma from "@/lib/prisma";
+import { getSessionEmailFromRequest } from "@/lib/session";
 import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
 
-const SESSION_COOKIE_NAME = "wf_user_email";
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_URL_LENGTH = 6_000_000;
 const MAX_PAGE_SIZE = 120;
+const DATA_URL_PREFIX = "data:image/";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const email = req.cookies.get(SESSION_COOKIE_NAME)?.value?.trim().toLowerCase() ?? "";
-  if (!emailRegex.test(email)) {
+  const email = getSessionEmailFromRequest(req);
+  if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -75,8 +76,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const email = req.cookies.get(SESSION_COOKIE_NAME)?.value?.trim().toLowerCase() ?? "";
-  if (!emailRegex.test(email)) {
+  const email = getSessionEmailFromRequest(req);
+  if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -118,10 +119,22 @@ export async function POST(
   }
 
   try {
+    let finalUrl = url;
+    if (url.startsWith(DATA_URL_PREFIX)) {
+      if (!isCloudinaryConfigured()) {
+        return NextResponse.json(
+          { error: "Cloudinary is not configured. Configure media environment variables." },
+          { status: 500 }
+        );
+      }
+      const uploaded = await uploadImageDataUrl(url);
+      finalUrl = uploaded.url;
+    }
+
     const photo = await prisma.photo.create({
       data: {
         name,
-        url,
+        url: finalUrl,
         galleryId: gallery.id,
       },
     });

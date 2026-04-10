@@ -1,11 +1,11 @@
 import { getPrismaUnavailableMessage, isPrismaUnavailableError } from "@/lib/prisma-errors";
 import { verifyOtp } from "@/lib/otp-store";
 import prisma from "@/lib/prisma";
+import { setSessionCookie } from "@/lib/session";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-const SESSION_COOKIE_NAME = "wf_user_email";
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function createAuthSuccessResponse(email: string, warning?: string) {
@@ -13,16 +13,13 @@ function createAuthSuccessResponse(email: string, warning?: string) {
     ok: true,
     ...(warning ? { warning } : {}),
   });
-  response.cookies.set({
-    name: SESSION_COOKIE_NAME,
-    value: email,
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 30,
-  });
-
+  const cookieSet = setSessionCookie(response, email);
+  if (!cookieSet) {
+    return NextResponse.json(
+      { ok: false, message: "Session secret is missing. Set NEXTAUTH_SECRET or AUTH_SECRET." },
+      { status: 500 }
+    );
+  }
   return response;
 }
 
@@ -54,6 +51,9 @@ export async function POST(req: Request) {
     if (isPrismaUnavailableError(error)) {
       if (process.env.NODE_ENV !== "production") {
         console.warn("[auth/verify-otp] prisma unavailable, using dev auth fallback");
+        if (!emailRegex.test(emailForFallback)) {
+          return NextResponse.json({ ok: false, message: "Unable to verify OTP right now." }, { status: 400 });
+        }
         return createAuthSuccessResponse(
           emailForFallback,
           "Signed in with development fallback because database is unavailable."

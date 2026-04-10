@@ -38,8 +38,14 @@ type DiskGalleryClientProps = {
   initialPhotos: GalleryPhoto[];
   totalPhotos: number;
   initialCursor: string | null;
+  allowSingleDownload: boolean;
+  allowBulkDownload: boolean;
+  favoritesEnabled: boolean;
+  serverFolders: Folder[];
+  serverFolderPhotosMap: Record<string, string[]>;
   hostLabel: string;
   formatHeaderDate: string;
+  isLocked: boolean;
 };
 
 type ClientFavoritesSelection = {
@@ -56,8 +62,6 @@ type ClientIdentity = {
 const CLIENT_FAVORITES_PREFIX = "wf_client_favorites:";
 const CLIENT_PROFILE_PREFIX = "wf_client_profile:";
 const FAVORITES_LIST_STORAGE_PREFIX = "wf_gallery_favorites_lists:";
-const FOLDER_STORAGE_PREFIX = "wf_gallery_folders:";
-const FOLDER_PHOTOS_PREFIX = "wf_gallery_folder_photos:";
 const CLIENT_DOWNLOADS_PREFIX = "wf_client_downloads:";
 const CLIENT_KEY_PREFIX = "wf_client_key:";
 const REVIEWS_STORAGE_KEY = "wf_gallery_reviews";
@@ -70,14 +74,16 @@ function formatDateLabel(iso: string) {
   }).format(new Date(iso));
 }
 
-function triggerDownload(url: string, name: string) {
+function triggerBlobDownload(blob: Blob, fileName: string) {
+  const objectUrl = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  link.href = url;
-  link.download = name || "photo";
+  link.href = objectUrl;
+  link.download = fileName;
   link.rel = "noopener";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  URL.revokeObjectURL(objectUrl);
 }
 
 function readClientSelections(galleryId: string): ClientFavoritesSelection[] {
@@ -124,28 +130,6 @@ function readClientDownloads(galleryId: string) {
 
 function writeClientDownloads(galleryId: string, next: string[]) {
   window.localStorage.setItem(`${CLIENT_DOWNLOADS_PREFIX}${galleryId}`, JSON.stringify(next));
-}
-
-function readFolders(galleryId: string): Folder[] {
-  try {
-    const raw = window.localStorage.getItem(`${FOLDER_STORAGE_PREFIX}${galleryId}`);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as Folder[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function readFolderPhotos(galleryId: string): Record<string, string[]> {
-  try {
-    const raw = window.localStorage.getItem(`${FOLDER_PHOTOS_PREFIX}${galleryId}`);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<string, string[]>;
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
 }
 
 function markDownloaded(galleryId: string, photoIds: string[]) {
@@ -208,13 +192,19 @@ export default function DiskGalleryClient({
   initialPhotos,
   totalPhotos,
   initialCursor,
+  allowSingleDownload,
+  allowBulkDownload,
+  favoritesEnabled: serverFavoritesEnabled,
+  serverFolders,
+  serverFolderPhotosMap,
   hostLabel,
   formatHeaderDate,
+  isLocked,
 }: DiskGalleryClientProps) {
   const [liked, setLiked] = useState<Record<string, boolean>>({});
   const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const [favoritesEnabled, setFavoritesEnabled] = useState(false);
+  const [favoritesEnabled, setFavoritesEnabled] = useState(serverFavoritesEnabled);
   const [favoritesLimitSelected, setFavoritesLimitSelected] = useState(false);
   const [favoritesMaxSelected, setFavoritesMaxSelected] = useState<number | null>(null);
   const [clientProfile, setClientProfile] = useState<ClientIdentity | null>(null);
@@ -229,8 +219,9 @@ export default function DiskGalleryClient({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const [folderFilterId, setFolderFilterId] = useState<string | null>(null);
+  const [folders, setFolders] = useState<Folder[]>(serverFolders);
   const [hiddenFolderIds, setHiddenFolderIds] = useState<Set<string>>(new Set());
-  const [folderPhotosMap, setFolderPhotosMap] = useState<Record<string, string[]>>({});
+  const [folderPhotosMap, setFolderPhotosMap] = useState<Record<string, string[]>>(serverFolderPhotosMap);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
   const [shareCopied, setShareCopied] = useState(false);
@@ -240,6 +231,9 @@ export default function DiskGalleryClient({
   const [reviewText, setReviewText] = useState("");
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const [pinValue, setPinValue] = useState("");
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [unlocking, setUnlocking] = useState(false);
 
   const likedCount = useMemo(() => Object.values(liked).filter(Boolean).length, [liked]);
   const selectionLimit = favoritesLimitSelected ? Math.max(1, favoritesMaxSelected ?? 1) : null;
@@ -268,17 +262,20 @@ export default function DiskGalleryClient({
 
   const activeFolderDescription = useMemo(() => {
     if (!folderFilterId) return "";
-    return readFolders(galleryId).find((folder) => folder.id === folderFilterId)?.description?.trim() ?? "";
-  }, [folderFilterId, galleryId, hiddenFolderIds, folderPhotosMap]);
+    return folders.find((folder) => folder.id === folderFilterId)?.description?.trim() ?? "";
+  }, [folderFilterId, folders]);
 
   const activePhoto = activeIndex === null ? null : visiblePhotos[activeIndex] ?? null;
   const hasPhotos = visiblePhotos.length > 0;
   const hasMorePhotos = photos.length < totalPhotos;
+  const singleDownloadAllowed = allowSingleDownload;
+  const bulkDownloadAllowed = allowBulkDownload;
 
   useEffect(() => {
+    if (isLocked) return;
     const syncGalleryMeta = () => {
       const meta = getGalleryMeta(galleryId);
-      setFavoritesEnabled(meta?.favoritesEnabled ?? true);
+      setFavoritesEnabled(serverFavoritesEnabled && (meta?.favoritesEnabled ?? true));
       setFavoritesLimitSelected(Boolean(meta?.favoritesLimitSelected));
       setFavoritesMaxSelected(meta?.favoritesMaxSelected ?? null);
     };
@@ -318,9 +315,10 @@ export default function DiskGalleryClient({
     }
 
     return () => window.removeEventListener("storage", handleStorage);
-  }, [galleryId]);
+  }, [galleryId, isLocked, serverFavoritesEnabled]);
 
   useEffect(() => {
+    if (isLocked) return;
     if (!clientKey) return;
     let active = true;
 
@@ -378,7 +376,7 @@ export default function DiskGalleryClient({
     return () => {
       active = false;
     };
-  }, [clientKey, galleryId]);
+  }, [clientKey, galleryId, isLocked]);
   useEffect(() => {
     if (selectionLimit !== null && likedCount > selectionLimit) {
       setFavoritesLimitMessage(`You can only select ${selectionLimit} photo${selectionLimit === 1 ? "" : "s"} in this gallery.`);
@@ -388,29 +386,19 @@ export default function DiskGalleryClient({
   }, [likedCount, selectionLimit, favoritesLimitMessage]);
 
   useEffect(() => {
-    const syncFolderState = () => {
-      const folders = readFolders(galleryId);
-      const hiddenIds = new Set(folders.filter((folder) => folder.hidden).map((folder) => folder.id));
-      setHiddenFolderIds(hiddenIds);
-      setFolderPhotosMap(readFolderPhotos(galleryId));
-    };
-
+    if (isLocked) return;
+    setFolders(serverFolders);
+    setFolderPhotosMap(serverFolderPhotosMap);
+    const hiddenIds = new Set(serverFolders.filter((folder) => folder.hidden).map((folder) => folder.id));
+    setHiddenFolderIds(hiddenIds);
     const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
     const folderParam = urlParams?.get("folder");
-    setFolderFilterId(folderParam && folderParam !== "photos" ? folderParam : null);
-
-    syncFolderState();
-
-    const handleStorage = (event: StorageEvent) => {
-      if (!event.key) return;
-      if (event.key.startsWith(FOLDER_STORAGE_PREFIX) || event.key.startsWith(FOLDER_PHOTOS_PREFIX)) {
-        syncFolderState();
-      }
-    };
-
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
-  }, [galleryId]);
+    const validFolderParam =
+      folderParam && folderParam !== "photos" && serverFolders.some((folder) => folder.id === folderParam)
+        ? folderParam
+        : null;
+    setFolderFilterId(validFolderParam);
+  }, [galleryId, isLocked, serverFolderPhotosMap, serverFolders]);
 
   const recordClientActions = async (
     actions: Array<{
@@ -453,6 +441,7 @@ export default function DiskGalleryClient({
   };
 
   const toggleLike = (id: string) => {
+    if (!favoritesEnabled) return;
     setFavoritesLimitMessage(null);
     if (!clientProfile) {
       setPendingLikePhotoId(id);
@@ -646,29 +635,68 @@ export default function DiskGalleryClient({
     markDownloaded(galleryId, photoIds);
   };
 
+  const downloadSinglePhoto = async (photo: GalleryPhoto) => {
+    const url = new URL(`/api/disk/${gallerySlug}/photos`, window.location.origin);
+    url.searchParams.set("downloadId", photo.id);
+    const response = await fetch(url.toString(), { method: "GET" });
+    if (!response.ok) {
+      return false;
+    }
+    const blob = await response.blob();
+    triggerBlobDownload(blob, photo.name || "photo");
+    return true;
+  };
+
+  const downloadServerZip = async (scope: "all" | "favorites") => {
+    const url = new URL("/api/disk", window.location.origin);
+    url.searchParams.set("action", "download");
+    url.searchParams.set("slug", gallerySlug);
+    url.searchParams.set("scope", scope);
+    if (scope === "favorites") {
+      if (!clientKey) return false;
+      url.searchParams.set("clientKey", clientKey);
+    }
+    const response = await fetch(url.toString(), { method: "GET" });
+    if (!response.ok) {
+      return false;
+    }
+    const blob = await response.blob();
+    const fileName = `${galleryName.replace(/[\\/:*?"<>|]+/g, "-").trim() || "gallery"}-${scope}.zip`;
+    triggerBlobDownload(blob, fileName);
+    return true;
+  };
+
   const onDownloadAll = () => {
-    registerDownloadedPhotos(visiblePhotos.map((photo) => photo.id));
-    void recordClientActions(
-      visiblePhotos.map((photo) => ({
-        photoId: photo.id,
-        action: "download",
-      }))
-    );
-    visiblePhotos.forEach((photo) => triggerDownload(photo.url, photo.name));
-    setIsDownloadMenuOpen(false);
+    if (!bulkDownloadAllowed) return;
+    const photoIds = visiblePhotos.map((photo) => photo.id);
+    registerDownloadedPhotos(photoIds);
+    void recordClientActions(photoIds.map((photoId) => ({ photoId, action: "download" })));
+    void (async () => {
+      const ok = await downloadServerZip("all");
+      if (!ok) {
+        for (const photo of visiblePhotos) {
+          await downloadSinglePhoto(photo);
+        }
+      }
+      setIsDownloadMenuOpen(false);
+    })();
   };
 
   const onDownloadFavorites = () => {
+    if (!bulkDownloadAllowed) return;
     const selected = visiblePhotos.filter((photo) => liked[photo.id]);
-    registerDownloadedPhotos(selected.map((photo) => photo.id));
-    void recordClientActions(
-      selected.map((photo) => ({
-        photoId: photo.id,
-        action: "download",
-      }))
-    );
-    selected.forEach((photo) => triggerDownload(photo.url, photo.name));
-    setIsDownloadMenuOpen(false);
+    const photoIds = selected.map((photo) => photo.id);
+    registerDownloadedPhotos(photoIds);
+    void recordClientActions(photoIds.map((photoId) => ({ photoId, action: "download" })));
+    void (async () => {
+      const ok = await downloadServerZip("favorites");
+      if (!ok) {
+        for (const photo of selected) {
+          await downloadSinglePhoto(photo);
+        }
+      }
+      setIsDownloadMenuOpen(false);
+    })();
   };
 
   const closeLightbox = () => setActiveIndex(null);
@@ -711,6 +739,7 @@ export default function DiskGalleryClient({
   };
 
   const loadMorePhotos = async () => {
+    if (isLocked) return;
     if (!hasMorePhotos || isLoadingMore) return;
     setIsLoadingMore(true);
     try {
@@ -732,6 +761,7 @@ export default function DiskGalleryClient({
   };
 
   useEffect(() => {
+    if (isLocked) return;
     if (!hasMorePhotos) return;
     const target = loadMoreRef.current;
     if (!target) return;
@@ -745,10 +775,88 @@ export default function DiskGalleryClient({
     );
     observer.observe(target);
     return () => observer.disconnect();
-  }, [hasMorePhotos, nextCursor]);
+  }, [hasMorePhotos, isLocked, nextCursor]);
+
+  const onUnlockGallery = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!pinValue.trim()) {
+      setUnlockError("PIN is required.");
+      return;
+    }
+    setUnlocking(true);
+    setUnlockError(null);
+    try {
+      const response = await fetch("/api/disk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "unlock",
+          slug: gallerySlug,
+          pin: pinValue.trim(),
+        }),
+      });
+      const data = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!response.ok || !data?.ok) {
+        setUnlockError(data?.error ?? "Unable to unlock gallery.");
+        return;
+      }
+      window.location.reload();
+    } catch {
+      setUnlockError("Unable to unlock gallery.");
+    } finally {
+      setUnlocking(false);
+    }
+  };
+
+  if (isLocked) {
+    return (
+      <div className="min-h-screen bg-[#f4faf7] text-[#10221d]">
+        <section className="relative h-[54vh] min-h-96 w-full overflow-hidden">
+          {coverUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={coverUrl} alt={galleryName} className="h-full w-full object-cover" decoding="async" />
+          ) : (
+            <div className="h-full w-full bg-slate-900" />
+          )}
+          <div className="absolute inset-0 bg-black/50" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center text-white">
+            <p className="text-xs uppercase tracking-[0.4em] opacity-80">{formatHeaderDate}</p>
+            <h1 className="font-display mt-4 text-4xl font-semibold sm:text-6xl">{galleryName}</h1>
+            <p className="mt-4 text-sm opacity-90">
+              {ownerName} | <span className="underline underline-offset-2">{hostLabel}</span>
+            </p>
+          </div>
+        </section>
+        <section className="mx-auto mt-10 w-full max-w-lg rounded-3xl border border-[#d8e9e2] bg-white p-8 shadow-[0_18px_38px_rgba(15,118,110,0.16)]">
+          <h2 className="text-center text-2xl font-semibold text-[#123229]">Enter Gallery PIN</h2>
+          <p className="mt-2 text-center text-sm text-[#5c7d72]">
+            This gallery is protected. Enter the event PIN to continue.
+          </p>
+          <form className="mt-6 space-y-4" onSubmit={onUnlockGallery}>
+            <input
+              value={pinValue}
+              onChange={(e) => setPinValue(e.target.value)}
+              placeholder="PIN"
+              className="h-12 w-full rounded-xl border border-[#d8e9e2] px-4 text-base outline-none focus:border-[#0f766e]"
+              autoComplete="one-time-code"
+              inputMode="numeric"
+            />
+            {unlockError ? <p className="text-sm text-[#c2410c]">{unlockError}</p> : null}
+            <button
+              type="submit"
+              disabled={unlocking}
+              className="h-12 w-full rounded-xl bg-[#0f766e] px-6 text-base font-semibold text-white transition hover:bg-[#115e59] disabled:opacity-60"
+            >
+              {unlocking ? "Unlocking..." : "Unlock Gallery"}
+            </button>
+          </form>
+        </section>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#f7f3ee] text-[#15161a]">
+    <div className="min-h-screen bg-[#f4faf7] text-[#10221d]">
       <section className="relative h-[74vh] min-h-115 w-full overflow-hidden">
         {coverUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -771,12 +879,12 @@ export default function DiskGalleryClient({
         </div>
       </section>
 
-      <section className="sticky top-0 z-20 border-b border-white/40 bg-white/80 backdrop-blur">
+      <section className="sticky top-0 z-20 border-b border-[#d8e9e2] bg-white/85 backdrop-blur">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-end gap-4 px-4 py-4 sm:px-8">
           {favoritesEnabled ? (
             <button
               type="button"
-              className="inline-flex items-center text-[#5f5b55] hover:text-[#15161a]"
+              className="inline-flex items-center text-[#4f6d63] hover:text-[#0f766e]"
               onClick={() => setIsIdentityModalOpen(true)}
               aria-label="Favorites"
             >
@@ -785,7 +893,7 @@ export default function DiskGalleryClient({
           ) : null}
           <button
             type="button"
-            className="inline-flex items-center text-[#5f5b55] hover:text-[#15161a]"
+            className="inline-flex items-center text-[#4f6d63] hover:text-[#0f766e]"
             onClick={() => openShareModal(window.location.href)}
             aria-label="Share gallery"
           >
@@ -793,7 +901,7 @@ export default function DiskGalleryClient({
           </button>
           <button
             type="button"
-            className="inline-flex items-center text-[#5f5b55] hover:text-[#15161a]"
+            className="inline-flex items-center text-[#4f6d63] hover:text-[#0f766e]"
             onClick={() => {
               setReviewSubmitted(false);
               setReviewError(null);
@@ -803,44 +911,48 @@ export default function DiskGalleryClient({
           >
             <ChatBubbleOvalLeftEllipsisIcon className="h-6 w-6" />
           </button>
-          <span className="text-sm text-[#5f5b55]">Expires on {formatDateLabel(expiresAt)}</span>
-          <div className="relative">
-            <button
-              className="rounded-full bg-[#101114] px-5 py-2.5 text-sm font-semibold text-white"
-              onClick={() => setIsDownloadMenuOpen((v) => !v)}
-            >
-              Download files
-            </button>
-            {isDownloadMenuOpen ? (
-              <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-[#e3d8cc] bg-white p-2 shadow-lg">
+          <span className="rounded-full border border-[#d3e6de] bg-[#eef8f4] px-3 py-1 text-xs font-semibold text-[#2f5c4f]">
+            Expires on {formatDateLabel(expiresAt)}
+          </span>
+          {bulkDownloadAllowed ? (
+            <div className="relative">
+              <button
+                className="rounded-full bg-[#0f766e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#115e59]"
+                onClick={() => setIsDownloadMenuOpen((v) => !v)}
+              >
+                Download files
+              </button>
+              {isDownloadMenuOpen ? (
+              <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-[#d9e8e2] bg-white p-2 shadow-xl shadow-[#0f766e]/10">
                 <button
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-[#f7f3ee]"
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-[#eef8f4]"
                   onClick={onDownloadAll}
                 >
                   <ArrowDownTrayIcon className="h-4 w-4" />
                   <span>
-                    <span className="block font-medium text-[#15161a]">Whole project</span>
-                    <span className="block text-xs text-[#8a7f73]">All files and folders</span>
+                    <span className="block font-medium text-[#14352d]">Whole project</span>
+                    <span className="block text-xs text-[#5d7f73]">All files and folders</span>
                   </span>
                 </button>
                 {favoritesEnabled ? (
                   <button
-                    className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-[#f7f3ee]"
+                    className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-[#eef8f4]"
                     onClick={onDownloadFavorites}
                   >
                     <HeartSolidIcon className="h-4 w-4" />
                     <span>
-                      <span className="block font-medium text-[#15161a]">Favorites</span>
-                      <span className="block text-xs text-[#8a7f73]">Only liked files</span>
+                      <span className="block font-medium text-[#14352d]">Favorites</span>
+                      <span className="block text-xs text-[#5d7f73]">Only liked files</span>
                     </span>
                   </button>
                 ) : null}
               </div>
-            ) : null}
-          </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
         {favoritesEnabled && selectionLimit !== null ? (
-          <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 pb-4 text-sm text-[#5f5b55] sm:px-8">
+          <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 pb-4 text-sm text-[#476a5e] sm:px-8">
             <span>
               Select up to {selectionLimit} photo{selectionLimit === 1 ? "" : "s"}.
             </span>
@@ -860,19 +972,24 @@ export default function DiskGalleryClient({
 
       {activeFolderDescription ? (
         <section className="mx-auto w-full max-w-5xl px-4 pt-10 text-center sm:px-8">
-          <p className="text-base leading-8 text-[#4f4a44] sm:text-lg">{activeFolderDescription}</p>
+          <p className="text-base leading-8 text-[#3f6659] sm:text-lg">{activeFolderDescription}</p>
         </section>
       ) : null}
 
       <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-8 sm:py-10">
         {hasPhotos ? (
           <>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
                 {visiblePhotos.map((photo, idx) => {
                   const isLiked = Boolean(liked[photo.id]);
                   const disableLike = !isLiked && selectionLimit !== null && likedCount >= selectionLimit;
+                  const tileAspect =
+                    idx % 7 === 0 ? "aspect-[4/5]" : idx % 5 === 0 ? "aspect-square" : "aspect-[4/3]";
                   return (
-                    <figure key={photo.id} className="group relative overflow-hidden rounded-[18px] bg-white shadow-sm">
+                    <figure
+                      key={photo.id}
+                      className="group relative overflow-hidden rounded-[20px] border border-[#d7e9e1] bg-white shadow-[0_14px_30px_rgba(15,118,110,0.12)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(15,118,110,0.2)]"
+                    >
                     <button
                       type="button"
                       className="block w-full"
@@ -883,53 +1000,62 @@ export default function DiskGalleryClient({
                       <img
                         src={photo.url}
                         alt={photo.name}
-                        className="aspect-4/3 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                        className={`${tileAspect} h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.06]`}
                         loading="lazy"
                         decoding="async"
                       />
                     </button>
-                    <div className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-black/25" />
-                    <div className="absolute bottom-3 right-3 flex gap-2 opacity-0 transition group-hover:opacity-100">
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0f241e]/45 via-transparent to-transparent opacity-70 transition group-hover:opacity-90" />
+                    <div className="absolute bottom-3 left-3 max-w-[70%]">
+                      <p className="truncate rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-semibold text-white/95 backdrop-blur">
+                        {photo.name}
+                      </p>
+                    </div>
+                    <div className="absolute bottom-3 right-3 flex gap-2 opacity-0 transition duration-300 group-hover:opacity-100">
                       <button
                         type="button"
-                        className="rounded-full bg-black/60 p-2 text-white"
+                        className="rounded-full bg-white/95 p-2 text-[#1f3b33] shadow-md"
                         onClick={() => openShareModal(photo.url)}
                         aria-label="Share photo"
                       >
                         <ShareIcon className="h-3.5 w-3.5" />
                       </button>
-                      <button
-                        type="button"
-                        className="rounded-full bg-black/60 p-2 text-white"
-                        onClick={() => {
-                          registerDownloadedPhotos([photo.id]);
-                          void recordClientActions([
-                            {
-                              photoId: photo.id,
-                              action: "download",
-                            },
-                          ]);
-                          triggerDownload(photo.url, photo.name);
-                        }}
-                        aria-label="Download photo"
-                      >
-                        <ArrowDownTrayIcon className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        className={`rounded-full p-2 text-white ${
-                          isLiked ? "bg-[#d97757]" : "bg-black/60"
-                        } ${disableLike ? "cursor-not-allowed opacity-60" : ""}`}
-                        onClick={() => toggleLike(photo.id)}
-                        disabled={disableLike}
-                        aria-label="Favorite photo"
-                      >
-                        {isLiked ? (
-                          <HeartSolidIcon className="h-3.5 w-3.5" />
-                        ) : (
-                          <HeartOutlineIcon className="h-3.5 w-3.5" />
-                        )}
-                      </button>
+                      {singleDownloadAllowed ? (
+                        <button
+                          type="button"
+                          className="rounded-full bg-white/95 p-2 text-[#1f3b33] shadow-md"
+                          onClick={() => {
+                            registerDownloadedPhotos([photo.id]);
+                            void recordClientActions([
+                              {
+                                photoId: photo.id,
+                                action: "download",
+                              },
+                            ]);
+                            void downloadSinglePhoto(photo);
+                          }}
+                          aria-label="Download photo"
+                        >
+                          <ArrowDownTrayIcon className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
+                      {favoritesEnabled ? (
+                        <button
+                          type="button"
+                          className={`rounded-full p-2 text-white shadow-md ${
+                            isLiked ? "bg-[#0f766e]" : "bg-black/55"
+                          } ${disableLike ? "cursor-not-allowed opacity-60" : ""}`}
+                          onClick={() => toggleLike(photo.id)}
+                          disabled={disableLike}
+                          aria-label="Favorite photo"
+                        >
+                          {isLiked ? (
+                            <HeartSolidIcon className="h-3.5 w-3.5" />
+                          ) : (
+                            <HeartOutlineIcon className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      ) : null}
                     </div>
                   </figure>
                 );
@@ -943,7 +1069,7 @@ export default function DiskGalleryClient({
             <div ref={loadMoreRef} />
           </>
         ) : (
-          <div className="rounded-2xl border border-[#e3d8cc] bg-white px-6 py-12 text-center text-[#8a7f73]">
+          <div className="rounded-2xl border border-[#d7e9e1] bg-white px-6 py-12 text-center text-[#5d7f73]">
             No photos uploaded yet.
           </div>
         )}
@@ -952,41 +1078,47 @@ export default function DiskGalleryClient({
       {activePhoto ? (
         <div className="fixed inset-0 z-50 bg-black/85">
           <div className="absolute inset-x-0 top-0 flex items-center justify-between px-6 py-4 text-white">
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 text-lg"
-              onClick={() => {
-                registerDownloadedPhotos([activePhoto.id]);
-                void recordClientActions([
-                  {
-                    photoId: activePhoto.id,
-                    action: "download",
-                  },
-                ]);
-                triggerDownload(activePhoto.url, activePhoto.name);
-              }}
-            >
-              <ArrowDownTrayIcon className="h-5 w-5" />
-              Download
-            </button>
-            <div className="flex items-center gap-6">
+            {singleDownloadAllowed ? (
               <button
                 type="button"
-                onClick={() => toggleLike(activePhoto.id)}
-                disabled={!liked[activePhoto.id] && selectionLimit !== null && likedCount >= selectionLimit}
-                className={`${liked[activePhoto.id] ? "text-rose-400" : "text-white"} ${
-                  !liked[activePhoto.id] && selectionLimit !== null && likedCount >= selectionLimit
-                    ? "cursor-not-allowed opacity-60"
-                    : ""
-                }`}
-                aria-label="Favorite photo"
+                className="inline-flex items-center gap-2 text-lg"
+                onClick={() => {
+                  registerDownloadedPhotos([activePhoto.id]);
+                  void recordClientActions([
+                    {
+                      photoId: activePhoto.id,
+                      action: "download",
+                    },
+                  ]);
+                  void downloadSinglePhoto(activePhoto);
+                }}
               >
-                {liked[activePhoto.id] ? (
-                  <HeartSolidIcon className="h-6 w-6" />
-                ) : (
-                  <HeartOutlineIcon className="h-6 w-6" />
-                )}
+                <ArrowDownTrayIcon className="h-5 w-5" />
+                Download
               </button>
+            ) : (
+              <span className="text-sm text-white/70">Downloads disabled</span>
+            )}
+            <div className="flex items-center gap-6">
+              {favoritesEnabled ? (
+                <button
+                  type="button"
+                  onClick={() => toggleLike(activePhoto.id)}
+                  disabled={!liked[activePhoto.id] && selectionLimit !== null && likedCount >= selectionLimit}
+                  className={`${liked[activePhoto.id] ? "text-rose-400" : "text-white"} ${
+                    !liked[activePhoto.id] && selectionLimit !== null && likedCount >= selectionLimit
+                      ? "cursor-not-allowed opacity-60"
+                      : ""
+                  }`}
+                  aria-label="Favorite photo"
+                >
+                  {liked[activePhoto.id] ? (
+                    <HeartSolidIcon className="h-6 w-6" />
+                  ) : (
+                    <HeartOutlineIcon className="h-6 w-6" />
+                  )}
+                </button>
+              ) : null}
               <button type="button" onClick={() => openShareModal(activePhoto.url)} aria-label="Share photo">
                 <ShareIcon className="h-6 w-6" />
               </button>
@@ -1043,7 +1175,9 @@ export default function DiskGalleryClient({
             >
               <XMarkIcon className="h-5 w-5" />
             </button>
-            <h3 className="font-display text-center text-2xl font-semibold text-[#15161a]">sample</h3>
+            <h3 className="font-display text-center text-2xl font-semibold text-[#15161a]">
+              Save your favorites
+            </h3>
             <p className="mt-1.5 text-center text-base text-[#8a7f73]">
               {selectionLimit === null
                 ? `Available for selection: ${visiblePhotos.length}`
@@ -1189,4 +1323,3 @@ export default function DiskGalleryClient({
     </div>
   );
 }
-

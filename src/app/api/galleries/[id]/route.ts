@@ -1,17 +1,21 @@
+import {
+  mergeEventSettings,
+  mergeGalleryMeta,
+  normalizeEventSettings,
+  normalizeGalleryMeta,
+} from "@/lib/gallery-config";
 import prisma from "@/lib/prisma";
+import { getSessionEmailFromRequest } from "@/lib/session";
 import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
-
-const SESSION_COOKIE_NAME = "wf_user_email";
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const email = req.cookies.get(SESSION_COOKIE_NAME)?.value?.trim().toLowerCase() ?? "";
-  if (!emailRegex.test(email)) {
+  const email = getSessionEmailFromRequest(req);
+  if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -35,6 +39,8 @@ export async function GET(
       slug: true,
       userId: true,
       coverPhotoId: true,
+      settings: true,
+      meta: true,
       createdAt: true,
       _count: {
         select: { photos: true },
@@ -46,10 +52,35 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const { _count, ...rest } = gallery;
+  const { _count, settings, meta, ...rest } = gallery;
+  const parsedSettings = normalizeEventSettings(settings);
+  const parsedMeta = normalizeGalleryMeta(meta);
   return NextResponse.json({
     ...rest,
     photosCount: _count.photos,
+    settings: parsedSettings,
+    meta: parsedMeta,
+    startDate: parsedSettings?.startDate ?? null,
+    endDate: parsedSettings?.endDate ?? null,
+    eventType: parsedSettings?.eventType ?? null,
+    eventLocation: parsedSettings?.eventLocation ?? null,
+    description: parsedSettings?.description ?? null,
+    published: parsedSettings?.published ?? true,
+    photoSellingEnabled: parsedSettings?.photoSellingEnabled ?? false,
+    allowSingleDownload: parsedSettings?.allowSingleDownload ?? true,
+    allowBulkDownload: parsedSettings?.allowBulkDownload ?? false,
+    oneQrEnabled: parsedSettings?.oneQrEnabled ?? true,
+    expiresAt: parsedMeta?.expiresAt ?? null,
+    storageTimeLabel: parsedMeta?.storageTimeLabel ?? null,
+    favoritesEnabled: parsedMeta?.favoritesEnabled ?? true,
+    favoritesLimitSelected: parsedMeta?.favoritesLimitSelected ?? false,
+    favoritesName: parsedMeta?.favoritesName ?? null,
+    favoritesListsCount: parsedMeta?.favoritesListsCount ?? 0,
+    selectionCompletedCount: parsedMeta?.selectionCompletedCount ?? 0,
+    favoritesMaxSelected: parsedMeta?.favoritesMaxSelected ?? null,
+    folders: parsedMeta?.folders ?? [],
+    folderPhotosMap: parsedMeta?.folderPhotosMap ?? {},
+    folderOrder: parsedMeta?.folderOrder ?? [],
   });
 }
 
@@ -58,8 +89,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const email = req.cookies.get(SESSION_COOKIE_NAME)?.value?.trim().toLowerCase() ?? "";
-  if (!emailRegex.test(email)) {
+  const email = getSessionEmailFromRequest(req);
+  if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -73,36 +104,103 @@ export async function PATCH(
   }
 
   const body = await req.json();
-  const nextName = String(body?.name ?? "").trim();
-  if (!nextName) {
-    return NextResponse.json({ error: "Gallery name is required" }, { status: 400 });
+  const nextName = typeof body?.name === "string" ? body.name.trim() : "";
+  const hasNameUpdate = nextName.length > 0;
+  const hasSettingsUpdate = body?.settings !== undefined;
+  const hasMetaUpdate = body?.meta !== undefined;
+
+  if (!hasNameUpdate && !hasSettingsUpdate && !hasMetaUpdate) {
+    return NextResponse.json(
+      { error: "Provide at least one field to update: name, settings, or meta." },
+      { status: 400 }
+    );
   }
 
-  const updated = await prisma.gallery.updateMany({
-    where: {
-      id,
-      userId: user.id,
-    },
-    data: {
-      name: nextName,
-    },
+  const existing = await prisma.gallery.findFirst({
+    where: { id, userId: user.id },
+    select: { id: true, settings: true, meta: true },
   });
-
-  if (updated.count === 0) {
+  if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const gallery = await prisma.gallery.findUnique({
-    where: { id },
+  const nextSettings = hasSettingsUpdate
+    ? mergeEventSettings(existing.settings, body.settings)
+    : undefined;
+  const nextMeta = hasMetaUpdate ? mergeGalleryMeta(existing.meta, body.meta) : undefined;
+
+  const gallery = await prisma.gallery.update({
+    where: { id: existing.id },
+    data: {
+      ...(hasNameUpdate ? { name: nextName } : {}),
+      ...(hasSettingsUpdate && nextSettings ? { settings: nextSettings } : {}),
+      ...(hasMetaUpdate && nextMeta ? { meta: nextMeta } : {}),
+    },
     select: {
       id: true,
       name: true,
       slug: true,
       userId: true,
       coverPhotoId: true,
+      settings: true,
+      meta: true,
       createdAt: true,
     },
   });
 
-  return NextResponse.json(gallery);
+  return NextResponse.json({
+    ...gallery,
+    settings: normalizeEventSettings(gallery.settings),
+    meta: normalizeGalleryMeta(gallery.meta),
+  });
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const email = getSessionEmailFromRequest(req);
+  if (!email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+
+  if (!user) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const existing = await prisma.gallery.findFirst({
+    where: { id, userId: user.id },
+    select: { id: true },
+  });
+
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.gallery.updateMany({
+      where: { id: existing.id, coverPhotoId: { not: null } },
+      data: { coverPhotoId: null },
+    });
+
+    await tx.clientPhotoAction.deleteMany({
+      where: { galleryId: existing.id },
+    });
+
+    await tx.photo.deleteMany({
+      where: { galleryId: existing.id },
+    });
+
+    await tx.gallery.delete({
+      where: { id: existing.id },
+    });
+  });
+
+  return NextResponse.json({ ok: true });
 }

@@ -14,8 +14,7 @@ import {
   ShieldCheck,
   Smartphone,
 } from "lucide-react";
-import { getGalleryMeta, saveGalleryMeta } from "@/lib/gallery-meta-storage";
-import { getEventSettings, saveEventSettings } from "@/lib/event-settings-storage";
+import type { GalleryEventSettings, GalleryMetaConfig } from "@/lib/gallery-config";
 
 const EVENT_TYPES = [
   "Wedding",
@@ -38,6 +37,8 @@ type ExistingGalleryResponse = {
   id: string;
   name: string;
   createdAt?: string | null;
+  settings?: GalleryEventSettings | null;
+  meta?: GalleryMetaConfig | null;
 };
 
 function Toggle({
@@ -134,6 +135,10 @@ function CreateEventsPageContent() {
   const [eventLocation, setEventLocation] = useState("");
   const [description, setDescription] = useState("");
   const [brandingEnabled, setBrandingEnabled] = useState(false);
+  const [favoritesEnabled, setFavoritesEnabled] = useState(true);
+  const [favoritesName, setFavoritesName] = useState("Selecting photos");
+  const [favoritesLimitSelected, setFavoritesLimitSelected] = useState(false);
+  const [favoritesMaxSelected, setFavoritesMaxSelected] = useState(1);
 
   const [advancedOpen, setAdvancedOpen] = useState(true);
   const [expiryDate, setExpiryDate] = useState("");
@@ -175,8 +180,8 @@ function CreateEventsPageContent() {
         }
 
         const gallery = (await response.json()) as ExistingGalleryResponse;
-        const settings = getEventSettings(editGalleryId);
-        const galleryMeta = getGalleryMeta(editGalleryId);
+        const settings = gallery.settings ?? null;
+        const galleryMeta = gallery.meta ?? null;
         const createdDate = toDateInputValue(gallery.createdAt) || todayDate;
         const rawEventType = settings?.eventType?.trim();
         const normalizedEventType =
@@ -195,6 +200,10 @@ function CreateEventsPageContent() {
         setEventLocation(settings?.eventLocation ?? "");
         setDescription(settings?.description ?? "");
         setBrandingEnabled(settings?.brandingEnabled ?? false);
+        setFavoritesEnabled(galleryMeta?.favoritesEnabled ?? true);
+        setFavoritesName(galleryMeta?.favoritesName ?? "Selecting photos");
+        setFavoritesLimitSelected(galleryMeta?.favoritesLimitSelected ?? false);
+        setFavoritesMaxSelected(Math.max(1, galleryMeta?.favoritesMaxSelected ?? 1));
         setExpiryDate(settings?.expiryDate ?? toDateInputValue(galleryMeta?.expiresAt) ?? "");
         setFullAccessPin(settings?.fullAccessPin ?? "");
         setGuestPin(settings?.guestPin ?? "");
@@ -225,10 +234,11 @@ function CreateEventsPageContent() {
     };
   }, [editGalleryId, isEditMode, todayDate]);
 
-  const canSubmit = useMemo(
-    () => eventName.trim().length > 1 && !submitting && !loadingEditData,
-    [eventName, submitting, loadingEditData]
-  );
+  const canSubmit = useMemo(() => {
+    const hasValidName = eventName.trim().length > 0;
+    const blockedByEditLoading = isEditMode && loadingEditData;
+    return hasValidName && !submitting && !blockedByEditLoading;
+  }, [eventName, isEditMode, loadingEditData, submitting]);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -244,69 +254,7 @@ function CreateEventsPageContent() {
 
     try {
       const expiresAtIso = expiryDate ? new Date(`${expiryDate}T00:00:00`).toISOString() : null;
-
-      if (isEditMode) {
-        const response = await fetch(`/api/galleries/${encodeURIComponent(editGalleryId)}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: safeName }),
-        });
-        const contentType = response.headers.get("content-type") ?? "";
-        if (!response.ok || !contentType.includes("application/json")) {
-          throw new Error("Unable to save event changes.");
-        }
-
-        saveGalleryMeta(editGalleryId, {
-          expiresAt: expiresAtIso,
-          storageTimeLabel: expiresAtIso ? "Custom expiry" : null,
-        });
-
-        saveEventSettings(editGalleryId, {
-          startDate,
-          endDate,
-          eventType,
-          eventLocation: eventLocation.trim() || null,
-          description: description.trim() || null,
-          published,
-          photoSellingEnabled: false,
-          reelitAiEnabled: false,
-          brandingEnabled,
-          expiryDate: expiryDate || null,
-          fullAccessPin: fullAccessPin.trim() || null,
-          guestPin: guestPin.trim() || null,
-          allowSingleDownload,
-          allowBulkDownload,
-          whatsappEnabled,
-          emailEnabled,
-          oneQrEnabled,
-          oneQrRequirePin,
-          oneQrAccessLevel,
-          galleryAppEnabled,
-          livenessDetectionEnabled,
-        });
-
-        router.push("/dashboard/drive");
-        return;
-      }
-
-      const response = await fetch("/api/galleries", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: safeName }),
-      });
-      const contentType = response.headers.get("content-type") ?? "";
-      if (!response.ok || !contentType.includes("application/json")) {
-        throw new Error("Unable to create event.");
-      }
-
-      const gallery = (await response.json()) as { id: string };
-
-      saveGalleryMeta(gallery.id, {
-        expiresAt: expiresAtIso,
-        storageTimeLabel: expiresAtIso ? "Custom expiry" : null,
-      });
-
-      saveEventSettings(gallery.id, {
+      const settingsPayload: GalleryEventSettings = {
         startDate,
         endDate,
         eventType,
@@ -328,7 +276,50 @@ function CreateEventsPageContent() {
         oneQrAccessLevel,
         galleryAppEnabled,
         livenessDetectionEnabled,
+      };
+      const metaPayload: GalleryMetaConfig = {
+        expiresAt: expiresAtIso,
+        storageTimeLabel: expiresAtIso ? "Custom expiry" : null,
+        favoritesEnabled,
+        favoritesLimitSelected,
+        favoritesName: favoritesName.trim() || "Selecting photos",
+        favoritesMaxSelected: favoritesLimitSelected ? Math.max(1, favoritesMaxSelected) : null,
+      };
+
+      if (isEditMode) {
+        const response = await fetch(`/api/galleries/${encodeURIComponent(editGalleryId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: safeName,
+            settings: settingsPayload,
+            meta: metaPayload,
+          }),
+        });
+        const contentType = response.headers.get("content-type") ?? "";
+        if (!response.ok || !contentType.includes("application/json")) {
+          throw new Error("Unable to save event changes.");
+        }
+
+        router.push("/dashboard/drive");
+        return;
+      }
+
+      const response = await fetch("/api/galleries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: safeName,
+          settings: settingsPayload,
+          meta: metaPayload,
+        }),
       });
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!response.ok || !contentType.includes("application/json")) {
+        throw new Error("Unable to create event.");
+      }
+
+      const gallery = (await response.json()) as { id: string };
 
       router.push(`/dashboard/drive/${gallery.id}`);
     } catch (error) {
@@ -486,6 +477,49 @@ function CreateEventsPageContent() {
                 Consistent delivery style
               </span>
             </div>
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-[#d9e8e2] bg-white p-6 shadow-[0_10px_30px_rgba(16,39,32,0.06)]">
+          <SectionHeader
+            icon={<BadgeCheck className="h-5 w-5" />}
+            title="Favorites Settings"
+            subtitle="Control how clients shortlist their selected photos."
+            trailing={<Toggle checked={favoritesEnabled} onChange={setFavoritesEnabled} />}
+          />
+          <div className={`mt-4 space-y-4 ${favoritesEnabled ? "" : "opacity-60"}`}>
+            <label className="text-sm font-semibold text-[#2d4f46]">
+              Favorites Label
+              <input
+                value={favoritesName}
+                onChange={(e) => setFavoritesName(e.target.value)}
+                disabled={!favoritesEnabled}
+                placeholder="Selecting photos"
+                className="mt-1 h-12 w-full rounded-xl border border-[#d5e7df] bg-white px-4 text-sm text-[#1a352d] outline-none focus:border-[#0f766e] disabled:cursor-not-allowed disabled:bg-[#f7fbf9]"
+              />
+            </label>
+            <ControlToggleRow
+              title="Limit Selected Photos"
+              description="Restrict how many photos each client can add to favorites."
+              value={favoritesLimitSelected}
+              onChange={setFavoritesLimitSelected}
+              disabled={!favoritesEnabled}
+            />
+            {favoritesEnabled && favoritesLimitSelected ? (
+              <label className="text-sm font-semibold text-[#2d4f46]">
+                Max Selected Photos
+                <input
+                  type="number"
+                  min={1}
+                  value={favoritesMaxSelected}
+                  onChange={(e) => {
+                    const next = Number.parseInt(e.target.value, 10);
+                    setFavoritesMaxSelected(Number.isFinite(next) ? Math.max(1, next) : 1);
+                  }}
+                  className="mt-1 h-12 w-full rounded-xl border border-[#d5e7df] bg-white px-4 text-sm text-[#1a352d] outline-none focus:border-[#0f766e]"
+                />
+              </label>
+            ) : null}
           </div>
         </section>
 

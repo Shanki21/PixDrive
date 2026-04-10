@@ -4,6 +4,8 @@ export const NAV_LINKS = [
   { label: "Features", href: "#features" },
   { label: "Workflow", href: "#workflow" },
   { label: "Gallery", href: "#gallery" },
+  { label: "Pricing", href: "#pricing" },
+  { label: "Referral", href: "#referral" },
 ];
 
 export const TRUST_LOGOS = ["Luna Studio", "Frame & Co", "North Lens", "Afterlight", "Memora Labs", "Slate Weddings"];

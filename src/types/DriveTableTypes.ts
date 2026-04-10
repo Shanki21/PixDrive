@@ -18,6 +18,9 @@ export type MinimalGallery = {
   downloads?: number;
   published?: boolean;
   photoSellingEnabled?: boolean;
+  allowSingleDownload?: boolean;
+  allowBulkDownload?: boolean;
+  oneQrEnabled?: boolean;
 
   type?: "client" | "favorites";
   favoritesEnabled?: boolean;
@@ -27,6 +30,15 @@ export type MinimalGallery = {
   selectionCompletedCount?: number;
   favoritesMaxSelected?: number | null;
   storageTimeLabel?: string;
+  folders?: Array<{
+    id: string;
+    name: string;
+    description: string;
+    hidden: boolean;
+    createdAt: string;
+  }>;
+  folderPhotosMap?: Record<string, string[]>;
+  folderOrder?: string[];
   pinned?: boolean;
   deletedAt?: string | null;
 };

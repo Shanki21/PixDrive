@@ -5,8 +5,8 @@ import {
   ArrowUpDown,
   Eye,
   PlusCircle,
+  QrCode,
   Settings,
-  Share2,
   Trash2,
   Upload,
   UserRoundPlus,
@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import SortDropdown from "./SortDropdown";
 import { MinimalGallery } from "../../types/DriveTableTypes";
-import { buildClientGalleryUrl } from "@/lib/client-gallery-url";
 
 type SortField =
   | "title"
@@ -70,6 +69,7 @@ export default function DriveTable({
   onOpenBin,
   onSettings,
   onPreview,
+  onOpenQr,
   onPinToggle,
   onPublishToggle,
   onPhotoSellingToggle,
@@ -83,6 +83,7 @@ export default function DriveTable({
   onOpenBin: () => void;
   onSettings: (gallery: MinimalGallery) => void;
   onPreview: (gallery: MinimalGallery) => void;
+  onOpenQr: (gallery: MinimalGallery) => void;
   onPinToggle: (gallery: MinimalGallery) => void;
   onPublishToggle: (gallery: MinimalGallery) => void;
   onPhotoSellingToggle: (gallery: MinimalGallery) => void;
@@ -98,7 +99,6 @@ export default function DriveTable({
   const [activeFilter, setActiveFilter] = useState<EventFilter>("all");
   const [openMenuFor, setOpenMenuFor] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
-  const [recentlySharedId, setRecentlySharedId] = useState<string | null>(null);
   const deferredQuery = useDeferredValue(query);
 
   useEffect(() => {
@@ -179,19 +179,6 @@ export default function DriveTable({
       photoSelling: galleries.filter((gallery) => Boolean(gallery.photoSellingEnabled)).length,
     };
   }, [galleries]);
-
-  const copyShareLink = async (gallery: MinimalGallery) => {
-    if (typeof window === "undefined" || typeof navigator === "undefined") return;
-    const slug = gallery.slug ?? gallery.id;
-    const shareUrl = buildClientGalleryUrl(slug, window.location.origin);
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setRecentlySharedId(gallery.id);
-      window.setTimeout(() => setRecentlySharedId((current) => (current === gallery.id ? null : current)), 1400);
-    } catch {
-      setRecentlySharedId(null);
-    }
-  };
 
   return (
     <div className="mt-6 space-y-5">
@@ -450,11 +437,11 @@ export default function DriveTable({
                   </button>
                   <button
                     type="button"
-                    onClick={() => void copyShareLink(gallery)}
+                    onClick={() => onOpenQr(gallery)}
                     className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#d8e8e1] bg-white text-[#2f544a] hover:border-[#0f766e] hover:text-[#0f766e]"
-                    title={recentlySharedId === gallery.id ? "Link copied" : "Share event"}
+                    title="Open in One QR"
                   >
-                    <Share2 className="h-4 w-4" />
+                    <QrCode className="h-4 w-4" />
                   </button>
                   <button
                     type="button"

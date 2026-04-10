@@ -6,8 +6,7 @@ import DriveHeader from "@/components/drive/DriveHeader";
 import DriveTable from "@/components/drive/DriveTable";
 import TrashTable from "@/components/drive/TrashTable";
 import TrashWarning from "@/components/drive/TrashWarning";
-import { getGalleryMeta } from "@/lib/gallery-meta-storage";
-import { getEventSettings, saveEventSettings } from "@/lib/event-settings-storage";
+import type { GalleryEventSettings } from "@/lib/gallery-config";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 
 const VISITS_STORAGE_KEY = "wf_gallery_visits";
@@ -66,10 +65,6 @@ export default function DrivePage() {
       }
 
       const rowsWithVisits = rows.map((row) => {
-        const meta = getGalleryMeta(row.id);
-        const eventSettings = getEventSettings(row.id);
-        const settingsExpiry =
-          eventSettings?.expiryDate ? new Date(`${eventSettings.expiryDate}T00:00:00`).toISOString() : undefined;
         let downloadsCount = row.downloads ?? 0;
         try {
           const rawDownloads = localStorage.getItem(`${CLIENT_DOWNLOADS_PREFIX}${row.id}`);
@@ -82,21 +77,6 @@ export default function DrivePage() {
           ...row,
           visitors: visitsMap[row.id] ?? row.visitors ?? 0,
           downloads: downloadsCount,
-          startDate: eventSettings?.startDate ?? null,
-          endDate: eventSettings?.endDate ?? null,
-          eventType: eventSettings?.eventType ?? null,
-          eventLocation: eventSettings?.eventLocation ?? null,
-          description: eventSettings?.description ?? null,
-          published: eventSettings?.published ?? true,
-          photoSellingEnabled: eventSettings?.photoSellingEnabled ?? false,
-          expiresAt: meta?.expiresAt ?? row.expiresAt ?? settingsExpiry ?? undefined,
-          storageTimeLabel: meta?.storageTimeLabel ?? row.storageTimeLabel ?? undefined,
-          favoritesEnabled: meta?.favoritesEnabled ?? row.favoritesEnabled ?? true,
-          favoritesLimitSelected: meta?.favoritesLimitSelected ?? row.favoritesLimitSelected ?? false,
-          favoritesName: meta?.favoritesName ?? row.favoritesName ?? undefined,
-          favoritesListsCount: meta?.favoritesListsCount ?? row.favoritesListsCount ?? 0,
-          selectionCompletedCount: meta?.selectionCompletedCount ?? row.selectionCompletedCount ?? 0,
-          favoritesMaxSelected: meta?.favoritesMaxSelected ?? row.favoritesMaxSelected ?? null,
         };
       });
 
@@ -193,6 +173,9 @@ export default function DrivePage() {
           onPreview={(gallery) => {
             router.push(`/dashboard/drive/${gallery.id}`);
           }}
+          onOpenQr={(gallery) => {
+            router.push(`/dashboard/qr-code?event=${encodeURIComponent(gallery.id)}`);
+          }}
           onPinToggle={(gallery) => {
             setGalleries((prev) => {
               const toggled = prev.map((g) =>
@@ -203,21 +186,41 @@ export default function DrivePage() {
               return [...pinned, ...regular];
             });
           }}
-          onPublishToggle={(gallery) => {
+          onPublishToggle={async (gallery) => {
             const nextPublished = !(gallery.published ?? true);
-            saveEventSettings(gallery.id, { published: nextPublished });
-            setGalleries((prev) =>
-              prev.map((item) => (item.id === gallery.id ? { ...item, published: nextPublished } : item))
-            );
+            const payload: GalleryEventSettings = { published: nextPublished };
+            try {
+              const res = await fetch(`/api/galleries/${encodeURIComponent(gallery.id)}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ settings: payload }),
+              });
+              if (!res.ok) return;
+              setGalleries((prev) =>
+                prev.map((item) => (item.id === gallery.id ? { ...item, published: nextPublished } : item))
+              );
+            } catch {
+              // Ignore toggle failures.
+            }
           }}
-          onPhotoSellingToggle={(gallery) => {
+          onPhotoSellingToggle={async (gallery) => {
             const nextPhotoSelling = !(gallery.photoSellingEnabled ?? false);
-            saveEventSettings(gallery.id, { photoSellingEnabled: nextPhotoSelling });
-            setGalleries((prev) =>
-              prev.map((item) =>
-                item.id === gallery.id ? { ...item, photoSellingEnabled: nextPhotoSelling } : item
-              )
-            );
+            const payload: GalleryEventSettings = { photoSellingEnabled: nextPhotoSelling };
+            try {
+              const res = await fetch(`/api/galleries/${encodeURIComponent(gallery.id)}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ settings: payload }),
+              });
+              if (!res.ok) return;
+              setGalleries((prev) =>
+                prev.map((item) =>
+                  item.id === gallery.id ? { ...item, photoSellingEnabled: nextPhotoSelling } : item
+                )
+              );
+            } catch {
+              // Ignore toggle failures.
+            }
           }}
           onDuplicate={(gallery) => {
             const copy: MinimalGallery = {
@@ -230,14 +233,23 @@ export default function DrivePage() {
 
             setGalleries((prev) => insertAfterPinned(prev, copy));
           }}
-          onDelete={(gallery) => {
-            const deleted: MinimalGallery = {
-              ...gallery,
-              deletedAt: new Date().toISOString(),
-            };
+          onDelete={async (gallery) => {
+            try {
+              const res = await fetch(`/api/galleries/${encodeURIComponent(gallery.id)}`, {
+                method: "DELETE",
+              });
+              if (!res.ok) return;
 
-            setGalleries((prev) => prev.filter((g) => g.id !== gallery.id));
-            setTrash((prev) => [deleted, ...prev]);
+              const deleted: MinimalGallery = {
+                ...gallery,
+                deletedAt: new Date().toISOString(),
+              };
+
+              setGalleries((prev) => prev.filter((g) => g.id !== gallery.id));
+              setTrash((prev) => [deleted, ...prev]);
+            } catch {
+              // Ignore delete failures to keep dashboard responsive.
+            }
           }}
           onReorder={(draggedId, targetId) => {
             setGalleries((prev) => {

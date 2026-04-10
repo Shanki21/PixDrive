@@ -1,7 +1,24 @@
+import { getGalleryPublicAccess } from "@/lib/gallery-public-access";
+import { getRequiredGalleryPin, hasGalleryAccessFromRequest } from "@/lib/gallery-pin-access";
 import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
 const MAX_PAGE_SIZE = 120;
+
+function sanitizeFileName(value: string) {
+  const cleaned = value.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim();
+  return cleaned || "photo";
+}
+
+function getFileExtension(contentType: string, fallbackName: string) {
+  const lower = contentType.toLowerCase();
+  if (lower.includes("image/jpeg")) return ".jpg";
+  if (lower.includes("image/png")) return ".png";
+  if (lower.includes("image/webp")) return ".webp";
+
+  const dot = fallbackName.lastIndexOf(".");
+  return dot > -1 ? fallbackName.slice(dot) : "";
+}
 
 export async function GET(
   req: NextRequest,
@@ -12,16 +29,64 @@ export async function GET(
   const rawTake = Number(searchParams.get("take") ?? "60");
   const take = Number.isFinite(rawTake) ? Math.min(Math.max(rawTake, 1), MAX_PAGE_SIZE) : 60;
   const cursor = searchParams.get("cursor");
+  const downloadId = String(searchParams.get("downloadId") ?? "").trim();
 
   const gallery = await prisma.gallery.findFirst({
     where: {
       OR: [{ slug }, { id: slug }],
     },
-    select: { id: true },
+    select: { id: true, settings: true, meta: true },
   });
 
   if (!gallery) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  const publicAccess = getGalleryPublicAccess({ settings: gallery.settings, meta: gallery.meta });
+  if (!publicAccess.canAccess) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  const requiredPin = getRequiredGalleryPin(gallery.settings);
+  if (requiredPin && !hasGalleryAccessFromRequest(req, gallery.id)) {
+    return NextResponse.json({ error: "PIN required." }, { status: 401 });
+  }
+
+  if (downloadId) {
+    if (!publicAccess.allowSingleDownload) {
+      return NextResponse.json({ error: "Single download is disabled for this gallery." }, { status: 403 });
+    }
+
+    const photo = await prisma.photo.findFirst({
+      where: { id: downloadId, galleryId: gallery.id },
+      select: { name: true, url: true },
+    });
+
+    if (!photo) {
+      return NextResponse.json({ error: "Photo not found." }, { status: 404 });
+    }
+
+    try {
+      const upstream = await fetch(photo.url, { signal: AbortSignal.timeout(12000) });
+      if (!upstream.ok) {
+        return NextResponse.json({ error: "Unable to fetch source image." }, { status: 502 });
+      }
+
+      const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
+      const data = await upstream.arrayBuffer();
+      const safeBase = sanitizeFileName(photo.name || "photo");
+      const ext = safeBase.includes(".") ? "" : getFileExtension(contentType, photo.name || "");
+      const fileName = `${safeBase}${ext}`;
+
+      return new NextResponse(data, {
+        status: 200,
+        headers: {
+          "Content-Type": contentType,
+          "Content-Disposition": `attachment; filename="${fileName}"`,
+          "Cache-Control": "no-store",
+        },
+      });
+    } catch {
+      return NextResponse.json({ error: "Unable to download photo right now." }, { status: 502 });
+    }
   }
 
   const photos = await prisma.photo.findMany({

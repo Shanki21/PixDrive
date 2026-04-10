@@ -1,4 +1,4 @@
-# Pixora Clone
+# Pixora
 
 Pixora is a Next.js application that uses Prisma with PostgreSQL. The safest way to finish this project is:
 
@@ -16,6 +16,7 @@ Example connection string:
 
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/pixora_dev?schema=public"
+NEXTAUTH_SECRET="replace-with-a-long-random-secret"
 ```
 
 The local `.env` in this repo is already set to that default.

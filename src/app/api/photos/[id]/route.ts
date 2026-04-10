@@ -1,8 +1,7 @@
+import { destroyCloudinaryAssetByUrl } from "@/lib/cloudinary";
 import prisma from "@/lib/prisma";
+import { getSessionEmailFromRequest } from "@/lib/session";
 import { NextRequest, NextResponse } from "next/server";
-
-const SESSION_COOKIE_NAME = "wf_user_email";
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 async function getAuthorizedPhoto(id: string, email: string) {
   const user = await prisma.user.findUnique({
@@ -22,8 +21,8 @@ async function getAuthorizedPhoto(id: string, email: string) {
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const email = req.cookies.get(SESSION_COOKIE_NAME)?.value?.trim().toLowerCase() ?? "";
-  if (!emailRegex.test(email)) {
+  const email = getSessionEmailFromRequest(req);
+  if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -48,8 +47,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const email = req.cookies.get(SESSION_COOKIE_NAME)?.value?.trim().toLowerCase() ?? "";
-  if (!emailRegex.test(email)) {
+  const email = getSessionEmailFromRequest(req);
+  if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -65,6 +64,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     }),
     prisma.photo.delete({ where: { id } }),
   ]);
+
+  try {
+    await destroyCloudinaryAssetByUrl(result.photo.url);
+  } catch {
+    // Ignore media cleanup failures to keep delete action resilient.
+  }
 
   return NextResponse.json({ ok: true });
 }

@@ -1,13 +1,11 @@
 import prisma from "@/lib/prisma";
+import { getSessionEmailFromRequest } from "@/lib/session";
 import { NextRequest, NextResponse } from "next/server";
-
-const SESSION_COOKIE_NAME = "wf_user_email";
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const email = req.cookies.get(SESSION_COOKIE_NAME)?.value?.trim().toLowerCase() ?? "";
-  if (!emailRegex.test(email)) {
+  const email = getSessionEmailFromRequest(req);
+  if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

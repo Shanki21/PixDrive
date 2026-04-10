@@ -1,14 +1,12 @@
+import { normalizeEventSettings, normalizeGalleryMeta } from "@/lib/gallery-config";
 import { getPrismaUnavailableMessage, isPrismaUnavailableError } from "@/lib/prisma-errors";
 import prisma from "@/lib/prisma";
+import { getSessionEmailFromRequest } from "@/lib/session";
 import { NextResponse, NextRequest } from "next/server";
 import slugify from "slugify";
 
-const SESSION_COOKIE_NAME = "wf_user_email";
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 function getSessionEmail(req: NextRequest) {
-  const email = req.cookies.get(SESSION_COOKIE_NAME)?.value?.trim().toLowerCase() ?? "";
-  return emailRegex.test(email) ? email : null;
+  return getSessionEmailFromRequest(req);
 }
 
 export async function GET(req: NextRequest) {
@@ -45,12 +43,35 @@ export async function GET(req: NextRequest) {
     });
 
     const enriched = galleries.map((gallery) => {
-      const { _count, photos, ...rest } = gallery;
+      const { _count, photos, settings, meta, ...rest } = gallery;
+      const parsedSettings = normalizeEventSettings(settings);
+      const parsedMeta = normalizeGalleryMeta(meta);
 
       return {
         ...rest,
         firstPhotoUrl: photos[0]?.url ?? null,
         filesCount: _count.photos,
+        startDate: parsedSettings?.startDate ?? null,
+        endDate: parsedSettings?.endDate ?? null,
+        eventType: parsedSettings?.eventType ?? null,
+        eventLocation: parsedSettings?.eventLocation ?? null,
+        description: parsedSettings?.description ?? null,
+        published: parsedSettings?.published ?? true,
+        photoSellingEnabled: parsedSettings?.photoSellingEnabled ?? false,
+        allowSingleDownload: parsedSettings?.allowSingleDownload ?? true,
+        allowBulkDownload: parsedSettings?.allowBulkDownload ?? false,
+        oneQrEnabled: parsedSettings?.oneQrEnabled ?? true,
+        expiresAt: parsedMeta?.expiresAt ?? null,
+        storageTimeLabel: parsedMeta?.storageTimeLabel ?? null,
+        favoritesEnabled: parsedMeta?.favoritesEnabled ?? true,
+        favoritesLimitSelected: parsedMeta?.favoritesLimitSelected ?? false,
+        favoritesName: parsedMeta?.favoritesName ?? null,
+        favoritesListsCount: parsedMeta?.favoritesListsCount ?? 0,
+        selectionCompletedCount: parsedMeta?.selectionCompletedCount ?? 0,
+        favoritesMaxSelected: parsedMeta?.favoritesMaxSelected ?? null,
+        folders: parsedMeta?.folders ?? [],
+        folderPhotosMap: parsedMeta?.folderPhotosMap ?? {},
+        folderOrder: parsedMeta?.folderOrder ?? [],
       };
     });
 
@@ -81,12 +102,16 @@ export async function POST(req: NextRequest) {
 
     const name = String(body?.name ?? "").trim();
     const safeName = name || "Untitled gallery";
+    const settings = normalizeEventSettings(body?.settings);
+    const meta = normalizeGalleryMeta(body?.meta);
 
     const gallery = await prisma.gallery.create({
       data: {
         name: safeName,
         slug: `${slugify(safeName, { lower: true, strict: true }) || "gallery"}-${Date.now()}`,
         userId: user.id,
+        settings: settings ?? undefined,
+        meta: meta ?? undefined,
       },
     });
 

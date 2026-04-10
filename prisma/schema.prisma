@@ -23,6 +23,8 @@ model Gallery {
   coverPhotoId String? @unique
   coverPhoto Photo? @relation("GalleryCoverPhoto", fields: [coverPhotoId], references: [id])
   clientActions ClientPhotoAction[]
+  settings Json?
+  meta Json?
   createdAt DateTime @default(now())
 }
 

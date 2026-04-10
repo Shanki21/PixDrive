@@ -1,7 +1,10 @@
 import { getClientGalleryHostLabel } from "@/lib/client-gallery-url";
+import { getGalleryPublicAccess } from "@/lib/gallery-public-access";
+import { getRequiredGalleryPin, hasGalleryAccessFromCookieStore } from "@/lib/gallery-pin-access";
+import { normalizeGalleryMeta } from "@/lib/gallery-config";
 import { getPrismaUnavailableMessage, isPrismaUnavailableError } from "@/lib/prisma-errors";
 import prisma from "@/lib/prisma";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { notFound } from "next/navigation";
 import DiskGalleryClient from "./DiskGalleryClient";
 
@@ -24,6 +27,7 @@ function formatHeaderDate(value: Date) {
 export default async function DiskGalleryPage({ params }: DiskGalleryPageProps) {
   try {
     const requestHeaders = await headers();
+    const cookieStore = await cookies();
     const forwardedHost = requestHeaders.get("x-forwarded-host");
     const host = forwardedHost || requestHeaders.get("host");
     const protocol = requestHeaders.get("x-forwarded-proto") || "https";
@@ -40,6 +44,8 @@ export default async function DiskGalleryPage({ params }: DiskGalleryPageProps) 
         id: true,
         name: true,
         createdAt: true,
+        settings: true,
+        meta: true,
         coverPhotoId: true,
         user: {
           select: { email: true },
@@ -49,6 +55,39 @@ export default async function DiskGalleryPage({ params }: DiskGalleryPageProps) 
 
     if (!gallery) {
       notFound();
+    }
+    const publicAccess = getGalleryPublicAccess({ settings: gallery.settings, meta: gallery.meta });
+    if (!publicAccess.canAccess) {
+      notFound();
+    }
+    const requiredPin = getRequiredGalleryPin(gallery.settings);
+    const hasPinAccess = !requiredPin || hasGalleryAccessFromCookieStore(cookieStore, gallery.id);
+    const meta = normalizeGalleryMeta(gallery.meta);
+    const expiresAtIso =
+      meta?.expiresAt ?? new Date(gallery.createdAt.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    if (!hasPinAccess) {
+      return (
+        <DiskGalleryClient
+          galleryId={gallery.id}
+          gallerySlug={slug}
+          galleryName={gallery.name}
+          ownerName={gallery.user.email.split("@")[0]}
+          expiresAt={expiresAtIso}
+          coverUrl={null}
+          initialPhotos={[]}
+          totalPhotos={0}
+          initialCursor={null}
+        allowSingleDownload={publicAccess.allowSingleDownload}
+        allowBulkDownload={publicAccess.allowBulkDownload}
+        favoritesEnabled={publicAccess.favoritesEnabled}
+        serverFolders={meta?.folders ?? []}
+        serverFolderPhotosMap={meta?.folderPhotosMap ?? {}}
+        hostLabel={getClientGalleryHostLabel(fallbackOrigin)}
+        formatHeaderDate={formatHeaderDate(gallery.createdAt)}
+        isLocked
+        />
+      );
     }
 
     const [initialPhotos, totalPhotos, coverPhoto] = await Promise.all([
@@ -73,7 +112,6 @@ export default async function DiskGalleryPage({ params }: DiskGalleryPageProps) 
 
     const fallbackCover = coverPhoto ?? initialPhotos[0] ?? null;
     const ownerName = gallery.user.email.split("@")[0];
-    const expiresAtIso = new Date(gallery.createdAt.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
     const photos = initialPhotos.map((photo) => ({
       id: photo.id,
       name: decodePhotoName(photo.name),
@@ -92,8 +130,14 @@ export default async function DiskGalleryPage({ params }: DiskGalleryPageProps) 
         initialPhotos={photos}
         totalPhotos={totalPhotos}
         initialCursor={nextCursor}
+        allowSingleDownload={publicAccess.allowSingleDownload}
+        allowBulkDownload={publicAccess.allowBulkDownload}
+        favoritesEnabled={publicAccess.favoritesEnabled}
+        serverFolders={meta?.folders ?? []}
+        serverFolderPhotosMap={meta?.folderPhotosMap ?? {}}
         hostLabel={getClientGalleryHostLabel(fallbackOrigin)}
         formatHeaderDate={formatHeaderDate(gallery.createdAt)}
+        isLocked={false}
       />
     );
   } catch (error) {

@@ -56,7 +56,7 @@ function formatDate(value: string) {
 }
 
 export default function ReviewsPage() {
-  const [reviews, setReviews] = useState<ReviewRecord[]>([]);
+  const [reviews, setReviews] = useState<ReviewRecord[]>(() => readReviews());
   const [galleries, setGalleries] = useState<MinimalGallery[]>([]);
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
   const [editing, setEditing] = useState<ReviewRecord | null>(null);
@@ -70,7 +70,6 @@ export default function ReviewsPage() {
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    setReviews(readReviews());
     const onStorage = (event: StorageEvent) => {
       if (event.key === REVIEWS_STORAGE_KEY) {
         setReviews(readReviews());

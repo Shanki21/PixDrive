@@ -91,21 +91,26 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (typeof document === "undefined") return;
-    const emailCookie = document.cookie
-      .split(";")
-      .map((value) => value.trim())
-      .find((item) => item.startsWith("wf_user_email="));
+    let active = true;
 
-    if (!emailCookie) return;
-    const emailValue = decodeURIComponent(emailCookie.split("=")[1] ?? "").trim();
-    if (!emailValue) return;
-    const local = emailValue.split("@")[0] ?? "Creator";
-    const normalized = local
-      .replace(/[._-]+/g, " ")
-      .replace(/\b\w/g, (char) => char.toUpperCase())
-      .trim();
-    setUsername(normalized || "Creator");
+    const loadMe = async () => {
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as { displayName?: string };
+        const displayName = String(data.displayName ?? "").trim();
+        if (active && displayName) {
+          setUsername(displayName);
+        }
+      } catch {
+        // Ignore profile fetch failures.
+      }
+    };
+
+    void loadMe();
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -214,13 +219,6 @@ export default function DashboardPage() {
     }
 
     items.push({
-      id: "weekly-analytics",
-      title: "Review gallery analytics",
-      detail: "Track visits and downloads to improve delivery performance.",
-      priority: "low",
-    });
-
-    items.push({
       id: "delivery-check",
       title: "Run final delivery check",
       detail: "Verify cover image, gallery order, and download permissions.",
@@ -327,13 +325,10 @@ export default function DashboardPage() {
           <article className="rounded-2xl border border-[#d8e8e1] bg-[#f7fbf9] p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#7c3aed]">Step 3</p>
             <p className="mt-2 text-base font-semibold text-[#18342c]">Share and Measure</p>
-            <p className="mt-1 text-sm text-[#648077]">Generate QR access and monitor engagement from analytics.</p>
+            <p className="mt-1 text-sm text-[#648077]">Generate One QR access links and share event delivery instantly.</p>
             <div className="mt-3 flex gap-3">
               <Link href="/dashboard/qr-code" className="text-sm font-semibold text-[#0f766e]">
-                QR Code
-              </Link>
-              <Link href="/dashboard/analytics" className="text-sm font-semibold text-[#0f766e]">
-                Analytics
+                Open One QR
               </Link>
             </div>
           </article>
@@ -515,16 +510,6 @@ export default function DashboardPage() {
                 <p className="text-xs text-[#5b7ea9]">Share event access instantly</p>
               </div>
               <QrCode className="h-4 w-4 text-[#2563eb]" />
-            </Link>
-            <Link
-              href="/dashboard/analytics"
-              className="flex items-center justify-between rounded-2xl border border-[#efe2cb] bg-[#fff8eb] px-4 py-3"
-            >
-              <div>
-                <p className="text-sm font-semibold text-[#7a4a1d]">View Analytics</p>
-                <p className="text-xs text-[#9c6b3d]">Track visitor and download activity</p>
-              </div>
-              <ChartColumnIncreasing className="h-4 w-4 text-[#b45309]" />
             </Link>
           </div>
         </article>

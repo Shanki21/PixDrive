@@ -3,15 +3,12 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AddGalleryModal from "@/components/drive/AddGalleryModal";
-import { getGalleryMeta, saveGalleryMeta } from "@/lib/gallery-meta-storage";
-import { buildClientGalleryUrl } from "@/lib/client-gallery-url";
+import type { GalleryMetaConfig } from "@/lib/gallery-config";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 import {
   ArrowDownToLine,
   ChevronLeft,
   ChevronRight,
-  Eye,
-  ExternalLink,
   Heart,
   Link as LinkIcon,
   Lock,
@@ -32,6 +29,19 @@ type GalleryDetail = {
   slug?: string | null;
   createdAt?: string | null;
   photosCount?: number | null;
+  expiresAt?: string | null;
+  storageTimeLabel?: string | null;
+  favoritesEnabled?: boolean;
+  favoritesLimitSelected?: boolean;
+  favoritesName?: string | null;
+  favoritesListsCount?: number;
+  selectionCompletedCount?: number;
+  favoritesMaxSelected?: number | null;
+  published?: boolean;
+  oneQrEnabled?: boolean;
+  folders?: Folder[];
+  folderPhotosMap?: Record<string, string[]>;
+  folderOrder?: string[];
 };
 
 type GalleryPhoto = {
@@ -51,6 +61,7 @@ type Folder = {
 type ClientFavoritesSelection = {
   name: string;
   email: string;
+  clientKey?: string;
   photoIds: string[];
 };
 
@@ -131,27 +142,6 @@ function formatDate(value?: string | null) {
     day: "numeric",
     year: "numeric",
   });
-}
-
-function TulipIcon() {
-  return (
-    <svg
-      className="tulip-icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 21v-6" />
-      <path d="M6 6c0 4 3 7 6 7s6-3 6-7" />
-      <path d="M6 6c2.5 1.5 5 1.5 6 0" />
-      <path d="M18 6c-2.5 1.5-5 1.5-6 0" />
-      <path d="M7.5 14.5c1.5.5 2.5 1.5 4.5 1.5s3-1 4.5-1.5" />
-    </svg>
-  );
 }
 
 function readFolders(galleryId: string): Folder[] {
@@ -283,7 +273,6 @@ export default function DriveDetailPage() {
   const params = useParams<{ id: string }>();
   const galleryId = params?.id;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const shareMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [gallery, setGallery] = useState<GalleryDetail | null>(null);
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
@@ -291,7 +280,7 @@ export default function DriveDetailPage() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"gallery" | "favorites" | "settings" | "design">("gallery");
+  const [activeTab, setActiveTab] = useState<"gallery" | "favorites">("gallery");
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -316,37 +305,29 @@ export default function DriveDetailPage() {
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
   const [folderZipBusy, setFolderZipBusy] = useState<string | null>(null);
   const [coverPhotoId, setCoverPhotoId] = useState<string | null>(null);
-  const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [photoSearch, setPhotoSearch] = useState("");
   const [sortMode, setSortMode] = useState<"latest" | "name">("latest");
 
-  const publicLink = useMemo(() => {
-    if (!gallery) return null;
-    const slug = gallery.slug || gallery.id;
-    const runtimeOrigin = typeof window === "undefined" ? undefined : window.location.origin;
-    return buildClientGalleryUrl(slug, runtimeOrigin);
-  }, [gallery]);
-
-  const previewPath = useMemo(() => {
-    return publicLink;
-  }, [publicLink]);
+  const openOneQrTab = () => {
+    if (!galleryId) return;
+    router.push(`/dashboard/qr-code?event=${encodeURIComponent(galleryId)}`);
+  };
 
   const initialGallery = useMemo(() => {
     if (!gallery) return null;
-    const meta = getGalleryMeta(gallery.id);
     return {
       id: gallery.id,
       name: gallery.name,
       createdAt: gallery.createdAt ?? null,
       filesCount: gallery.photosCount ?? photos.length,
-      favoritesEnabled: meta?.favoritesEnabled ?? true,
-      favoritesLimitSelected: meta?.favoritesLimitSelected ?? false,
-      favoritesName: meta?.favoritesName ?? undefined,
-      favoritesListsCount: meta?.favoritesListsCount ?? 0,
-      selectionCompletedCount: meta?.selectionCompletedCount ?? 0,
-      favoritesMaxSelected: meta?.favoritesMaxSelected ?? null,
-      storageTimeLabel: meta?.storageTimeLabel ?? undefined,
-      expiresAt: meta?.expiresAt ?? undefined,
+      favoritesEnabled: gallery.favoritesEnabled ?? true,
+      favoritesLimitSelected: gallery.favoritesLimitSelected ?? false,
+      favoritesName: gallery.favoritesName ?? undefined,
+      favoritesListsCount: gallery.favoritesListsCount ?? 0,
+      selectionCompletedCount: gallery.selectionCompletedCount ?? 0,
+      favoritesMaxSelected: gallery.favoritesMaxSelected ?? null,
+      storageTimeLabel: gallery.storageTimeLabel ?? undefined,
+      expiresAt: gallery.expiresAt ?? undefined,
       slug: gallery.slug ?? undefined,
     } as MinimalGallery & { slug?: string };
   }, [gallery, photos.length]);
@@ -402,18 +383,68 @@ export default function DriveDetailPage() {
 
   useEffect(() => {
     if (!galleryId) return;
-    const nextFolders = readFolders(galleryId);
+    const serverFolders = gallery?.folders ?? [];
+    const serverFolderMap = gallery?.folderPhotosMap ?? {};
+    const serverFolderOrder = gallery?.folderOrder ?? [];
+    const nextFolders = serverFolders.length > 0 ? serverFolders : readFolders(galleryId);
+    const nextFolderMap = Object.keys(serverFolderMap).length > 0 ? serverFolderMap : readFolderPhotos(galleryId);
+    const nextFolderOrder = serverFolderOrder.length > 0 ? serverFolderOrder : readFolderOrder(galleryId);
     setFolders(nextFolders);
-    setFolderPhotos(readFolderPhotos(galleryId));
-    setFolderOrder(normalizeFolderOrder(readFolderOrder(galleryId), nextFolders));
-    setFavoriteIds(readFavoriteIds(galleryId));
+    setFolderPhotos(nextFolderMap);
+    setFolderOrder(normalizeFolderOrder(nextFolderOrder, nextFolders));
+    const localSelections = readClientSelections(galleryId);
+    setClientSelections(localSelections);
+    const localFavoriteIds = new Set<string>();
+    localSelections.forEach((entry) => entry.photoIds.forEach((photoId) => localFavoriteIds.add(photoId)));
+    setFavoriteIds(localFavoriteIds);
     setDownloadedIds(readClientDownloads(galleryId));
-    setClientSelections(readClientSelections(galleryId));
     setFavoriteFolderMeta(readFavoriteFolderMeta(galleryId));
     const savedTab = window.localStorage.getItem(`${ACTIVE_TAB_STORAGE_PREFIX}${galleryId}`);
-    if (savedTab === "gallery" || savedTab === "favorites" || savedTab === "settings" || savedTab === "design") {
+    if (savedTab === "gallery" || savedTab === "favorites") {
       setActiveTab(savedTab);
     }
+  }, [gallery?.folderOrder, gallery?.folderPhotosMap, gallery?.folders, galleryId]);
+
+  useEffect(() => {
+    if (!galleryId) return;
+    let active = true;
+
+    const loadServerClientSignals = async () => {
+      try {
+        const [favoritesRes, downloadsRes] = await Promise.all([
+          fetch(`/api/galleries/${galleryId}/client-actions?action=favorite`),
+          fetch(`/api/galleries/${galleryId}/client-actions?action=download`),
+        ]);
+
+        if (favoritesRes.ok) {
+          const favoritesPayload = (await favoritesRes.json()) as { selections?: ClientFavoritesSelection[] };
+          const selections = Array.isArray(favoritesPayload.selections) ? favoritesPayload.selections : [];
+          if (active) {
+            setClientSelections(selections);
+            writeClientSelections(galleryId, selections);
+            const nextFavorites = new Set<string>();
+            selections.forEach((entry) => entry.photoIds.forEach((photoId) => nextFavorites.add(photoId)));
+            setFavoriteIds(nextFavorites);
+          }
+        }
+
+        if (downloadsRes.ok) {
+          const downloadsPayload = (await downloadsRes.json()) as { photoIds?: string[] };
+          const ids = Array.isArray(downloadsPayload.photoIds) ? downloadsPayload.photoIds : [];
+          if (active) {
+            setDownloadedIds(new Set(ids));
+            window.localStorage.setItem(`${CLIENT_DOWNLOADS_PREFIX}${galleryId}`, JSON.stringify(ids));
+          }
+        }
+      } catch {
+        // Keep dashboard usable even if server summary is temporarily unavailable.
+      }
+    };
+
+    void loadServerClientSignals();
+    return () => {
+      active = false;
+    };
   }, [galleryId]);
 
   useEffect(() => {
@@ -449,15 +480,27 @@ export default function DriveDetailPage() {
   }, [galleryId]);
 
   useEffect(() => {
-    if (activeTab === "settings") {
-      setSettingsOpen(true);
-    }
-  }, [activeTab]);
-
-  useEffect(() => {
     if (!galleryId) return;
     window.localStorage.setItem(`${ACTIVE_TAB_STORAGE_PREFIX}${galleryId}`, activeTab);
   }, [activeTab, galleryId]);
+
+  useEffect(() => {
+    if (!galleryId || !gallery) return;
+    const timeout = window.setTimeout(() => {
+      void fetch(`/api/galleries/${encodeURIComponent(galleryId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          meta: {
+            folders,
+            folderPhotosMap: folderPhotos,
+            folderOrder,
+          },
+        }),
+      });
+    }, 450);
+    return () => window.clearTimeout(timeout);
+  }, [folderOrder, folderPhotos, folders, gallery, galleryId]);
 
   useEffect(() => {
     if (!menuOpenFor) return;
@@ -476,29 +519,6 @@ export default function DriveDetailPage() {
       window.removeEventListener("keydown", handleKey);
     };
   }, [menuOpenFor]);
-
-  useEffect(() => {
-    if (!shareMenuOpen) return;
-
-    const handleClick = (event: MouseEvent) => {
-      if (!shareMenuRef.current?.contains(event.target as Node)) {
-        setShareMenuOpen(false);
-      }
-    };
-
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setShareMenuOpen(false);
-      }
-    };
-
-    window.addEventListener("click", handleClick);
-    window.addEventListener("keydown", handleKey);
-    return () => {
-      window.removeEventListener("click", handleClick);
-      window.removeEventListener("keydown", handleKey);
-    };
-  }, [shareMenuOpen]);
 
   const favoritePhotos = useMemo(() => {
     if (favoriteIds.size === 0) return [];
@@ -654,87 +674,14 @@ export default function DriveDetailPage() {
     return photos.filter((photo) => idSet.has(photo.id));
   };
 
-  const buildFolderLink = (folderId: string) => {
-    if (!publicLink) return null;
-    const url = new URL(publicLink);
-    if (folderId !== "photos") {
-      url.searchParams.set("folder", folderId);
-    }
-    return url.toString();
-  };
-
-  const buildPhotoLink = (photoId: string) => {
-    const folderLink = buildFolderLink(selectedFolderId);
-    if (!folderLink) return null;
-    const url = new URL(folderLink);
-    url.searchParams.set("photo", photoId);
-    return url.toString();
-  };
-
   const openFolderPreview = (folderId: string) => {
-    if (!previewPath) return;
-    const url = new URL(previewPath, window.location.origin);
-    if (folderId !== "photos") {
-      url.searchParams.set("folder", folderId);
-    }
-    window.open(url.toString(), "_blank", "noopener,noreferrer");
-  };
-
-  const copyFolderLink = async (folderId: string) => {
-    const link = buildFolderLink(folderId);
-    if (!link) return;
-    try {
-      await navigator.clipboard.writeText(link);
-    } catch {
-      // Ignore clipboard errors.
-    }
-  };
-
-  const copyPhotoLink = async (photoId: string) => {
-    const link = buildPhotoLink(photoId);
-    if (!link) return;
-    try {
-      await navigator.clipboard.writeText(link);
-    } catch {
-      // Ignore clipboard errors.
-    }
-  };
-
-  const shareGalleryTo = (platform: "facebook" | "whatsapp" | "telegram" | "viber") => {
-    if (!publicLink) return;
-    const encodedLink = encodeURIComponent(publicLink);
-    const encodedText = encodeURIComponent(`Take a look at this gallery: ${publicLink}`);
-
-    const shareUrl =
-      platform === "facebook"
-        ? `https://www.facebook.com/sharer/sharer.php?u=${encodedLink}`
-        : platform === "whatsapp"
-          ? `https://wa.me/?text=${encodedText}`
-          : platform === "telegram"
-            ? `https://t.me/share/url?url=${encodedLink}&text=${encodeURIComponent("Take a look at this gallery")}`
-            : `viber://forward?text=${encodedText}`;
-
-    window.open(shareUrl, "_blank", "noopener,noreferrer");
-  };
-
-  const downloadGalleryQr = () => {
-    if (!publicLink) return;
-    const link = document.createElement("a");
-    link.href = `https://api.qrserver.com/v1/create-qr-code/?size=512x512&data=${encodeURIComponent(publicLink)}`;
-    link.download = `${sanitizeFileName(gallery?.name || "gallery")}-qr.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    void folderId;
+    openOneQrTab();
   };
 
   const previewPhoto = (photoId: string) => {
-    if (!previewPath) return;
-    const url = new URL(previewPath, window.location.origin);
-    if (selectedFolderId !== "photos") {
-      url.searchParams.set("folder", selectedFolderId);
-    }
-    url.searchParams.set("photo", photoId);
-    window.open(url.toString(), "_blank", "noopener,noreferrer");
+    void photoId;
+    openOneQrTab();
   };
 
   const renamePhoto = async (photoId: string) => {
@@ -783,7 +730,7 @@ export default function DriveDetailPage() {
       });
       if (!res.ok) return;
       setCoverPhotoId(photoId);
-      setActiveTab("design");
+      setActiveTab("gallery");
     } catch {
       // Ignore cover failures.
     }
@@ -873,27 +820,6 @@ export default function DriveDetailPage() {
     }
   };
 
-  const removeFavoriteSelection = (selection: ClientFavoritesSelection) => {
-    if (!galleryId) return;
-
-    const nextSelections = clientSelections.filter(
-      (entry) => !(entry.name === selection.name && entry.email === selection.email)
-    );
-    setClientSelections(nextSelections);
-    writeClientSelections(galleryId, nextSelections);
-    setFavoriteIds(readFavoriteIds(galleryId));
-
-    const nextMeta = { ...favoriteFolderMeta };
-    delete nextMeta[getFavoriteSelectionKey(selection)];
-    setFavoriteFolderMeta(nextMeta);
-    writeFavoriteFolderMeta(galleryId, nextMeta);
-
-    if (selectedFavoriteFolderKey === getFavoriteSelectionKey(selection)) {
-      const nextActive = nextSelections[0];
-      setSelectedFavoriteFolderKey(nextActive ? getFavoriteSelectionKey(nextActive) : null);
-    }
-  };
-
   const removeFavoritePhoto = (selection: ClientFavoritesSelection, photoId: string) => {
     if (!galleryId) return;
 
@@ -907,7 +833,28 @@ export default function DriveDetailPage() {
 
     setClientSelections(nextSelections);
     writeClientSelections(galleryId, nextSelections);
-    setFavoriteIds(readFavoriteIds(galleryId));
+    const nextFavoriteIds = new Set<string>();
+    nextSelections.forEach((entry) => entry.photoIds.forEach((id) => nextFavoriteIds.add(id)));
+    setFavoriteIds(nextFavoriteIds);
+
+    if (selection.clientKey) {
+      void fetch(`/api/galleries/${galleryId}/client-actions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          actions: [
+            {
+              photoId,
+              action: "favorite",
+              liked: false,
+              clientKey: selection.clientKey,
+              clientName: selection.name,
+              clientEmail: selection.email,
+            },
+          ],
+        }),
+      });
+    }
 
     const stillExists = nextSelections.some(
       (entry) => entry.name === selection.name && entry.email === selection.email
@@ -989,53 +936,6 @@ export default function DriveDetailPage() {
     }
   };
 
-  const downloadFavoriteSelection = async (selection: ClientFavoritesSelection) => {
-    const items =
-      favoriteFolders.find((entry) => entry.name === selection.name && entry.email === selection.email)?.items ?? [];
-    if (items.length === 0 || folderZipBusy) return;
-
-    const busyKey = `favorite:${getFavoriteSelectionKey(selection)}`;
-    setFolderZipBusy(busyKey);
-    try {
-      const { default: JSZip } = await import("jszip");
-      const zip = new JSZip();
-      const usedNames = new Set<string>();
-
-      await Promise.all(
-        items.map(async (photo, index) => {
-          const response = await fetch(photo.url);
-          const blob = await response.blob();
-          const baseName = sanitizeFileName(photo.name || `photo-${index + 1}`);
-          const extMatch = baseName.match(/\.[a-z0-9]+$/i);
-          const ext = extMatch ? "" : blob.type === "image/png" ? ".png" : blob.type === "image/jpeg" ? ".jpg" : "";
-          let fileName = `${baseName}${ext}`;
-          let counter = 1;
-          while (usedNames.has(fileName)) {
-            counter += 1;
-            fileName = `${baseName}-${counter}${ext}`;
-          }
-          usedNames.add(fileName);
-          zip.file(fileName, blob);
-        })
-      );
-
-      const content = await zip.generateAsync({ type: "blob" });
-      const url = URL.createObjectURL(content);
-      const link = document.createElement("a");
-      const folderLabel = favoriteFolderMeta[getFavoriteSelectionKey(selection)]?.name || selection.name || "favorites";
-      link.href = url;
-      link.download = `${sanitizeFileName(folderLabel)}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch {
-      // Ignore zip failures.
-    } finally {
-      setFolderZipBusy(null);
-    }
-  };
-
   const getFolderMenuItems = (folderId: string) => {
     const isPhotos = folderId === "photos";
     const folder = folders.find((f) => f.id === folderId);
@@ -1044,8 +944,8 @@ export default function DriveDetailPage() {
 
     const items = [
       {
-        label: "Preview",
-        icon: Eye,
+        label: "Open in One QR",
+        icon: LinkIcon,
         onClick: () => openFolderPreview(folderId),
       },
       {
@@ -1053,17 +953,11 @@ export default function DriveDetailPage() {
         icon: Settings,
         onClick: () => {
           if (isPhotos) {
-            setActiveTab("settings");
             setSettingsOpen(true);
             return;
           }
           startEditFolder(folderId);
         },
-      },
-      {
-        label: "Copy Link",
-        icon: LinkIcon,
-        onClick: () => copyFolderLink(folderId),
       },
       {
         label: folderZipBusy === folderId ? "Downloading..." : "Download Files",
@@ -1211,86 +1105,13 @@ export default function DriveDetailPage() {
               {uploading ? "Uploading..." : "Upload Photos"}
             </button>
 
-            <div className="relative" ref={shareMenuRef}>
-              <button
-                className="rounded-xl border border-[#d0e5dc] bg-white px-4 py-2.5 text-sm font-semibold text-[#21453d] transition hover:border-[#0f766e] hover:text-[#0f766e]"
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setShareMenuOpen((prev) => !prev);
-                }}
-              >
-                Share gallery
-              </button>
-              {shareMenuOpen ? (
-                <div
-                  className="absolute right-0 top-full z-50 mt-3 w-72 overflow-hidden rounded-2xl border border-[#d9e8e2] bg-white shadow-2xl"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <div className="py-2 text-sm text-[#24433c]">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void navigator.clipboard.writeText(publicLink ?? "");
-                        setShareMenuOpen(false);
-                      }}
-                      className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-[#f2faf7]"
-                    >
-                      <LinkIcon className="h-5 w-5 text-[#4f7b70]" />
-                      <span>Copy link</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        downloadGalleryQr();
-                        setShareMenuOpen(false);
-                      }}
-                      className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-[#f2faf7]"
-                    >
-                      <div className="flex h-5 w-5 items-center justify-center rounded bg-[#e8f3ef] text-[10px] font-bold text-[#2e6a5d]">
-                        QR
-                      </div>
-                      <span>Download QR code</span>
-                    </button>
-                  </div>
-                  <div className="border-t border-[#e6f0ec] py-2 text-sm text-[#24433c]">
-                    {[
-                      { id: "facebook", label: "Facebook", bg: "bg-[#4267B2]", text: "f" },
-                      { id: "whatsapp", label: "WhatsApp", bg: "bg-[#25D366]", text: "w" },
-                      { id: "telegram", label: "Telegram", bg: "bg-[#229ED9]", text: "t" },
-                      { id: "viber", label: "Viber", bg: "bg-[#7360F2]", text: "v" },
-                    ].map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => {
-                          shareGalleryTo(item.id as "facebook" | "whatsapp" | "telegram" | "viber");
-                          setShareMenuOpen(false);
-                        }}
-                        className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-[#f2faf7]"
-                      >
-                        <span
-                          className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold uppercase text-white ${item.bg}`}
-                        >
-                          {item.text}
-                        </span>
-                        <span>{item.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-
-            {previewPath ? (
-              <button
-                type="button"
-                onClick={() => window.open(previewPath, "_blank", "noopener,noreferrer")}
-                className="rounded-xl border border-[#d0e5dc] bg-white px-4 py-2.5 text-sm font-semibold text-[#21453d] transition hover:border-[#0f766e] hover:text-[#0f766e]"
-              >
-                Preview
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={openOneQrTab}
+              className="rounded-xl border border-[#d0e5dc] bg-white px-4 py-2.5 text-sm font-semibold text-[#21453d] transition hover:border-[#0f766e] hover:text-[#0f766e]"
+            >
+              One QR
+            </button>
           </div>
         </div>
       </section>
@@ -1299,8 +1120,6 @@ export default function DriveDetailPage() {
         {[
           { id: "gallery", label: "Gallery" },
           { id: "favorites", label: `Favorites (${favoritePhotos.length})` },
-          { id: "settings", label: "Settings" },
-          
         ].map((tab) => (
           <button
             key={tab.id}
@@ -1547,8 +1366,8 @@ export default function DriveDetailPage() {
                             danger: false,
                           },
                           {
-                            label: "Preview",
-                            icon: ExternalLink,
+                            label: "Open in One QR",
+                            icon: LinkIcon,
                             onClick: () => previewPhoto(photo.id),
                             active: false,
                             danger: false,
@@ -1674,14 +1493,9 @@ export default function DriveDetailPage() {
                             <div className="mb-2 flex w-25 items-center overflow-visible rounded-full border border-[#e3d8cc] bg-white/90 opacity-0 shadow transition group-hover:opacity-100">
                               {[
                                 {
-                                  label: "Preview",
-                                  icon: ExternalLink,
-                                  onClick: () => {
-                                    if (!previewPath) return;
-                                    const url = new URL(previewPath, window.location.origin);
-                                    url.searchParams.set("photo", photo.id);
-                                    window.open(url.toString(), "_blank", "noopener,noreferrer");
-                                  },
+                                  label: "Open in One QR",
+                                  icon: LinkIcon,
+                                  onClick: openOneQrTab,
                                   active: false,
                                   danger: false,
                                 },
@@ -1745,40 +1559,6 @@ export default function DriveDetailPage() {
         </div>
       )}
 
-      {activeTab === "design" && (
-        <div className="mt-10 rounded-[26px] border border-[#e3d8cc] bg-white p-8">
-          <h2 className="font-display text-2xl font-semibold text-[#15161a]">Design and cover</h2>
-          <p className="mt-2 text-sm text-[#8a7f73]">
-            Customize the gallery cover and visual style. (Layout only, wire the actions you want.)
-          </p>
-          <div className="mt-6 grid gap-6 md:grid-cols-2">
-            <div className="overflow-hidden rounded-[20px] border border-[#e3d8cc] bg-[#f7f3ee]">
-              {photos[0] ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={(photos.find((photo) => photo.id === coverPhotoId) ?? photos[0]).url}
-                  alt="Cover preview"
-                  className="h-52 w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-52 items-center justify-center text-sm text-[#8a7f73]">No cover yet</div>
-              )}
-            </div>
-            <div className="space-y-4">
-              <button className="w-full rounded-full border border-[#d9cfc4] px-6 py-2.5 text-sm font-semibold text-[#4a433d]">
-                Choose cover
-              </button>
-              <button className="w-full rounded-full border border-[#d9cfc4] px-6 py-2.5 text-sm font-semibold text-[#4a433d]">
-                Change theme
-              </button>
-              <button className="w-full rounded-full bg-[#101114] px-6 py-2.5 text-sm font-semibold text-white">
-                Save design
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {settingsOpen && initialGallery ? (
         <AddGalleryModal
           open={settingsOpen}
@@ -1788,17 +1568,30 @@ export default function DriveDetailPage() {
             setActiveTab("gallery");
           }}
           onUpdated={(updated) => {
-            saveGalleryMeta(updated.id, {
+            const metaPayload: GalleryMetaConfig = {
               expiresAt: updated.expiresAt ?? null,
               storageTimeLabel: updated.storageTimeLabel ?? null,
-              favoritesEnabled: updated.favoritesEnabled ?? false,
+              favoritesEnabled: updated.favoritesEnabled ?? true,
               favoritesLimitSelected: updated.favoritesLimitSelected ?? false,
               favoritesName: updated.favoritesName ?? null,
               favoritesListsCount: updated.favoritesListsCount ?? 0,
               selectionCompletedCount: updated.selectionCompletedCount ?? 0,
               favoritesMaxSelected: updated.favoritesMaxSelected ?? null,
+            };
+            void fetch(`/api/galleries/${encodeURIComponent(updated.id)}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: updated.name, meta: metaPayload }),
             });
-            setGallery((prev) => (prev ? { ...prev, name: updated.name } : prev));
+            setGallery((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    name: updated.name,
+                    ...metaPayload,
+                  }
+                : prev
+            );
           }}
           onCreated={() => {
             // No-op: settings modal only.
