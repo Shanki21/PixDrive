@@ -1,17 +1,18 @@
-import { normalizeEventSettings, normalizeGalleryMeta } from "@/lib/gallery-config";
+import { maskEventSettingsPins, normalizeEventSettings, normalizeGalleryMeta } from "@/lib/gallery-config";
+import { secureEventSettingsForStorage } from "@/lib/event-settings-security";
 import { getPrismaUnavailableMessage, isPrismaUnavailableError } from "@/lib/prisma-errors";
 import prisma from "@/lib/prisma";
-import { getSessionEmailFromRequest } from "@/lib/session";
+import { getSessionEmailFromRequestAsync } from "@/lib/session";
 import { NextResponse, NextRequest } from "next/server";
 import slugify from "slugify";
 
-function getSessionEmail(req: NextRequest) {
-  return getSessionEmailFromRequest(req);
+async function getSessionEmail(req: NextRequest) {
+  return await getSessionEmailFromRequestAsync(req);
 }
 
 export async function GET(req: NextRequest) {
   try {
-    const email = getSessionEmail(req);
+    const email = await getSessionEmail(req);
     if (!email) {
       return NextResponse.json([]);
     }
@@ -87,7 +88,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const email = getSessionEmail(req);
+    const email = await getSessionEmail(req);
     if (!email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -104,18 +105,22 @@ export async function POST(req: NextRequest) {
     const safeName = name || "Untitled gallery";
     const settings = normalizeEventSettings(body?.settings);
     const meta = normalizeGalleryMeta(body?.meta);
+    const secureSettings = await secureEventSettingsForStorage(settings);
 
     const gallery = await prisma.gallery.create({
       data: {
         name: safeName,
         slug: `${slugify(safeName, { lower: true, strict: true }) || "gallery"}-${Date.now()}`,
         userId: user.id,
-        settings: settings ?? undefined,
+        settings: secureSettings ?? undefined,
         meta: meta ?? undefined,
       },
     });
-
-    return NextResponse.json(gallery);
+    return NextResponse.json({
+      ...gallery,
+      settings: maskEventSettingsPins(normalizeEventSettings(gallery.settings)),
+      meta: normalizeGalleryMeta(gallery.meta),
+    });
   } catch (error) {
     console.error("Failed to create gallery:", error);
     return NextResponse.json(

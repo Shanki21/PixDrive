@@ -1,6 +1,6 @@
 import { destroyCloudinaryAssetByUrl } from "@/lib/cloudinary";
 import prisma from "@/lib/prisma";
-import { getSessionEmailFromRequest } from "@/lib/session";
+import { getSessionEmailFromRequestAsync } from "@/lib/session";
 import { NextRequest, NextResponse } from "next/server";
 
 async function getAuthorizedPhoto(id: string, email: string) {
@@ -21,7 +21,7 @@ async function getAuthorizedPhoto(id: string, email: string) {
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const email = getSessionEmailFromRequest(req);
+  const email = await getSessionEmailFromRequestAsync(req);
   if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const email = getSessionEmailFromRequest(req);
+  const email = await getSessionEmailFromRequestAsync(req);
   if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

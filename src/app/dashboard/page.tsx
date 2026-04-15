@@ -117,26 +117,37 @@ export default function DashboardPage() {
     if (typeof window === "undefined") return;
 
     let parsedVisits: Record<string, number> = {};
-    try {
-      const rawVisits = window.localStorage.getItem(VISITS_STORAGE_KEY);
-      parsedVisits = rawVisits ? (JSON.parse(rawVisits) as Record<string, number>) : {};
-    } catch {
-      parsedVisits = {};
-    }
-
-    const nextDownloads: Record<string, number> = {};
-    galleries.forEach((gallery) => {
+    const fetchVisits = async () => {
       try {
-        const raw = window.localStorage.getItem(`${CLIENT_DOWNLOADS_PREFIX}${gallery.id}`);
-        const parsed = raw ? (JSON.parse(raw) as string[]) : [];
-        nextDownloads[gallery.id] = Array.isArray(parsed) ? parsed.length : 0;
+        const res = await fetch("/api/galleries/analytics/visits", { cache: "no-store" });
+        if (res.ok) {
+          const data = (await res.json()) as { visits?: Record<string, number> };
+          parsedVisits = data.visits ?? {};
+        } else {
+          const rawVisits = window.localStorage.getItem(VISITS_STORAGE_KEY);
+          parsedVisits = rawVisits ? (JSON.parse(rawVisits) as Record<string, number>) : {};
+        }
       } catch {
-        nextDownloads[gallery.id] = 0;
+        const rawVisits = window.localStorage.getItem(VISITS_STORAGE_KEY);
+        parsedVisits = rawVisits ? (JSON.parse(rawVisits) as Record<string, number>) : {};
       }
-    });
 
-    setVisitMap(parsedVisits);
-    setDownloadMap(nextDownloads);
+      const nextDownloads: Record<string, number> = {};
+      galleries.forEach((gallery) => {
+        try {
+          const raw = window.localStorage.getItem(`${CLIENT_DOWNLOADS_PREFIX}${gallery.id}`);
+          const parsed = raw ? (JSON.parse(raw) as string[]) : [];
+          nextDownloads[gallery.id] = Array.isArray(parsed) ? parsed.length : 0;
+        } catch {
+          nextDownloads[gallery.id] = 0;
+        }
+      });
+
+      setVisitMap(parsedVisits);
+      setDownloadMap(nextDownloads);
+    };
+
+    void fetchVisits();
   }, [galleries]);
 
   const totals = useMemo(() => {
@@ -429,7 +440,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="h-2 rounded-full bg-[#e5f0eb]">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-[#0f766e] to-[#2563eb]"
+                        className="h-full rounded-full bg-linear-to-r from-[#0f766e] to-[#2563eb]"
                         style={{ width: `${event.progress}%` }}
                       />
                     </div>

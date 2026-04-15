@@ -1,11 +1,13 @@
 import {
+  maskEventSettingsPins,
   mergeEventSettings,
   mergeGalleryMeta,
   normalizeEventSettings,
   normalizeGalleryMeta,
 } from "@/lib/gallery-config";
+import { secureEventSettingsForStorage } from "@/lib/event-settings-security";
 import prisma from "@/lib/prisma";
-import { getSessionEmailFromRequest } from "@/lib/session";
+import { getSessionEmailFromRequestAsync } from "@/lib/session";
 import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
 
@@ -14,7 +16,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const email = getSessionEmailFromRequest(req);
+  const email = await getSessionEmailFromRequestAsync(req);
   if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -58,7 +60,7 @@ export async function GET(
   return NextResponse.json({
     ...rest,
     photosCount: _count.photos,
-    settings: parsedSettings,
+    settings: maskEventSettingsPins(parsedSettings),
     meta: parsedMeta,
     startDate: parsedSettings?.startDate ?? null,
     endDate: parsedSettings?.endDate ?? null,
@@ -89,7 +91,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const email = getSessionEmailFromRequest(req);
+  const email = await getSessionEmailFromRequestAsync(req);
   if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -129,11 +131,15 @@ export async function PATCH(
     : undefined;
   const nextMeta = hasMetaUpdate ? mergeGalleryMeta(existing.meta, body.meta) : undefined;
 
+  const secureSettings = hasSettingsUpdate
+    ? await secureEventSettingsForStorage(nextSettings ?? null)
+    : undefined;
+
   const gallery = await prisma.gallery.update({
     where: { id: existing.id },
     data: {
       ...(hasNameUpdate ? { name: nextName } : {}),
-      ...(hasSettingsUpdate && nextSettings ? { settings: nextSettings } : {}),
+      ...(hasSettingsUpdate && secureSettings ? { settings: secureSettings } : {}),
       ...(hasMetaUpdate && nextMeta ? { meta: nextMeta } : {}),
     },
     select: {
@@ -150,7 +156,7 @@ export async function PATCH(
 
   return NextResponse.json({
     ...gallery,
-    settings: normalizeEventSettings(gallery.settings),
+    settings: maskEventSettingsPins(normalizeEventSettings(gallery.settings)),
     meta: normalizeGalleryMeta(gallery.meta),
   });
 }
@@ -160,7 +166,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const email = getSessionEmailFromRequest(req);
+  const email = await getSessionEmailFromRequestAsync(req);
   if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -187,6 +193,18 @@ export async function DELETE(
     await tx.gallery.updateMany({
       where: { id: existing.id, coverPhotoId: { not: null } },
       data: { coverPhotoId: null },
+    });
+
+    await tx.galleryVisit.deleteMany({
+      where: { galleryId: existing.id },
+    });
+
+    await tx.review.deleteMany({
+      where: { galleryId: existing.id },
+    });
+
+    await tx.clientProfile.deleteMany({
+      where: { galleryId: existing.id },
     });
 
     await tx.clientPhotoAction.deleteMany({

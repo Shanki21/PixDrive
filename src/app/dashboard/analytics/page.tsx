@@ -82,13 +82,30 @@ export default function AnalyticsPage() {
   }, []);
 
   useEffect(() => {
-    const visits = readVisitsMap();
-    const downloads: Record<string, number> = {};
-    galleries.forEach((gallery) => {
-      downloads[gallery.id] = readDownloadCount(gallery.id);
-    });
-    setVisitMap(visits);
-    setDownloadMap(downloads);
+    const load = async () => {
+      let visits: Record<string, number> = {};
+      try {
+        const res = await fetch("/api/galleries/analytics/visits", { cache: "no-store" });
+        if (res.ok) {
+          const data = (await res.json()) as { visits?: Record<string, number> };
+          visits = data.visits ?? {};
+        } else {
+          visits = readVisitsMap();
+        }
+      } catch {
+        visits = readVisitsMap();
+      }
+
+      const downloads: Record<string, number> = {};
+      galleries.forEach((gallery) => {
+        downloads[gallery.id] = readDownloadCount(gallery.id);
+      });
+
+      setVisitMap(visits);
+      setDownloadMap(downloads);
+    };
+
+    void load();
   }, [galleries]);
 
   const analyticsRows = useMemo(() => {
@@ -189,7 +206,7 @@ export default function AnalyticsPage() {
           </div>
 
           {loading ? (
-            <div className="h-60 animate-pulse rounded-2xl border border-[#e4efe9] bg-[#f7fbf9]" />
+            <div className="h-60 animate-pulse rounded-bg-linear-to-rr-[#e4efe9] bg-[#f7fbf9]" />
           ) : topPerformance.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-[#d2e4db] bg-[#f9fcfa] p-8 text-center text-sm text-[#648178]">
               No event data yet. Start by creating and sharing your first gallery.
@@ -206,7 +223,7 @@ export default function AnalyticsPage() {
                     </div>
                     <div className="mt-2 h-2 rounded-full bg-[#e2efe9]">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-[#0f766e] to-[#2563eb]"
+                        className="h-full rounded-full bg-linear-to-r from-[#0f766e] to-[#2563eb]"
                         style={{ width: `${width}%` }}
                       />
                     </div>

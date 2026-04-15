@@ -55,6 +55,17 @@ function validateEmailProvider(errors) {
   }
 }
 
+function validateRateLimitProvider(warnings) {
+  const upstashUrl = readEnv("UPSTASH_REDIS_REST_URL");
+  const upstashToken = readEnv("UPSTASH_REDIS_REST_TOKEN");
+  const hasUpstash = isConfigured(upstashUrl) && isConfigured(upstashToken);
+  if (!hasUpstash) {
+    warnings.push(
+      "Distributed rate limiting is not configured. Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN for multi-instance production."
+    );
+  }
+}
+
 function main() {
   const strict =
     process.env.CHECK_ENV_STRICT === "1" ||
@@ -66,13 +77,18 @@ function main() {
   }
 
   const errors = [];
+  const warnings = [];
   validateRequired("DATABASE_URL", errors);
   validateRequired("NEXT_PUBLIC_CLIENT_GALLERY_BASE_URL", errors);
   validateOneOf(["NEXTAUTH_SECRET", "AUTH_SECRET"], errors);
   validateEmailProvider(errors);
+  validateRateLimitProvider(warnings);
 
   if (errors.length === 0) {
     console.log("[env:check] Environment validation passed.");
+    for (const warning of warnings) {
+      console.warn(`[env:check] Warning: ${warning}`);
+    }
     return;
   }
 

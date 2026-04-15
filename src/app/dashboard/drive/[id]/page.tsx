@@ -674,12 +674,12 @@ export default function DriveDetailPage() {
     return photos.filter((photo) => idSet.has(photo.id));
   };
 
-  const openFolderPreview = (folderId: string) => {
+  const openFolderInOneQr = (folderId: string) => {
     void folderId;
     openOneQrTab();
   };
 
-  const previewPhoto = (photoId: string) => {
+  const openPhotoInOneQr = (photoId: string) => {
     void photoId;
     openOneQrTab();
   };
@@ -946,7 +946,7 @@ export default function DriveDetailPage() {
       {
         label: "Open in One QR",
         icon: LinkIcon,
-        onClick: () => openFolderPreview(folderId),
+        onClick: () => openFolderInOneQr(folderId),
       },
       {
         label: "Settings",
@@ -1368,7 +1368,7 @@ export default function DriveDetailPage() {
                           {
                             label: "Open in One QR",
                             icon: LinkIcon,
-                            onClick: () => previewPhoto(photo.id),
+                            onClick: () => openPhotoInOneQr(photo.id),
                             active: false,
                             danger: false,
                           },

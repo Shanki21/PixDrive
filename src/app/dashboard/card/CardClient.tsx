@@ -38,6 +38,37 @@ export default function CardClient() {
   const [profile, setProfile] = useState<DashboardProfile>(() => loadProfile());
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
 
+  // Try to load server-backed profile for authenticated users and merge with local defaults.
+  useEffect(() => {
+    let active = true;
+    const loadServerProfile = async () => {
+      try {
+        const res = await fetch("/api/auth/profile", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!active || !data?.ok) return;
+        const server = data.profile ?? null;
+        if (!server) return;
+        setProfile((prev) => ({
+          ...prev,
+          name: server.name ?? prev.name,
+          occupation: server.occupation ?? prev.occupation,
+          phone: server.phone ?? prev.phone,
+          // map avatarUrl -> avatarDataUrl for compatibility
+          avatarDataUrl: server.avatarUrl ?? prev.avatarDataUrl,
+          socialAccounts: server.socialAccounts ?? prev.socialAccounts,
+        }));
+      } catch {
+        // ignore server profile failures
+      }
+    };
+
+    void loadServerProfile();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const [draftName, setDraftName] = useState(profile.name);
   const [draftOccupation, setDraftOccupation] = useState(profile.occupation);
   const [draftPhone, setDraftPhone] = useState(profile.phone);

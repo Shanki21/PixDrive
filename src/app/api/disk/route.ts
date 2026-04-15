@@ -1,5 +1,7 @@
 import JSZip from "jszip";
 import { getGalleryPublicAccess } from "@/lib/gallery-public-access";
+import { checkIpThrottle } from "@/lib/ip-throttle";
+import { getClientIp } from "@/lib/request-ip";
 import {
   hasGalleryAccessFromRequest,
   setGalleryAccessCookie,
@@ -11,6 +13,16 @@ import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+const DOWNLOAD_FETCH_TIMEOUT_MS = 12000;
+const MAX_SOURCE_FILE_BYTES = 30 * 1024 * 1024;
+const MAX_BULK_DOWNLOAD_FILES = 400;
+const MAX_BULK_DOWNLOAD_BYTES = 500 * 1024 * 1024;
+const ALLOWED_IMAGE_CONTENT_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+];
 
 function sanitizeFileName(value: string) {
   const cleaned = value.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim();
@@ -33,6 +45,11 @@ function uniqueFileName(base: string, used: Set<string>) {
   }
   used.add(next);
   return next;
+}
+
+function isAllowedImageContentType(contentType: string) {
+  const lower = contentType.toLowerCase();
+  return ALLOWED_IMAGE_CONTENT_TYPES.some((allowed) => lower.includes(allowed));
 }
 
 async function resolveGalleryBySlug(slug: string) {
@@ -80,7 +97,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  if (!verifyGalleryPin(gallery.settings, pin)) {
+  const ip = getClientIp(req) ?? "unknown";
+  const unlockLimit = await checkIpThrottle({
+    key: `gallery:unlock:${gallery.id}:${ip}`,
+    limit: 12,
+    windowMs: 15 * 60 * 1000,
+  });
+  if (!unlockLimit.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Too many attempts. Try again later.",
+        retryAfterSeconds: unlockLimit.retryAfterSeconds,
+      },
+      { status: 429 }
+    );
+  }
+
+  if (!(await verifyGalleryPin(gallery.settings, pin))) {
     return NextResponse.json({ ok: false, error: "Invalid PIN." }, { status: 401 });
   }
 
@@ -124,6 +158,22 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "PIN required." }, { status: 401 });
   }
 
+  const ip = getClientIp(req) ?? "unknown";
+  const bulkDownloadLimit = await checkIpThrottle({
+    key: `gallery:bulk-download:${gallery.id}:${ip}`,
+    limit: 20,
+    windowMs: 15 * 60 * 1000,
+  });
+  if (!bulkDownloadLimit.ok) {
+    return NextResponse.json(
+      {
+        error: "Too many download requests. Try again later.",
+        retryAfterSeconds: bulkDownloadLimit.retryAfterSeconds,
+      },
+      { status: 429 }
+    );
+  }
+
   const allPhotos = gallery.photos;
   let targetPhotos = allPhotos;
 
@@ -155,36 +205,75 @@ export async function GET(req: NextRequest) {
   if (targetPhotos.length === 0) {
     return NextResponse.json({ error: "No photos to download." }, { status: 404 });
   }
+  if (targetPhotos.length > MAX_BULK_DOWNLOAD_FILES) {
+    return NextResponse.json(
+      { error: `Too many photos requested at once. Maximum ${MAX_BULK_DOWNLOAD_FILES} files per ZIP.` },
+      { status: 413 }
+    );
+  }
 
   const zip = new JSZip();
   const usedNames = new Set<string>();
+  let totalBytes = 0;
+  let addedCount = 0;
 
-  await Promise.all(
-    targetPhotos.map(async (photo, index) => {
-      try {
-        const response = await fetch(photo.url, { signal: AbortSignal.timeout(12000) });
-        if (!response.ok) return;
-        const blob = await response.blob();
-        const safe = sanitizeFileName(photo.name || `photo-${index + 1}`);
-        const ext =
-          safe.includes(".")
-            ? ""
-            : blob.type === "image/png"
-              ? ".png"
-              : blob.type === "image/webp"
-                ? ".webp"
-                : blob.type === "image/jpeg"
-                  ? ".jpg"
-                  : "";
-        const fileName = uniqueFileName(`${safe}${ext}`, usedNames);
-        zip.file(fileName, blob);
-      } catch {
-        // Skip unreachable files and continue packing.
+  for (let index = 0; index < targetPhotos.length; index += 1) {
+    const photo = targetPhotos[index];
+    try {
+      const response = await fetch(photo.url, { signal: AbortSignal.timeout(DOWNLOAD_FETCH_TIMEOUT_MS) });
+      if (!response.ok) continue;
+      const contentType = response.headers.get("content-type") ?? "application/octet-stream";
+      if (!isAllowedImageContentType(contentType)) continue;
+
+      const headerLength = Number(response.headers.get("content-length") ?? 0);
+      if (Number.isFinite(headerLength) && headerLength > MAX_SOURCE_FILE_BYTES) {
+        continue;
       }
-    })
-  );
+      if (
+        Number.isFinite(headerLength) &&
+        headerLength > 0 &&
+        totalBytes + headerLength > MAX_BULK_DOWNLOAD_BYTES
+      ) {
+        return NextResponse.json({ error: "Requested ZIP is too large." }, { status: 413 });
+      }
 
-  const content = await zip.generateAsync({ type: "nodebuffer" });
+      const data = await response.arrayBuffer();
+      if (data.byteLength > MAX_SOURCE_FILE_BYTES) {
+        continue;
+      }
+      if (totalBytes + data.byteLength > MAX_BULK_DOWNLOAD_BYTES) {
+        return NextResponse.json({ error: "Requested ZIP is too large." }, { status: 413 });
+      }
+
+      const safe = sanitizeFileName(photo.name || `photo-${index + 1}`);
+      const ext =
+        safe.includes(".")
+          ? ""
+          : contentType.includes("image/png")
+            ? ".png"
+            : contentType.includes("image/webp")
+              ? ".webp"
+              : contentType.includes("image/jpeg")
+                ? ".jpg"
+                : "";
+      const fileName = uniqueFileName(`${safe}${ext}`, usedNames);
+      zip.file(fileName, new Uint8Array(data));
+      totalBytes += data.byteLength;
+      addedCount += 1;
+    } catch {
+      // Skip unreachable files and continue packing.
+    }
+  }
+
+  if (addedCount === 0) {
+    return NextResponse.json({ error: "No downloadable photos were available." }, { status: 502 });
+  }
+
+  const content = await zip.generateAsync({
+    type: "nodebuffer",
+    compression: "DEFLATE",
+    compressionOptions: { level: 6 },
+  });
   const body = new Uint8Array(content);
   const baseName = sanitizeFileName(gallery.name || "gallery");
   const scopeLabel = scope === "favorites" ? "favorites" : "all";

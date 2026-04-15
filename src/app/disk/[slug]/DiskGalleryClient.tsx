@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownTrayIcon,
   ArrowLeftIcon,
@@ -64,7 +64,6 @@ const CLIENT_PROFILE_PREFIX = "wf_client_profile:";
 const FAVORITES_LIST_STORAGE_PREFIX = "wf_gallery_favorites_lists:";
 const CLIENT_DOWNLOADS_PREFIX = "wf_client_downloads:";
 const CLIENT_KEY_PREFIX = "wf_client_key:";
-const REVIEWS_STORAGE_KEY = "wf_gallery_reviews";
 
 function formatDateLabel(iso: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -271,6 +270,23 @@ export default function DiskGalleryClient({
   const singleDownloadAllowed = allowSingleDownload;
   const bulkDownloadAllowed = allowBulkDownload;
 
+  const persistLikes = useCallback(
+    (nextLiked: Record<string, boolean>, profile: ClientIdentity) => {
+      const selections = readClientSelections(galleryId);
+      const selectedIds = Object.keys(nextLiked).filter((id) => nextLiked[id]);
+      const hasEntry = selections.some((entry) => entry.name === profile.name);
+      const nextSelections = hasEntry
+        ? selections.map((entry) =>
+            entry.name === profile.name ? { ...entry, email: profile.email, photoIds: selectedIds } : entry
+          )
+        : [...selections, { name: profile.name, email: profile.email, photoIds: selectedIds }];
+
+      writeClientSelections(galleryId, nextSelections);
+      syncDashboardFavorites(galleryId, profile, nextSelections);
+    },
+    [galleryId]
+  );
+
   useEffect(() => {
     if (isLocked) return;
     const syncGalleryMeta = () => {
@@ -298,6 +314,22 @@ export default function DiskGalleryClient({
       window.localStorage.setItem(`${CLIENT_KEY_PREFIX}${galleryId}`, key);
     }
     setClientKey(key);
+
+    void (async () => {
+      try {
+        await fetch(`/api/galleries/${galleryId}/visit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            clientKey: key,
+            clientLocation:
+              typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : null,
+          }),
+        });
+      } catch {
+        // ignore visit tracking failures
+      }
+    })();
 
     const profile = readClientProfile(galleryId);
     if (profile) {
@@ -376,7 +408,7 @@ export default function DiskGalleryClient({
     return () => {
       active = false;
     };
-  }, [clientKey, galleryId, isLocked]);
+  }, [clientKey, galleryId, isLocked, persistLikes]);
   useEffect(() => {
     if (selectionLimit !== null && likedCount > selectionLimit) {
       setFavoritesLimitMessage(`You can only select ${selectionLimit} photo${selectionLimit === 1 ? "" : "s"} in this gallery.`);
@@ -424,20 +456,6 @@ export default function DiskGalleryClient({
     } catch {
       // Ignore tracking failures to keep UI responsive.
     }
-  };
-
-  const persistLikes = (nextLiked: Record<string, boolean>, profile: ClientIdentity) => {
-    const selections = readClientSelections(galleryId);
-    const selectedIds = Object.keys(nextLiked).filter((id) => nextLiked[id]);
-    const hasEntry = selections.some((entry) => entry.name === profile.name);
-    const nextSelections = hasEntry
-      ? selections.map((entry) =>
-          entry.name === profile.name ? { ...entry, email: profile.email, photoIds: selectedIds } : entry
-        )
-      : [...selections, { name: profile.name, email: profile.email, photoIds: selectedIds }];
-
-    writeClientSelections(galleryId, nextSelections);
-    syncDashboardFavorites(galleryId, profile, nextSelections);
   };
 
   const toggleLike = (id: string) => {
@@ -548,7 +566,7 @@ export default function DiskGalleryClient({
       return;
     }
     if (trimmedReview.length < 30) {
-      setReviewError("Minimum review length is 30 characters.");
+      setReviewError("Minimum review length - 30 characters.");
       return;
     }
     if (trimmedSocial && !/^https?:\/\//i.test(trimmedSocial)) {
@@ -559,68 +577,28 @@ export default function DiskGalleryClient({
     setReviewError(null);
     setReviewSubmitted(true);
 
-    const captureAndSave = async () => {
-      let clientIp: string | null = null;
+      const captureAndSave = async () => {
       let clientLocation: string | null = null;
-      let userAgent = typeof navigator !== "undefined" ? navigator.userAgent : null;
-
       try {
-        const res = await fetch("/api/reviews/metadata");
-        if (res.ok) {
-          const data = (await res.json()) as {
-            ip?: string | null;
-            location?: string | null;
-            userAgent?: string | null;
-          };
-          clientIp = data.ip ?? null;
-          clientLocation = data.location ?? null;
-          userAgent = data.userAgent ?? userAgent;
-        }
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        clientLocation = tz || null;
       } catch {
-        // Ignore metadata fetch failures.
-      }
-
-      if (!clientLocation) {
-        try {
-          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-          clientLocation = tz || null;
-        } catch {
-          clientLocation = null;
-        }
+        clientLocation = null;
       }
 
       try {
-        const raw = window.localStorage.getItem(REVIEWS_STORAGE_KEY);
-        const parsed = raw ? (JSON.parse(raw) as Array<{
-          id: string;
-          galleryId: string;
-          galleryName: string;
-          reviewerName: string;
-          socialLink?: string;
-          text: string;
-          createdAt: string;
-          published: boolean;
-          clientIp?: string | null;
-          clientLocation?: string | null;
-          userAgent?: string | null;
-        }>) : [];
-        const next = Array.isArray(parsed) ? parsed : [];
-        next.unshift({
-          id: `${galleryId}-${Date.now()}`,
-          galleryId,
-          galleryName,
-          reviewerName: trimmedName,
-          socialLink: trimmedSocial || undefined,
-          text: trimmedReview,
-          createdAt: new Date().toISOString(),
-          published: true,
-          clientIp,
-          clientLocation,
-          userAgent,
+        await fetch(`/api/galleries/${galleryId}/reviews`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reviewerName: trimmedName,
+            text: trimmedReview,
+            socialLink: trimmedSocial || null,
+            clientLocation,
+          }),
         });
-        window.localStorage.setItem(REVIEWS_STORAGE_KEY, JSON.stringify(next));
       } catch {
-        // Ignore review storage failures.
+        // Ignore review submission failures to keep UI responsive.
       }
     };
 
@@ -699,17 +677,17 @@ export default function DiskGalleryClient({
     })();
   };
 
-  const closeLightbox = () => setActiveIndex(null);
+  const closeLightbox = useCallback(() => setActiveIndex(null), []);
 
-  const showNext = () => {
+  const showNext = useCallback(() => {
     if (activeIndex === null || visiblePhotos.length === 0) return;
     setActiveIndex((activeIndex + 1) % visiblePhotos.length);
-  };
+  }, [activeIndex, visiblePhotos.length]);
 
-  const showPrevious = () => {
+  const showPrevious = useCallback(() => {
     if (activeIndex === null || visiblePhotos.length === 0) return;
     setActiveIndex((activeIndex - 1 + visiblePhotos.length) % visiblePhotos.length);
-  };
+  }, [activeIndex, visiblePhotos.length]);
 
   useEffect(() => {
     function onKeyDown(ev: KeyboardEvent) {
@@ -721,7 +699,7 @@ export default function DiskGalleryClient({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activeIndex]);
+  }, [activeIndex, closeLightbox, showNext, showPrevious]);
 
   useEffect(() => {
     if (activeIndex === null) return;
@@ -738,7 +716,7 @@ export default function DiskGalleryClient({
     return Array.from(map.values());
   };
 
-  const loadMorePhotos = async () => {
+  const loadMorePhotos = useCallback(async () => {
     if (isLocked) return;
     if (!hasMorePhotos || isLoadingMore) return;
     setIsLoadingMore(true);
@@ -758,7 +736,7 @@ export default function DiskGalleryClient({
     } finally {
       setIsLoadingMore(false);
     }
-  };
+  }, [gallerySlug, hasMorePhotos, isLoadingMore, isLocked, nextCursor]);
 
   useEffect(() => {
     if (isLocked) return;
@@ -775,7 +753,7 @@ export default function DiskGalleryClient({
     );
     observer.observe(target);
     return () => observer.disconnect();
-  }, [hasMorePhotos, isLocked, nextCursor]);
+  }, [hasMorePhotos, isLocked, loadMorePhotos]);
 
   const onUnlockGallery = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1005,7 +983,7 @@ export default function DiskGalleryClient({
                         decoding="async"
                       />
                     </button>
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0f241e]/45 via-transparent to-transparent opacity-70 transition group-hover:opacity-90" />
+                    <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-[#0f241e]/45 via-transparent to-transparent opacity-70 transition group-hover:opacity-90" />
                     <div className="absolute bottom-3 left-3 max-w-[70%]">
                       <p className="truncate rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-semibold text-white/95 backdrop-blur">
                         {photo.name}
@@ -1303,7 +1281,7 @@ export default function DiskGalleryClient({
                   onChange={(event) => setReviewText(event.target.value)}
                 />
               </div>
-              <p className="mt-5 text-lg text-[#7a736d]">Minimum review length — 30 characters</p>
+              <p className="mt-5 text-lg text-[#7a736d]">Minimum review length - 30 characters</p>
               {reviewError ? <p className="mt-3 text-sm text-[#c2410c]">{reviewError}</p> : null}
               {reviewSubmitted ? (
                 <p className="mt-3 text-sm text-emerald-700">Thanks. Your review has been captured locally.</p>
@@ -1323,3 +1301,4 @@ export default function DiskGalleryClient({
     </div>
   );
 }
+

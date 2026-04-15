@@ -41,26 +41,6 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      const checkRes = await fetch("/api/auth/check-user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-
-      const checkData = await parseJsonSafe(checkRes);
-      const canSkipCheckUser =
-        (!checkRes.ok && checkRes.status === 404) || (!checkRes.ok && checkRes.status === 503);
-
-      if (checkRes.ok && checkData?.exists === false) {
-        setError("Email address not found");
-        return;
-      }
-
-      if (!checkRes.ok && !canSkipCheckUser) {
-        setError(checkData?.message ?? "Unable to validate your email right now");
-        return;
-      }
-
       const otpRes = await fetch("/api/auth/request-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -153,7 +133,7 @@ export default function LoginPage() {
             className="pix-btn pix-btn-primary w-full"
             disabled={loading}
           >
-            {loading ? "Checking..." : "Next"}
+            {loading ? "Sending..." : "Next"}
           </motion.button>
         </motion.form>
       ) : (

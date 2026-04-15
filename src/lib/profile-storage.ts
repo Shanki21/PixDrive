@@ -63,7 +63,30 @@ export function loadProfile(): DashboardProfile {
 
 export function saveProfile(next: DashboardProfile) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(next));
+  try {
+    window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // ignore localStorage write failures
+  }
+
+  // Fire-and-forget: persist profile to server for authenticated users
+  (async () => {
+    try {
+      await fetch("/api/auth/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: next.name || undefined,
+          occupation: next.occupation || undefined,
+          phone: next.phone || undefined,
+          avatarUrl: next.avatarDataUrl || undefined,
+          socialAccounts: next.socialAccounts || undefined,
+        }),
+      });
+    } catch {
+      // ignore network failures; profile remains in localStorage as fallback
+    }
+  })();
 }
 
 

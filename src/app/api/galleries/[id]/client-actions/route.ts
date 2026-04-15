@@ -1,7 +1,8 @@
 import { normalizeEventSettings, normalizeGalleryMeta } from "@/lib/gallery-config";
 import { getRequiredGalleryPin, hasGalleryAccessFromRequest } from "@/lib/gallery-pin-access";
 import prisma from "@/lib/prisma";
-import { getSessionEmailFromRequest } from "@/lib/session";
+import type { Prisma } from "@prisma/client";
+import { getSessionEmailFromRequestAsync } from "@/lib/session";
 import { NextRequest, NextResponse } from "next/server";
 
 type ClientActionPayload = {
@@ -60,7 +61,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   if (!clientKey) {
-    const email = getSessionEmailFromRequest(req);
+    const email = await getSessionEmailFromRequestAsync(req);
     if (!email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -226,7 +227,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       });
 
       if (liked && !existing) {
-        await prisma.$transaction([
+        const ops: Prisma.PrismaPromise<unknown>[] = [
           prisma.clientPhotoAction.create({
             data: {
               galleryId: id,
@@ -241,7 +242,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             where: { id: action.photoId },
             data: { favoriteCount: { increment: 1 } },
           }),
-        ]);
+        ];
+
+        if (action.clientName || action.clientEmail) {
+          ops.push(
+            prisma.clientProfile.upsert({
+              where: { galleryId_clientKey: { galleryId: id, clientKey: action.clientKey } },
+              update: { name: action.clientName ?? undefined, email: action.clientEmail ?? undefined },
+              create: {
+                galleryId: id,
+                clientKey: action.clientKey,
+                name: action.clientName ?? undefined,
+                email: action.clientEmail ?? undefined,
+              },
+            })
+          );
+        }
+
+        await prisma.$transaction(ops);
       }
 
       if (!liked && existing) {
@@ -266,7 +284,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       },
     });
     if (!existing) {
-      await prisma.$transaction([
+      const ops: Prisma.PrismaPromise<unknown>[] = [
         prisma.clientPhotoAction.create({
           data: {
             galleryId: id,
@@ -281,7 +299,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           where: { id: action.photoId },
           data: { downloadCount: { increment: 1 } },
         }),
-      ]);
+      ];
+
+      if (action.clientName || action.clientEmail) {
+        ops.push(
+          prisma.clientProfile.upsert({
+            where: { galleryId_clientKey: { galleryId: id, clientKey: action.clientKey } },
+            update: { name: action.clientName ?? undefined, email: action.clientEmail ?? undefined },
+            create: {
+              galleryId: id,
+              clientKey: action.clientKey,
+              name: action.clientName ?? undefined,
+              email: action.clientEmail ?? undefined,
+            },
+          })
+        );
+      }
+
+      await prisma.$transaction(ops);
     }
   }
 

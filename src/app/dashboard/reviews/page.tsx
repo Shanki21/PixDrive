@@ -56,7 +56,7 @@ function formatDate(value: string) {
 }
 
 export default function ReviewsPage() {
-  const [reviews, setReviews] = useState<ReviewRecord[]>(() => readReviews());
+  const [reviews, setReviews] = useState<ReviewRecord[]>([]);
   const [galleries, setGalleries] = useState<MinimalGallery[]>([]);
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
   const [editing, setEditing] = useState<ReviewRecord | null>(null);
@@ -70,13 +70,28 @@ export default function ReviewsPage() {
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === REVIEWS_STORAGE_KEY) {
-        setReviews(readReviews());
+    let active = true;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/galleries/reviews", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (!active) return;
+          setReviews(Array.isArray(data.reviews) ? data.reviews : []);
+          return;
+        }
+      } catch {
+        // ignore
       }
+
+      // Fallback to localStorage-based reviews for unauthenticated or offline cases
+      if (active) setReviews(readReviews());
     };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+
+    void load();
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -136,26 +151,87 @@ export default function ReviewsPage() {
           }
         : review
     );
-    setReviews(next);
-    writeReviews(next);
+
+    // Try server update first
+    (async () => {
+      try {
+        const res = await fetch(`/api/galleries/${encodeURIComponent(editing.galleryId)}/reviews/${encodeURIComponent(editing.id)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reviewerName: nameDraft.trim(),
+            text: textDraft.trim(),
+            categories: categoriesDraft,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setReviews((prev) => prev.map((r) => (r.id === editing.id ? data.review : r)));
+        } else {
+          setReviews(next);
+          writeReviews(next);
+        }
+      } catch {
+        setReviews(next);
+        writeReviews(next);
+      }
+    })();
     setEditing(null);
     setEditingImageUrl(null);
     setActiveTab("main");
   };
 
   const togglePublished = (id: string) => {
-    const next = reviews.map((review) =>
-      review.id === id ? { ...review, published: !review.published } : review
-    );
-    setReviews(next);
-    writeReviews(next);
-    setEditing((prev) => (prev && prev.id === id ? { ...prev, published: !prev.published } : prev));
+    const target = reviews.find((r) => r.id === id);
+    if (!target) return;
+    const newValue = !target.published;
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/galleries/${encodeURIComponent(target.galleryId)}/reviews/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ published: newValue }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setReviews((prev) => prev.map((r) => (r.id === id ? data.review : r)));
+          setEditing((prev) => (prev && prev.id === id ? data.review : prev));
+          return;
+        }
+      } catch {
+        // ignore
+      }
+
+      // fallback to local changes
+      const next = reviews.map((review) => (review.id === id ? { ...review, published: newValue } : review));
+      setReviews(next);
+      writeReviews(next);
+      setEditing((prev) => (prev && prev.id === id ? { ...prev, published: newValue } : prev));
+    })();
   };
 
   const deleteReview = (id: string) => {
-    const next = reviews.filter((review) => review.id !== id);
-    setReviews(next);
-    writeReviews(next);
+    const target = reviews.find((r) => r.id === id);
+    if (!target) return;
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/galleries/${encodeURIComponent(target.galleryId)}/reviews/${encodeURIComponent(id)}`, {
+          method: "DELETE",
+        });
+        if (res.ok) {
+          setReviews((prev) => prev.filter((review) => review.id !== id));
+          return;
+        }
+      } catch {
+        // ignore
+      }
+
+      const next = reviews.filter((review) => review.id !== id);
+      setReviews(next);
+      writeReviews(next);
+    })();
   };
 
   const filteredCategories = CATEGORY_OPTIONS.filter((category) =>

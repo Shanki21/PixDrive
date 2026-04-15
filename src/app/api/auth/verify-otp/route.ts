@@ -1,19 +1,21 @@
 import { getPrismaUnavailableMessage, isPrismaUnavailableError } from "@/lib/prisma-errors";
-import { verifyOtp } from "@/lib/otp-store";
+import { verifyOtp, OtpRateLimitError } from "@/lib/otp-store";
+import { checkIpThrottle } from "@/lib/ip-throttle";
 import prisma from "@/lib/prisma";
+import { getClientIp } from "@/lib/request-ip";
 import { setSessionCookie } from "@/lib/session";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function createAuthSuccessResponse(email: string, warning?: string) {
+async function createAuthSuccessResponse(email: string, warning?: string) {
   const response = NextResponse.json({
     ok: true,
     ...(warning ? { warning } : {}),
   });
-  const cookieSet = setSessionCookie(response, email);
+  const cookieSet = await setSessionCookie(response, email);
   if (!cookieSet) {
     return NextResponse.json(
       { ok: false, message: "Session secret is missing. Set NEXTAUTH_SECRET or AUTH_SECRET." },
@@ -23,7 +25,7 @@ function createAuthSuccessResponse(email: string, warning?: string) {
   return response;
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   let emailForFallback = "";
 
   try {
@@ -36,8 +38,49 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, message: "Invalid email or OTP format." }, { status: 400 });
     }
 
-    if (!verifyOtp(email, code)) {
-      return NextResponse.json({ ok: false, message: "Invalid or expired OTP." }, { status: 401 });
+    const ip = getClientIp(req) ?? "unknown";
+    const ipLimit = await checkIpThrottle({
+      key: `auth:otp:verify:ip:${ip}`,
+      limit: 50,
+      windowMs: 60 * 60 * 1000,
+    });
+    if (!ipLimit.ok) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "Too many attempts. Try again later.",
+          retryAfterSeconds: ipLimit.retryAfterSeconds,
+        },
+        { status: 429 }
+      );
+    }
+
+    const emailIpLimit = await checkIpThrottle({
+      key: `auth:otp:verify:email-ip:${email}:${ip}`,
+      limit: 12,
+      windowMs: 15 * 60 * 1000,
+    });
+    if (!emailIpLimit.ok) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "Too many attempts. Try again later.",
+          retryAfterSeconds: emailIpLimit.retryAfterSeconds,
+        },
+        { status: 429 }
+      );
+    }
+
+    try {
+      const ok = await verifyOtp(email, code);
+      if (!ok) {
+        return NextResponse.json({ ok: false, message: "Invalid or expired OTP." }, { status: 401 });
+      }
+    } catch (err) {
+      if (err instanceof OtpRateLimitError) {
+        return NextResponse.json({ ok: false, message: "Too many attempts. Try again later." }, { status: 429 });
+      }
+      throw err;
     }
 
     await prisma.user.upsert({
@@ -46,7 +89,7 @@ export async function POST(req: Request) {
       create: { email },
     });
 
-    return createAuthSuccessResponse(email);
+    return await createAuthSuccessResponse(email);
   } catch (error) {
     if (isPrismaUnavailableError(error)) {
       if (process.env.NODE_ENV !== "production") {
@@ -54,7 +97,7 @@ export async function POST(req: Request) {
         if (!emailRegex.test(emailForFallback)) {
           return NextResponse.json({ ok: false, message: "Unable to verify OTP right now." }, { status: 400 });
         }
-        return createAuthSuccessResponse(
+        return await createAuthSuccessResponse(
           emailForFallback,
           "Signed in with development fallback because database is unavailable."
         );

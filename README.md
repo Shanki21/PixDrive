@@ -110,6 +110,10 @@ RESEND_FROM_EMAIL="no-reply@example.com"
 # SMTP_PASS="smtp-password"
 # SMTP_FROM_EMAIL="no-reply@example.com"
 
+# Optional distributed rate limiting (recommended in production):
+# UPSTASH_REDIS_REST_URL="https://your-instance.upstash.io"
+# UPSTASH_REDIS_REST_TOKEN="your-upstash-token"
+
 # Optional payment (Stripe)
 # STRIPE_SECRET_KEY="sk_test_..."
 # STRIPE_WEBHOOK_SECRET="whsec_..."
@@ -121,13 +125,13 @@ Notes:
 
 ## 8. Project Structure
 
-- `src/app/` — Next.js app routes, pages and API routes
-- `src/components/` — Reusable React components
-- `src/lib/` — Server/browser helper modules (Cloudinary, Prisma client, session helpers)
-- `prisma/` — Prisma schema and migration history
-- `public/` — Static assets (images, icons)
-- `tests/` — Minimal unit tests and test runner
-- `scripts/` — Utility scripts (environment checks)
+- `src/app/` - Next.js app routes, pages and API routes
+- `src/components/` - Reusable React components
+- `src/lib/` - Server/browser helper modules (Cloudinary, Prisma client, session helpers)
+- `prisma/` - Prisma schema and migration history
+- `public/` - Static assets (images, icons)
+- `tests/` - Minimal unit tests and test runner
+- `scripts/` - Utility scripts (environment checks)
 
 ## 9. Usage
 
@@ -140,6 +144,7 @@ npm run start         # run built app
 npm run env:check     # run environment checks (strict in production)
 npm run db:migrate    # apply Prisma migrations in dev
 npm run db:deploy     # run migrations in production
+npm run pins:backfill # dry-run PIN hash backfill (use -- --apply to persist)
 npm run lint          # run ESLint
 npm run test:unit     # run unit-style tests included in tests/
 ```

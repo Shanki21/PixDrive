@@ -13,6 +13,8 @@ export type GalleryEventSettings = {
   expiryDate?: string | null;
   fullAccessPin?: string | null;
   guestPin?: string | null;
+  fullAccessPinHash?: string | null;
+  guestPinHash?: string | null;
   allowSingleDownload?: boolean;
   allowBulkDownload?: boolean;
   whatsappEnabled?: boolean;
@@ -126,6 +128,8 @@ export function normalizeEventSettings(value: unknown): GalleryEventSettings | n
     expiryDate: asNullableString(record.expiryDate),
     fullAccessPin: asNullableString(record.fullAccessPin),
     guestPin: asNullableString(record.guestPin),
+    fullAccessPinHash: asNullableString(record.fullAccessPinHash),
+    guestPinHash: asNullableString(record.guestPinHash),
     allowSingleDownload: asBoolean(record.allowSingleDownload, true),
     allowBulkDownload: asBoolean(record.allowBulkDownload, false),
     whatsappEnabled: asBoolean(record.whatsappEnabled, false),
@@ -167,6 +171,17 @@ export function mergeEventSettings(
   const next = normalizeEventSettings(incoming);
   if (!next) return null;
   return { ...base, ...next };
+}
+
+export function maskEventSettingsPins(settings: GalleryEventSettings | null): GalleryEventSettings | null {
+  if (!settings) return null;
+  return {
+    ...settings,
+    fullAccessPin: null,
+    guestPin: null,
+    fullAccessPinHash: null,
+    guestPinHash: null,
+  };
 }
 
 export function mergeGalleryMeta(existing: unknown, incoming: unknown): GalleryMetaConfig | null {

@@ -68,7 +68,6 @@ export default function DriveTable({
   onAdd,
   onOpenBin,
   onSettings,
-  onPreview,
   onOpenQr,
   onPinToggle,
   onPublishToggle,
@@ -82,7 +81,6 @@ export default function DriveTable({
   onAdd: () => void;
   onOpenBin: () => void;
   onSettings: (gallery: MinimalGallery) => void;
-  onPreview: (gallery: MinimalGallery) => void;
   onOpenQr: (gallery: MinimalGallery) => void;
   onPinToggle: (gallery: MinimalGallery) => void;
   onPublishToggle: (gallery: MinimalGallery) => void;
@@ -410,30 +408,14 @@ export default function DriveTable({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-[1fr_repeat(6,40px)] items-center gap-2">
+                <div className="grid grid-cols-[1fr_repeat(4,40px)] items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => onPreview(gallery)}
+                    onClick={() => onOpenQr(gallery)}
                     className="inline-flex items-center justify-center gap-2 rounded-full border border-[#d7e8e0] bg-white px-4 py-2 text-sm font-semibold text-[#23463d] transition hover:border-[#0f766e] hover:text-[#0f766e]"
                   >
-                    <Eye className="h-4 w-4" />
-                    View
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onPreview(gallery)}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#d8e8e1] bg-white text-[#2f544a] hover:border-[#0f766e] hover:text-[#0f766e]"
-                    title="Manage guests"
-                  >
-                    <UserRoundPlus className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onPreview(gallery)}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#d8e8e1] bg-white text-[#2f544a] hover:border-[#0f766e] hover:text-[#0f766e]"
-                    title="Upload files"
-                  >
-                    <Upload className="h-4 w-4" />
+                    <QrCode className="h-4 w-4" />
+                    Open One QR
                   </button>
                   <button
                     type="button"
@@ -447,7 +429,7 @@ export default function DriveTable({
                     type="button"
                     onClick={() => onSettings(gallery)}
                     className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#d8e8e1] bg-white text-[#2f544a] hover:border-[#0f766e] hover:text-[#0f766e]"
-                    title="Settings"
+                    title="Edit event"
                   >
                     <Settings className="h-4 w-4" />
                   </button>
