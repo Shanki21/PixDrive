@@ -4,7 +4,6 @@ import { memo, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Copy,
-  Eye,
   Heart,
   Image as ImageIcon,
   Link,
@@ -23,7 +22,7 @@ function GalleryRow({
   onOpen,
   onPrefetch,
   onSettings,
-  onPreview,
+  onOpenQr,
   onPinToggle,
   onDuplicate,
   onDelete,
@@ -34,7 +33,7 @@ function GalleryRow({
   onOpen: () => void;
   onPrefetch?: () => void;
   onSettings: () => void;
-  onPreview: () => void;
+  onOpenQr: () => void;
   onPinToggle: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -123,6 +122,7 @@ function GalleryRow({
 
       <div className="w-14 h-14 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
         {gallery.coverUrl || gallery.firstPhotoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={gallery.coverUrl ?? gallery.firstPhotoUrl ?? ""}
             alt={gallery.name}
@@ -264,11 +264,11 @@ function GalleryRow({
               }}
             />
             <ActionRow
-              icon={<Eye size={18} />}
-              label="Preview"
+              icon={<QrCode size={18} />}
+              label="Open in One QR"
               onClick={() => {
                 setShowActionMenu(false);
-                onPreview();
+                onOpenQr();
               }}
             />
             <ActionRow

@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import type { NextRequest, NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
 
 export const SESSION_COOKIE_NAME = "wf_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
@@ -103,6 +104,26 @@ export function getSessionEmailFromRequest(req: NextRequest) {
   return session?.email ?? null;
 }
 
+export async function getSessionEmailFromRequestAsync(req: NextRequest) {
+  const token = req.cookies.get(SESSION_COOKIE_NAME)?.value ?? "";
+  if (!token) return null;
+  const payload = parseSessionToken(token);
+  if (!payload) return null;
+
+  try {
+    const row = await prisma.session.findUnique({ where: { token } });
+    if (!row) return null;
+    if (new Date(row.expiresAt).getTime() <= Date.now()) {
+      // expired session, remove
+      await prisma.session.deleteMany({ where: { token } }).catch(() => {});
+      return null;
+    }
+    return row.email ?? payload.email ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function getSessionEmailFromCookieStore(cookieStore: {
   get: (name: string) => { value?: string } | undefined;
 }) {
@@ -111,10 +132,17 @@ export function getSessionEmailFromCookieStore(cookieStore: {
   return session?.email ?? null;
 }
 
-export function setSessionCookie(response: NextResponse, email: string) {
+export async function setSessionCookie(response: NextResponse, email: string) {
   const token = createSessionForEmail(email);
   if (!token) {
     return false;
+  }
+
+  const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
+  try {
+    await prisma.session.create({ data: { token, email: email.trim().toLowerCase(), expiresAt } });
+  } catch {
+    // ignore DB write failures; still set cookie so signed token works as fallback
   }
 
   response.cookies.set({

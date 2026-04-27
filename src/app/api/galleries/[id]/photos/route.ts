@@ -1,19 +1,32 @@
 import { isCloudinaryConfigured, uploadImageDataUrl } from "@/lib/cloudinary";
+import { normalizeSingleLine } from "@/lib/input-security";
 import prisma from "@/lib/prisma";
-import { getSessionEmailFromRequest } from "@/lib/session";
+import { rejectCrossOriginWrite } from "@/lib/request-security";
+import { getSessionEmailFromRequestAsync } from "@/lib/session";
+import { normalizePublicUrl } from "@/lib/url-security";
 import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
 
 const MAX_URL_LENGTH = 6_000_000;
 const MAX_PAGE_SIZE = 120;
 const DATA_URL_PREFIX = "data:image/";
+const MAX_EXTERNAL_URL_LENGTH = 2048;
+const MAX_PHOTO_NAME_LENGTH = 180;
+const ALLOWED_DATA_URL_MIME = /^data:image\/(jpeg|jpg|png|webp|gif);base64,/i;
+
+function normalizeExternalImageUrl(value: string) {
+  if (!value || value.length > MAX_EXTERNAL_URL_LENGTH) return null;
+  return normalizePublicUrl(value, {
+    allowHttpLocalhost: process.env.NODE_ENV !== "production",
+  });
+}
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const email = getSessionEmailFromRequest(req);
+  const email = await getSessionEmailFromRequestAsync(req);
   if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -75,8 +88,13 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const blocked = rejectCrossOriginWrite(req);
+  if (blocked) {
+    return blocked;
+  }
+
   const { id } = await params;
-  const email = getSessionEmailFromRequest(req);
+  const email = await getSessionEmailFromRequestAsync(req);
   if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -109,11 +127,29 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const name = String(body?.name ?? "").trim();
-  const url = String(body?.url ?? "");
-  if (!name || !url) {
+  const name = normalizeSingleLine(body?.name, MAX_PHOTO_NAME_LENGTH);
+  const rawUrl = String(body?.url ?? "").trim();
+  if (!name || !rawUrl) {
     return NextResponse.json({ error: "name and url are required" }, { status: 400 });
   }
+  if (name.length > MAX_PHOTO_NAME_LENGTH) {
+    return NextResponse.json({ error: "Photo name is too long." }, { status: 400 });
+  }
+
+  let url = rawUrl;
+  const isDataUrl = url.startsWith(DATA_URL_PREFIX);
+  if (isDataUrl) {
+    if (!ALLOWED_DATA_URL_MIME.test(url)) {
+      return NextResponse.json({ error: "Unsupported image format." }, { status: 400 });
+    }
+  } else {
+    const external = normalizeExternalImageUrl(url);
+    if (!external) {
+      return NextResponse.json({ error: "Only secure public HTTPS image URLs are allowed." }, { status: 400 });
+    }
+    url = external;
+  }
+
   if (url.length > MAX_URL_LENGTH) {
     return NextResponse.json({ error: "Image payload is too large" }, { status: 413 });
   }

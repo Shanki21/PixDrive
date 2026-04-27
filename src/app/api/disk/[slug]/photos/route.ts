@@ -1,9 +1,17 @@
 import { getGalleryPublicAccess } from "@/lib/gallery-public-access";
 import { getRequiredGalleryPin, hasGalleryAccessFromRequest } from "@/lib/gallery-pin-access";
+import { normalizePublicUrl } from "@/lib/url-security";
 import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
 const MAX_PAGE_SIZE = 120;
+const MAX_SINGLE_DOWNLOAD_BYTES = 25 * 1024 * 1024;
+const ALLOWED_IMAGE_CONTENT_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+];
 
 function sanitizeFileName(value: string) {
   const cleaned = value.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim();
@@ -18,6 +26,11 @@ function getFileExtension(contentType: string, fallbackName: string) {
 
   const dot = fallbackName.lastIndexOf(".");
   return dot > -1 ? fallbackName.slice(dot) : "";
+}
+
+function isAllowedImageContentType(contentType: string) {
+  const lower = contentType.toLowerCase();
+  return ALLOWED_IMAGE_CONTENT_TYPES.some((allowed) => lower.includes(allowed));
 }
 
 export async function GET(
@@ -65,13 +78,28 @@ export async function GET(
     }
 
     try {
-      const upstream = await fetch(photo.url, { signal: AbortSignal.timeout(12000) });
+      const sourceUrl = normalizePublicUrl(photo.url);
+      if (!sourceUrl) {
+        return NextResponse.json({ error: "Photo source is unavailable." }, { status: 415 });
+      }
+
+      const upstream = await fetch(sourceUrl, { signal: AbortSignal.timeout(12000) });
       if (!upstream.ok) {
         return NextResponse.json({ error: "Unable to fetch source image." }, { status: 502 });
       }
 
       const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
+      if (!isAllowedImageContentType(contentType)) {
+        return NextResponse.json({ error: "Unsupported source file type." }, { status: 415 });
+      }
+      const headerLength = Number(upstream.headers.get("content-length") ?? 0);
+      if (Number.isFinite(headerLength) && headerLength > MAX_SINGLE_DOWNLOAD_BYTES) {
+        return NextResponse.json({ error: "File is too large to download." }, { status: 413 });
+      }
       const data = await upstream.arrayBuffer();
+      if (data.byteLength > MAX_SINGLE_DOWNLOAD_BYTES) {
+        return NextResponse.json({ error: "File is too large to download." }, { status: 413 });
+      }
       const safeBase = sanitizeFileName(photo.name || "photo");
       const ext = safeBase.includes(".") ? "" : getFileExtension(contentType, photo.name || "");
       const fileName = `${safeBase}${ext}`;

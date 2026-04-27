@@ -17,9 +17,6 @@ import {
 } from "lucide-react";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 
-const VISITS_STORAGE_KEY = "wf_gallery_visits";
-const CLIENT_DOWNLOADS_PREFIX = "wf_client_downloads:";
-
 type DashboardGallery = MinimalGallery & {
   slug?: string | null;
 };
@@ -114,28 +111,13 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    let parsedVisits: Record<string, number> = {};
-    try {
-      const rawVisits = window.localStorage.getItem(VISITS_STORAGE_KEY);
-      parsedVisits = rawVisits ? (JSON.parse(rawVisits) as Record<string, number>) : {};
-    } catch {
-      parsedVisits = {};
-    }
-
+    const nextVisits: Record<string, number> = {};
     const nextDownloads: Record<string, number> = {};
     galleries.forEach((gallery) => {
-      try {
-        const raw = window.localStorage.getItem(`${CLIENT_DOWNLOADS_PREFIX}${gallery.id}`);
-        const parsed = raw ? (JSON.parse(raw) as string[]) : [];
-        nextDownloads[gallery.id] = Array.isArray(parsed) ? parsed.length : 0;
-      } catch {
-        nextDownloads[gallery.id] = 0;
-      }
+      nextVisits[gallery.id] = gallery.visitors ?? 0;
+      nextDownloads[gallery.id] = gallery.downloads ?? 0;
     });
-
-    setVisitMap(parsedVisits);
+    setVisitMap(nextVisits);
     setDownloadMap(nextDownloads);
   }, [galleries]);
 
@@ -429,7 +411,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="h-2 rounded-full bg-[#e5f0eb]">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-[#0f766e] to-[#2563eb]"
+                        className="h-full rounded-full bg-linear-to-r from-[#0f766e] to-[#2563eb]"
                         style={{ width: `${event.progress}%` }}
                       />
                     </div>

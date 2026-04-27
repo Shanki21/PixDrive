@@ -9,8 +9,6 @@ import TrashWarning from "@/components/drive/TrashWarning";
 import type { GalleryEventSettings } from "@/lib/gallery-config";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 
-const VISITS_STORAGE_KEY = "wf_gallery_visits";
-const CLIENT_DOWNLOADS_PREFIX = "wf_client_downloads:";
 const GALLERIES_CACHE_KEY = "wf_drive_galleries_cache_v1";
 const GALLERIES_CACHE_TTL = 60 * 1000;
 
@@ -43,7 +41,7 @@ export default function DrivePage() {
 
   useEffect(() => {
     const load = async () => {
-      const res = await fetch("/api/galleries");
+      const res = await fetch("/api/galleries", { cache: "no-store" });
       const contentType = res.headers.get("content-type") ?? "";
       if (!res.ok || !contentType.includes("application/json")) {
         return;
@@ -54,37 +52,11 @@ export default function DrivePage() {
         return;
       }
 
-      const visitsMapRaw = localStorage.getItem(VISITS_STORAGE_KEY);
-      let visitsMap: Record<string, number> = {};
-      if (visitsMapRaw) {
-        try {
-          visitsMap = JSON.parse(visitsMapRaw) as Record<string, number>;
-        } catch {
-          visitsMap = {};
-        }
-      }
-
-      const rowsWithVisits = rows.map((row) => {
-        let downloadsCount = row.downloads ?? 0;
-        try {
-          const rawDownloads = localStorage.getItem(`${CLIENT_DOWNLOADS_PREFIX}${row.id}`);
-          const parsedDownloads = rawDownloads ? (JSON.parse(rawDownloads) as string[]) : [];
-          downloadsCount = Array.isArray(parsedDownloads) ? parsedDownloads.length : downloadsCount;
-        } catch {
-          downloadsCount = row.downloads ?? 0;
-        }
-        return {
-          ...row,
-          visitors: visitsMap[row.id] ?? row.visitors ?? 0,
-          downloads: downloadsCount,
-        };
-      });
-
-      setGalleries(rowsWithVisits);
+      setGalleries(rows);
       try {
         window.sessionStorage.setItem(
           GALLERIES_CACHE_KEY,
-          JSON.stringify({ ts: Date.now(), data: rowsWithVisits })
+          JSON.stringify({ ts: Date.now(), data: rows })
         );
       } catch {
         // Ignore cache write failures.
@@ -92,7 +64,7 @@ export default function DrivePage() {
     };
 
     load().finally(() => setLoading(false));
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     const prefetch = () => {
@@ -170,11 +142,11 @@ export default function DrivePage() {
           onSettings={(gallery) => {
             router.push(`/dashboard/create-events?edit=${encodeURIComponent(gallery.id)}`);
           }}
-          onPreview={(gallery) => {
-            router.push(`/dashboard/drive/${gallery.id}`);
-          }}
           onOpenQr={(gallery) => {
             router.push(`/dashboard/qr-code?event=${encodeURIComponent(gallery.id)}`);
+          }}
+          onOpen={(gallery) => {
+            router.push(`/dashboard/drive/${encodeURIComponent(gallery.id)}`);
           }}
           onPinToggle={(gallery) => {
             setGalleries((prev) => {
@@ -247,6 +219,11 @@ export default function DrivePage() {
 
               setGalleries((prev) => prev.filter((g) => g.id !== gallery.id));
               setTrash((prev) => [deleted, ...prev]);
+              try {
+                window.sessionStorage.removeItem(GALLERIES_CACHE_KEY);
+              } catch {
+                // Ignore cache cleanup failures.
+              }
             } catch {
               // Ignore delete failures to keep dashboard responsive.
             }
@@ -266,8 +243,8 @@ export default function DrivePage() {
               return next;
             });
           }}
-          />
-        )}
+        />
+      )}
 
       {tab === "trash" && (
         <div className="mt-6 space-y-4">

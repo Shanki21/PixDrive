@@ -4,9 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, BarChart3, CalendarClock, Download, Eye, TrendingUp } from "lucide-react";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 
-const VISITS_STORAGE_KEY = "wf_gallery_visits";
-const CLIENT_DOWNLOADS_PREFIX = "wf_client_downloads:";
-
 type GalleryWithSlug = MinimalGallery & {
   slug?: string | null;
 };
@@ -24,27 +21,6 @@ function formatDate(value?: string | null) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
-}
-
-function readVisitsMap() {
-  if (typeof window === "undefined") return {} as Record<string, number>;
-  try {
-    const raw = window.localStorage.getItem(VISITS_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
-  } catch {
-    return {} as Record<string, number>;
-  }
-}
-
-function readDownloadCount(galleryId: string) {
-  if (typeof window === "undefined") return 0;
-  try {
-    const raw = window.localStorage.getItem(`${CLIENT_DOWNLOADS_PREFIX}${galleryId}`);
-    const parsed = raw ? (JSON.parse(raw) as string[]) : [];
-    return Array.isArray(parsed) ? parsed.length : 0;
-  } catch {
-    return 0;
-  }
 }
 
 export default function AnalyticsPage() {
@@ -82,10 +58,11 @@ export default function AnalyticsPage() {
   }, []);
 
   useEffect(() => {
-    const visits = readVisitsMap();
+    const visits: Record<string, number> = {};
     const downloads: Record<string, number> = {};
     galleries.forEach((gallery) => {
-      downloads[gallery.id] = readDownloadCount(gallery.id);
+      visits[gallery.id] = gallery.visitors ?? 0;
+      downloads[gallery.id] = gallery.downloads ?? 0;
     });
     setVisitMap(visits);
     setDownloadMap(downloads);
@@ -189,7 +166,7 @@ export default function AnalyticsPage() {
           </div>
 
           {loading ? (
-            <div className="h-60 animate-pulse rounded-2xl border border-[#e4efe9] bg-[#f7fbf9]" />
+            <div className="h-60 animate-pulse rounded-bg-linear-to-rr-[#e4efe9] bg-[#f7fbf9]" />
           ) : topPerformance.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-[#d2e4db] bg-[#f9fcfa] p-8 text-center text-sm text-[#648178]">
               No event data yet. Start by creating and sharing your first gallery.
@@ -206,7 +183,7 @@ export default function AnalyticsPage() {
                     </div>
                     <div className="mt-2 h-2 rounded-full bg-[#e2efe9]">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-[#0f766e] to-[#2563eb]"
+                        className="h-full rounded-full bg-linear-to-r from-[#0f766e] to-[#2563eb]"
                         style={{ width: `${width}%` }}
                       />
                     </div>
@@ -263,4 +240,3 @@ export default function AnalyticsPage() {
     </div>
   );
 }
-

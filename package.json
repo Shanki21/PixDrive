@@ -15,6 +15,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:status": "prisma migrate status",
+    "pins:backfill": "node scripts/backfill-pin-hashes.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -54,5 +55,4 @@
     "typescript": "^5.9.3"
   }
 }
-
 

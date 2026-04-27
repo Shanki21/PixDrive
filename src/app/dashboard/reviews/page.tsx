@@ -20,7 +20,6 @@ type ReviewRecord = {
   published: boolean;
 };
 
-const REVIEWS_STORAGE_KEY = "wf_gallery_reviews";
 const CATEGORY_OPTIONS = [
   "Weddings",
   "Portraits",
@@ -32,23 +31,6 @@ const CATEGORY_OPTIONS = [
   "Outdoor",
 ];
 
-function readReviews(): ReviewRecord[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(REVIEWS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as ReviewRecord[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeReviews(next: ReviewRecord[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(REVIEWS_STORAGE_KEY, JSON.stringify(next));
-}
-
 function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
@@ -56,8 +38,9 @@ function formatDate(value: string) {
 }
 
 export default function ReviewsPage() {
-  const [reviews, setReviews] = useState<ReviewRecord[]>(() => readReviews());
+  const [reviews, setReviews] = useState<ReviewRecord[]>([]);
   const [galleries, setGalleries] = useState<MinimalGallery[]>([]);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
   const [editing, setEditing] = useState<ReviewRecord | null>(null);
   const [editingImageUrl, setEditingImageUrl] = useState<string | null>(null);
@@ -70,13 +53,27 @@ export default function ReviewsPage() {
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === REVIEWS_STORAGE_KEY) {
-        setReviews(readReviews());
+    let active = true;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/galleries/reviews", { cache: "no-store" });
+        if (!res.ok) throw new Error("Unable to load reviews.");
+        const data = await res.json();
+        if (!active) return;
+        setReviews(Array.isArray(data.reviews) ? data.reviews : []);
+        setPageError(null);
+      } catch {
+        if (active) {
+          setReviews([]);
+          setPageError("Unable to load reviews right now.");
+        }
       }
     };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+
+    void load();
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -123,39 +120,91 @@ export default function ReviewsPage() {
     setActiveTab("main");
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editing) return;
-    const next = reviews.map((review) =>
-      review.id === editing.id
-        ? {
-            ...review,
-            reviewerName: nameDraft.trim() || review.reviewerName,
-            socialLink: socialDraft.trim() || undefined,
-            text: textDraft.trim() || review.text,
+    setPageError(null);
+
+    try {
+      const res = await fetch(
+        `/api/galleries/${encodeURIComponent(editing.galleryId)}/reviews/${encodeURIComponent(editing.id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reviewerName: nameDraft.trim(),
+            socialLink: socialDraft.trim(),
+            text: textDraft.trim(),
             categories: categoriesDraft,
-          }
-        : review
-    );
-    setReviews(next);
-    writeReviews(next);
-    setEditing(null);
-    setEditingImageUrl(null);
-    setActiveTab("main");
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error("Unable to save review changes.");
+      }
+
+      const data = await res.json();
+      setReviews((prev) => prev.map((review) => (review.id === editing.id ? data.review : review)));
+      setEditing(null);
+      setEditingImageUrl(null);
+      setActiveTab("main");
+    } catch {
+      setPageError("Unable to save review changes right now.");
+    }
   };
 
   const togglePublished = (id: string) => {
-    const next = reviews.map((review) =>
-      review.id === id ? { ...review, published: !review.published } : review
-    );
-    setReviews(next);
-    writeReviews(next);
-    setEditing((prev) => (prev && prev.id === id ? { ...prev, published: !prev.published } : prev));
+    const target = reviews.find((r) => r.id === id);
+    if (!target) return;
+    const newValue = !target.published;
+
+    void (async () => {
+      try {
+        setPageError(null);
+        const res = await fetch(
+          `/api/galleries/${encodeURIComponent(target.galleryId)}/reviews/${encodeURIComponent(id)}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ published: newValue }),
+          }
+        );
+        if (!res.ok) {
+          throw new Error("Unable to update review visibility.");
+        }
+
+        const data = await res.json();
+        setReviews((prev) => prev.map((review) => (review.id === id ? data.review : review)));
+        setEditing((prev) => (prev && prev.id === id ? data.review : prev));
+      } catch {
+        setPageError("Unable to update review visibility right now.");
+      }
+    })();
   };
 
   const deleteReview = (id: string) => {
-    const next = reviews.filter((review) => review.id !== id);
-    setReviews(next);
-    writeReviews(next);
+    const target = reviews.find((r) => r.id === id);
+    if (!target) return;
+
+    void (async () => {
+      try {
+        setPageError(null);
+        const res = await fetch(
+          `/api/galleries/${encodeURIComponent(target.galleryId)}/reviews/${encodeURIComponent(id)}`,
+          {
+            method: "DELETE",
+          }
+        );
+        if (!res.ok) {
+          throw new Error("Unable to delete review.");
+        }
+
+        setReviews((prev) => prev.filter((review) => review.id !== id));
+        setEditing((prev) => (prev?.id === id ? null : prev));
+      } catch {
+        setPageError("Unable to delete review right now.");
+      }
+    })();
   };
 
   const filteredCategories = CATEGORY_OPTIONS.filter((category) =>
@@ -176,7 +225,10 @@ export default function ReviewsPage() {
   const infoLocation =
     editing?.clientLocation ||
     (editing && typeof window !== "undefined"
-      ? buildClientGalleryUrl(editing.galleryId, window.location.origin)
+      ? buildClientGalleryUrl(
+          editing.galleryId,
+          galleryMap.get(editing.galleryId)?.customDomain ?? window.location.origin
+        )
       : "-");
   const infoUserAgent = editing?.userAgent ?? "-";
   const infoIp = editing?.clientIp ?? "Unavailable";
@@ -202,6 +254,12 @@ export default function ReviewsPage() {
         At the moment, reviews are only displayed in the dashboard. In the future, it will be possible to
         publish reviews on a separate page.
       </div>
+
+      {pageError ? (
+        <div className="mt-4 rounded-2xl border border-[#f4c7cf] bg-[#fff4f6] px-4 py-3 text-sm font-medium text-[#b42318]">
+          {pageError}
+        </div>
+      ) : null}
 
       <div className="mt-6 overflow-visible rounded-2xl border border-[#efe6dc] bg-white">
         <div className="grid grid-cols-[24px_2.2fr_3fr_1fr_1fr_40px] items-start gap-3 border-b border-[#efe6dc] px-6 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-[#8a7f73]">
@@ -245,7 +303,7 @@ export default function ReviewsPage() {
                     <p className="text-xs text-[#8a7f73]">{review.galleryName}</p>
                   </div>
                 </div>
-                <p className=" w-80 text-sm text-[#4a433d] whitespace-pre-wrap wrap-break-word">{review.text}</p>
+                <p className="w-80 whitespace-pre-wrap break-words text-sm text-[#4a433d]">{review.text}</p>
                 <span className="text-sm text-[#4a433d]">{formatDate(review.createdAt)}</span>
                 <button
                   type="button"
