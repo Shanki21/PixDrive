@@ -17,9 +17,6 @@ import {
 } from "lucide-react";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 
-const VISITS_STORAGE_KEY = "wf_gallery_visits";
-const CLIENT_DOWNLOADS_PREFIX = "wf_client_downloads:";
-
 type DashboardGallery = MinimalGallery & {
   slug?: string | null;
 };
@@ -114,40 +111,14 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    let parsedVisits: Record<string, number> = {};
-    const fetchVisits = async () => {
-      try {
-        const res = await fetch("/api/galleries/analytics/visits", { cache: "no-store" });
-        if (res.ok) {
-          const data = (await res.json()) as { visits?: Record<string, number> };
-          parsedVisits = data.visits ?? {};
-        } else {
-          const rawVisits = window.localStorage.getItem(VISITS_STORAGE_KEY);
-          parsedVisits = rawVisits ? (JSON.parse(rawVisits) as Record<string, number>) : {};
-        }
-      } catch {
-        const rawVisits = window.localStorage.getItem(VISITS_STORAGE_KEY);
-        parsedVisits = rawVisits ? (JSON.parse(rawVisits) as Record<string, number>) : {};
-      }
-
-      const nextDownloads: Record<string, number> = {};
-      galleries.forEach((gallery) => {
-        try {
-          const raw = window.localStorage.getItem(`${CLIENT_DOWNLOADS_PREFIX}${gallery.id}`);
-          const parsed = raw ? (JSON.parse(raw) as string[]) : [];
-          nextDownloads[gallery.id] = Array.isArray(parsed) ? parsed.length : 0;
-        } catch {
-          nextDownloads[gallery.id] = 0;
-        }
-      });
-
-      setVisitMap(parsedVisits);
-      setDownloadMap(nextDownloads);
-    };
-
-    void fetchVisits();
+    const nextVisits: Record<string, number> = {};
+    const nextDownloads: Record<string, number> = {};
+    galleries.forEach((gallery) => {
+      nextVisits[gallery.id] = gallery.visitors ?? 0;
+      nextDownloads[gallery.id] = gallery.downloads ?? 0;
+    });
+    setVisitMap(nextVisits);
+    setDownloadMap(nextDownloads);
   }, [galleries]);
 
   const totals = useMemo(() => {

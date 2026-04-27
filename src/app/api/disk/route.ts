@@ -1,7 +1,10 @@
 import JSZip from "jszip";
 import { getGalleryPublicAccess } from "@/lib/gallery-public-access";
 import { checkIpThrottle } from "@/lib/ip-throttle";
+import { normalizeClientKey, normalizeSingleLine } from "@/lib/input-security";
 import { getClientIp } from "@/lib/request-ip";
+import { rejectCrossOriginWrite } from "@/lib/request-security";
+import { normalizePublicUrl } from "@/lib/url-security";
 import {
   hasGalleryAccessFromRequest,
   setGalleryAccessCookie,
@@ -70,14 +73,19 @@ async function resolveGalleryBySlug(slug: string) {
 }
 
 export async function POST(req: NextRequest) {
+  const blocked = rejectCrossOriginWrite(req);
+  if (blocked) {
+    return blocked;
+  }
+
   const body = (await req.json().catch(() => null)) as { slug?: unknown; pin?: unknown; action?: unknown } | null;
   const action = String(body?.action ?? "").trim();
   if (action !== "unlock") {
     return NextResponse.json({ ok: false, error: "Invalid action." }, { status: 400 });
   }
 
-  const slug = String(body?.slug ?? "").trim();
-  const pin = String(body?.pin ?? "").trim();
+  const slug = normalizeSingleLine(body?.slug, 120);
+  const pin = normalizeSingleLine(body?.pin, 64);
   if (!slug || !pin) {
     return NextResponse.json({ ok: false, error: "slug and pin are required." }, { status: 400 });
   }
@@ -135,7 +143,7 @@ export async function GET(req: NextRequest) {
 
   const slug = String(searchParams.get("slug") ?? "").trim();
   const scope = String(searchParams.get("scope") ?? "all").trim();
-  const clientKey = String(searchParams.get("clientKey") ?? "").trim();
+  const clientKey = normalizeClientKey(searchParams.get("clientKey"));
   if (!slug) {
     return NextResponse.json({ error: "slug is required." }, { status: 400 });
   }
@@ -219,8 +227,13 @@ export async function GET(req: NextRequest) {
 
   for (let index = 0; index < targetPhotos.length; index += 1) {
     const photo = targetPhotos[index];
+    const sourceUrl = normalizePublicUrl(photo.url);
+    if (!sourceUrl) {
+      continue;
+    }
+
     try {
-      const response = await fetch(photo.url, { signal: AbortSignal.timeout(DOWNLOAD_FETCH_TIMEOUT_MS) });
+      const response = await fetch(sourceUrl, { signal: AbortSignal.timeout(DOWNLOAD_FETCH_TIMEOUT_MS) });
       if (!response.ok) continue;
       const contentType = response.headers.get("content-type") ?? "application/octet-stream";
       if (!isAllowedImageContentType(contentType)) continue;

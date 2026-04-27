@@ -1,11 +1,18 @@
-import { NextResponse } from "next/server";
+import { normalizeEmail } from "@/lib/input-security";
+import { rejectCrossOriginWrite } from "@/lib/request-security";
+import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const blocked = rejectCrossOriginWrite(req);
+  if (blocked) {
+    return blocked;
+  }
+
   try {
     const body = await req.json();
-    const email = String(body?.email ?? "").trim();
+    const email = normalizeEmail(body?.email);
     if (!email) {
       return NextResponse.json({ ok: false, message: "Email is required." }, { status: 400 });
     }

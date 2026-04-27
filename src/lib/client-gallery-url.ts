@@ -1,21 +1,13 @@
+import { normalizePublicOrigin } from "./url-security";
+
 const DISK_ROUTE_PREFIX = "/disk";
 
-function trimTrailingSlash(value: string) {
-  return value.replace(/\/+$/, "");
-}
-
 function normalizeOrigin(raw: string) {
-  const trimmed = trimTrailingSlash(raw.trim());
-  if (!trimmed) return "";
-
-  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-
-  try {
-    const parsed = new URL(withProtocol);
-    return parsed.origin;
-  } catch {
-    return trimTrailingSlash(withProtocol);
-  }
+  return (
+    normalizePublicOrigin(raw, {
+      allowHttpLocalhost: process.env.NODE_ENV !== "production",
+    }) ?? ""
+  );
 }
 
 function readConfiguredOrigin() {

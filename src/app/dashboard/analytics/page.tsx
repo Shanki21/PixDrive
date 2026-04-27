@@ -4,9 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, BarChart3, CalendarClock, Download, Eye, TrendingUp } from "lucide-react";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 
-const VISITS_STORAGE_KEY = "wf_gallery_visits";
-const CLIENT_DOWNLOADS_PREFIX = "wf_client_downloads:";
-
 type GalleryWithSlug = MinimalGallery & {
   slug?: string | null;
 };
@@ -24,27 +21,6 @@ function formatDate(value?: string | null) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
-}
-
-function readVisitsMap() {
-  if (typeof window === "undefined") return {} as Record<string, number>;
-  try {
-    const raw = window.localStorage.getItem(VISITS_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
-  } catch {
-    return {} as Record<string, number>;
-  }
-}
-
-function readDownloadCount(galleryId: string) {
-  if (typeof window === "undefined") return 0;
-  try {
-    const raw = window.localStorage.getItem(`${CLIENT_DOWNLOADS_PREFIX}${galleryId}`);
-    const parsed = raw ? (JSON.parse(raw) as string[]) : [];
-    return Array.isArray(parsed) ? parsed.length : 0;
-  } catch {
-    return 0;
-  }
 }
 
 export default function AnalyticsPage() {
@@ -82,30 +58,14 @@ export default function AnalyticsPage() {
   }, []);
 
   useEffect(() => {
-    const load = async () => {
-      let visits: Record<string, number> = {};
-      try {
-        const res = await fetch("/api/galleries/analytics/visits", { cache: "no-store" });
-        if (res.ok) {
-          const data = (await res.json()) as { visits?: Record<string, number> };
-          visits = data.visits ?? {};
-        } else {
-          visits = readVisitsMap();
-        }
-      } catch {
-        visits = readVisitsMap();
-      }
-
-      const downloads: Record<string, number> = {};
-      galleries.forEach((gallery) => {
-        downloads[gallery.id] = readDownloadCount(gallery.id);
-      });
-
-      setVisitMap(visits);
-      setDownloadMap(downloads);
-    };
-
-    void load();
+    const visits: Record<string, number> = {};
+    const downloads: Record<string, number> = {};
+    galleries.forEach((gallery) => {
+      visits[gallery.id] = gallery.visitors ?? 0;
+      downloads[gallery.id] = gallery.downloads ?? 0;
+    });
+    setVisitMap(visits);
+    setDownloadMap(downloads);
   }, [galleries]);
 
   const analyticsRows = useMemo(() => {
@@ -280,4 +240,3 @@ export default function AnalyticsPage() {
     </div>
   );
 }
-

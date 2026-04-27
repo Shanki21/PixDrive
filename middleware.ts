@@ -2,21 +2,61 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const DEV_FALLBACK_SESSION_SECRET = "pixora-dev-session-secret-not-for-production";
+const PUBLIC_EXACT_PATHS = new Set(["/", "/favicon.ico", "/robots.txt"]);
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/signup",
+  "/_next",
+  "/public",
+  "/disk/",
+  "/api/auth",
+  "/api/disk",
+  "/api/qr",
+  "/api/reviews/metadata",
+];
+const PUBLIC_GALLERY_API_PATTERN = /^\/api\/galleries\/[^/]+\/(visit|client-actions|reviews)$/;
+const NO_STORE_PREFIXES = ["/dashboard", "/api/auth", "/api/galleries", "/api/photos"];
+
+function matchesPublicPrefix(pathname: string) {
+  return PUBLIC_PREFIXES.some((prefix) =>
+    prefix.endsWith("/") ? pathname.startsWith(prefix) : pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+}
 
 function isPublicPath(pathname: string) {
-  // Allow auth endpoints and pages, next internals, and common static files
   return (
-    pathname === "/" ||
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/signup") ||
-    pathname.startsWith("/api/auth") ||
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon.ico") ||
-    pathname.startsWith("/robots.txt") ||
+    PUBLIC_EXACT_PATHS.has(pathname) ||
+    matchesPublicPrefix(pathname) ||
+    PUBLIC_GALLERY_API_PATTERN.test(pathname) ||
     pathname.startsWith("/sitemap") ||
-    pathname.startsWith("/public") ||
     /\.[a-zA-Z0-9]+$/.test(pathname)
   );
+}
+
+function shouldForceNoStore(pathname: string) {
+  return NO_STORE_PREFIXES.some((prefix) =>
+    pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+}
+
+function applySecurityHeaders(response: NextResponse, req: NextRequest) {
+  response.headers.set("Content-Security-Policy", "base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'");
+  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  response.headers.set("Origin-Agent-Cluster", "?1");
+
+  if (shouldForceNoStore(req.nextUrl.pathname)) {
+    response.headers.set("Cache-Control", "no-store");
+  }
+
+  if (req.nextUrl.protocol === "https:") {
+    response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+
+  return response;
 }
 
 function base64UrlToUint8Array(input: string) {
@@ -86,16 +126,27 @@ async function isValidSessionToken(token: string | undefined) {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  if (isPublicPath(pathname)) return NextResponse.next();
+  if (isPublicPath(pathname)) {
+    return applySecurityHeaders(NextResponse.next(), req);
+  }
 
   const token = req.cookies.get("wf_session")?.value;
   const ok = await isValidSessionToken(token);
-  if (ok) return NextResponse.next();
+  if (ok) {
+    return applySecurityHeaders(NextResponse.next(), req);
+  }
+
+  if (pathname.startsWith("/api/")) {
+    return applySecurityHeaders(
+      NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 }),
+      req
+    );
+  }
 
   // Redirect to login preserving original path
   const loginUrl = new URL("/login", req.url);
   loginUrl.searchParams.set("next", req.nextUrl.pathname + req.nextUrl.search);
-  return NextResponse.redirect(loginUrl);
+  return applySecurityHeaders(NextResponse.redirect(loginUrl), req);
 }
 
 export const config = {

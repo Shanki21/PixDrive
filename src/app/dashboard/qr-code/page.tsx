@@ -91,7 +91,7 @@ export default function QrCodePage() {
   const publicGalleryUrl = useMemo(() => {
     if (!selectedGallery) return "";
     const slug = selectedGallery.slug || selectedGallery.id;
-    const runtimeOrigin = typeof window === "undefined" ? undefined : window.location.origin;
+    const runtimeOrigin = typeof window === "undefined" ? undefined : (selectedGallery.customDomain ?? window.location.origin);
     return buildClientGalleryUrl(slug, runtimeOrigin);
   }, [selectedGallery]);
 
@@ -201,6 +201,7 @@ export default function QrCodePage() {
                 <Link
                   href={publicGalleryUrl}
                   target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 rounded-xl border border-[#d6e7df] bg-white px-4 py-2 text-sm font-semibold text-[#27453e] transition hover:border-[#0f766e] hover:text-[#0f766e]"
                 >
                   <ExternalLink className="h-4 w-4" />

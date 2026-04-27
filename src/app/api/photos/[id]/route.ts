@@ -1,7 +1,11 @@
 import { destroyCloudinaryAssetByUrl } from "@/lib/cloudinary";
+import { normalizeSingleLine } from "@/lib/input-security";
 import prisma from "@/lib/prisma";
+import { rejectCrossOriginWrite } from "@/lib/request-security";
 import { getSessionEmailFromRequestAsync } from "@/lib/session";
 import { NextRequest, NextResponse } from "next/server";
+
+const MAX_PHOTO_NAME_LENGTH = 180;
 
 async function getAuthorizedPhoto(id: string, email: string) {
   const user = await prisma.user.findUnique({
@@ -20,6 +24,11 @@ async function getAuthorizedPhoto(id: string, email: string) {
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const blocked = rejectCrossOriginWrite(req);
+  if (blocked) {
+    return blocked;
+  }
+
   const { id } = await params;
   const email = await getSessionEmailFromRequestAsync(req);
   if (!email) {
@@ -31,8 +40,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const body = await req.json();
-  const nextName = String(body?.name ?? "").trim();
+  const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!body) {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+  const nextName = normalizeSingleLine(body?.name, MAX_PHOTO_NAME_LENGTH);
   if (!nextName) {
     return NextResponse.json({ error: "Photo name is required" }, { status: 400 });
   }
@@ -46,6 +58,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const blocked = rejectCrossOriginWrite(req);
+  if (blocked) {
+    return blocked;
+  }
+
   const { id } = await params;
   const email = await getSessionEmailFromRequestAsync(req);
   if (!email) {

@@ -1078,7 +1078,7 @@ export default function DriveDetailPage() {
             <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#0f766e]">Pixora Upload Studio</p>
             <h1 className="mt-2 text-3xl font-bold tracking-[-0.03em] text-[#122520] md:text-4xl">{gallery.name}</h1>
             <p className="mt-2 text-sm text-[#58726a]">
-              Saved until {formatDate(initialGallery?.expiresAt ?? null)} - {gallery.photosCount ?? photos.length} files
+              Saved until {formatDate(initialGallery?.expiresAt ?? null)}
             </p>
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -1290,30 +1290,8 @@ export default function DriveDetailPage() {
                     <option value="name">Name A-Z</option>
                   </select>
                 </label>
-
-                <button
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0f766e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#115e59] disabled:cursor-not-allowed disabled:opacity-70"
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                >
-                  <UploadCloud className="h-4 w-4" />
-                  {uploading ? "Uploading..." : "Upload"}
-                </button>
               </div>
             </div>
-
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="mt-5 flex w-full flex-col items-center justify-center rounded-2xl border border-dashed border-[#bcd8ce] bg-[linear-gradient(145deg,#f5fbf8_0%,#f4f9ff_100%)] px-6 py-8 text-center transition hover:border-[#0f766e]"
-            >
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-white text-[#0f766e] shadow-sm">
-                <UploadCloud className="h-5 w-5" />
-              </span>
-              <span className="mt-3 text-sm font-semibold text-[#1a3d35]">Click to browse and upload photos</span>
-              <span className="mt-1 text-xs text-[#67857c]">Supports JPG, PNG, and WEBP formats</span>
-            </button>
           </section>
 
           {visibleFolderPhotos.length === 0 ? (

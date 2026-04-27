@@ -1,14 +1,14 @@
 import { getPrismaUnavailableMessage, isPrismaUnavailableError } from "@/lib/prisma-errors";
+import { normalizeEmail } from "@/lib/input-security";
 import { verifyOtp, OtpRateLimitError } from "@/lib/otp-store";
 import { checkIpThrottle } from "@/lib/ip-throttle";
 import prisma from "@/lib/prisma";
 import { getClientIp } from "@/lib/request-ip";
+import { rejectCrossOriginWrite } from "@/lib/request-security";
 import { setSessionCookie } from "@/lib/session";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 async function createAuthSuccessResponse(email: string, warning?: string) {
   const response = NextResponse.json({
@@ -28,13 +28,18 @@ async function createAuthSuccessResponse(email: string, warning?: string) {
 export async function POST(req: NextRequest) {
   let emailForFallback = "";
 
+  const blocked = rejectCrossOriginWrite(req);
+  if (blocked) {
+    return blocked;
+  }
+
   try {
     const body = await req.json();
-    const email = String(body?.email ?? "").trim().toLowerCase();
+    const email = normalizeEmail(body?.email);
     emailForFallback = email;
     const code = String(body?.code ?? "").replace(/\D/g, "");
 
-    if (!emailRegex.test(email) || code.length !== 6) {
+    if (!email || code.length !== 6) {
       return NextResponse.json({ ok: false, message: "Invalid email or OTP format." }, { status: 400 });
     }
 
@@ -94,7 +99,7 @@ export async function POST(req: NextRequest) {
     if (isPrismaUnavailableError(error)) {
       if (process.env.NODE_ENV !== "production") {
         console.warn("[auth/verify-otp] prisma unavailable, using dev auth fallback");
-        if (!emailRegex.test(emailForFallback)) {
+        if (!emailForFallback) {
           return NextResponse.json({ ok: false, message: "Unable to verify OTP right now." }, { status: 400 });
         }
         return await createAuthSuccessResponse(

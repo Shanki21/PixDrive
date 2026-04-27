@@ -7,7 +7,10 @@ type HeaderCarrier = {
 function sanitizeIp(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return null;
-  return trimmed.slice(0, 100);
+  if (!/^[0-9a-fA-F:.%]+$/.test(trimmed)) {
+    return null;
+  }
+  return trimmed.slice(0, 64);
 }
 
 export function getClientIp(req: HeaderCarrier) {

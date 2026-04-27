@@ -1,17 +1,22 @@
 import { createOtp, OtpRateLimitError } from "@/lib/otp-store";
 import { sendOtpEmail } from "@/lib/email";
+import { normalizeEmail } from "@/lib/input-security";
 import { checkIpThrottle } from "@/lib/ip-throttle";
 import { getClientIp } from "@/lib/request-ip";
+import { rejectCrossOriginWrite } from "@/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 export async function POST(req: NextRequest) {
+  const blocked = rejectCrossOriginWrite(req);
+  if (blocked) {
+    return blocked;
+  }
+
   try {
     const body = await req.json();
-    const email = String(body?.email ?? "").trim().toLowerCase();
+    const email = normalizeEmail(body?.email);
 
-    if (!emailRegex.test(email)) {
+    if (!email) {
       return NextResponse.json({ ok: false, message: "Invalid email" }, { status: 400 });
     }
 

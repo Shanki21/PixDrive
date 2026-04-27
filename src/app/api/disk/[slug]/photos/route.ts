@@ -1,5 +1,6 @@
 import { getGalleryPublicAccess } from "@/lib/gallery-public-access";
 import { getRequiredGalleryPin, hasGalleryAccessFromRequest } from "@/lib/gallery-pin-access";
+import { normalizePublicUrl } from "@/lib/url-security";
 import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -77,7 +78,12 @@ export async function GET(
     }
 
     try {
-      const upstream = await fetch(photo.url, { signal: AbortSignal.timeout(12000) });
+      const sourceUrl = normalizePublicUrl(photo.url);
+      if (!sourceUrl) {
+        return NextResponse.json({ error: "Photo source is unavailable." }, { status: 415 });
+      }
+
+      const upstream = await fetch(sourceUrl, { signal: AbortSignal.timeout(12000) });
       if (!upstream.ok) {
         return NextResponse.json({ error: "Unable to fetch source image." }, { status: 502 });
       }

@@ -1,4 +1,18 @@
+import { normalizePublicOrigin } from "./url-security";
+
 type JsonRecord = Record<string, unknown>;
+const MAX_DATE_LENGTH = 40;
+const MAX_EVENT_FIELD_LENGTH = 160;
+const MAX_DESCRIPTION_LENGTH = 2000;
+const MAX_PIN_LENGTH = 64;
+const MAX_STORAGE_LABEL_LENGTH = 80;
+const MAX_FAVORITES_NAME_LENGTH = 120;
+const MAX_FOLDER_ID_LENGTH = 100;
+const MAX_FOLDER_NAME_LENGTH = 100;
+const MAX_FOLDER_DESCRIPTION_LENGTH = 280;
+const MAX_FOLDER_COUNT = 48;
+const MAX_FOLDER_PHOTO_IDS = 500;
+const MAX_FOLDER_ORDER_IDS = 128;
 
 export type GalleryEventSettings = {
   startDate?: string | null;
@@ -29,6 +43,8 @@ export type GalleryEventSettings = {
 export type GalleryMetaConfig = {
   expiresAt?: string | null;
   storageTimeLabel?: string | null;
+  customDomain?: string | null;
+  customDomainVerified?: boolean;
   favoritesEnabled?: boolean;
   favoritesLimitSelected?: boolean;
   favoritesName?: string | null;
@@ -55,9 +71,9 @@ function asRecord(value: unknown): JsonRecord | null {
   return value as JsonRecord;
 }
 
-function asNullableString(value: unknown) {
+function asNullableString(value: unknown, maxLength = MAX_EVENT_FIELD_LENGTH) {
   if (value == null) return null;
-  const next = String(value).trim();
+  const next = String(value).trim().slice(0, maxLength);
   return next || null;
 }
 
@@ -70,28 +86,31 @@ function asNumber(value: unknown, fallback: number) {
   return value;
 }
 
-function asStringArray(value: unknown) {
+function asStringArray(value: unknown, maxItems = MAX_FOLDER_ORDER_IDS, itemMaxLength = MAX_FOLDER_ID_LENGTH) {
   if (!Array.isArray(value)) return [];
   return value
+    .slice(0, maxItems)
     .map((entry) => String(entry ?? "").trim())
+    .map((entry) => entry.slice(0, itemMaxLength))
     .filter((entry) => entry.length > 0);
 }
 
 function asFolderMetaArray(value: unknown): GalleryFolderMeta[] {
   if (!Array.isArray(value)) return [];
   return value
+    .slice(0, MAX_FOLDER_COUNT)
     .map((entry) => {
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
       const record = entry as JsonRecord;
-      const id = asNullableString(record.id) ?? "";
-      const name = asNullableString(record.name) ?? "";
+      const id = asNullableString(record.id, MAX_FOLDER_ID_LENGTH) ?? "";
+      const name = asNullableString(record.name, MAX_FOLDER_NAME_LENGTH) ?? "";
       if (!id || !name) return null;
       return {
         id,
         name,
-        description: asNullableString(record.description) ?? "",
+        description: asNullableString(record.description, MAX_FOLDER_DESCRIPTION_LENGTH) ?? "",
         hidden: asBoolean(record.hidden, false),
-        createdAt: asNullableString(record.createdAt) ?? new Date().toISOString(),
+        createdAt: asNullableString(record.createdAt, MAX_DATE_LENGTH) ?? new Date().toISOString(),
       };
     })
     .filter((entry): entry is GalleryFolderMeta => Boolean(entry));
@@ -101,10 +120,10 @@ function asFolderPhotosMap(value: unknown): Record<string, string[]> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const record = value as JsonRecord;
   const normalized: Record<string, string[]> = {};
-  for (const [key, raw] of Object.entries(record)) {
-    const cleanKey = key.trim();
+  for (const [key, raw] of Object.entries(record).slice(0, MAX_FOLDER_COUNT)) {
+    const cleanKey = key.trim().slice(0, MAX_FOLDER_ID_LENGTH);
     if (!cleanKey) continue;
-    normalized[cleanKey] = asStringArray(raw);
+    normalized[cleanKey] = asStringArray(raw, MAX_FOLDER_PHOTO_IDS, MAX_FOLDER_ID_LENGTH);
   }
   return normalized;
 }
@@ -116,20 +135,20 @@ export function normalizeEventSettings(value: unknown): GalleryEventSettings | n
   const oneQrAccessLevel = access === "full" || access === "guest" ? access : "guest";
 
   return {
-    startDate: asNullableString(record.startDate),
-    endDate: asNullableString(record.endDate),
-    eventType: asNullableString(record.eventType),
-    eventLocation: asNullableString(record.eventLocation),
-    description: asNullableString(record.description),
+    startDate: asNullableString(record.startDate, MAX_DATE_LENGTH),
+    endDate: asNullableString(record.endDate, MAX_DATE_LENGTH),
+    eventType: asNullableString(record.eventType, MAX_EVENT_FIELD_LENGTH),
+    eventLocation: asNullableString(record.eventLocation, MAX_EVENT_FIELD_LENGTH),
+    description: asNullableString(record.description, MAX_DESCRIPTION_LENGTH),
     published: asBoolean(record.published, true),
     photoSellingEnabled: asBoolean(record.photoSellingEnabled, false),
     reelitAiEnabled: asBoolean(record.reelitAiEnabled, false),
     brandingEnabled: asBoolean(record.brandingEnabled, false),
-    expiryDate: asNullableString(record.expiryDate),
-    fullAccessPin: asNullableString(record.fullAccessPin),
-    guestPin: asNullableString(record.guestPin),
-    fullAccessPinHash: asNullableString(record.fullAccessPinHash),
-    guestPinHash: asNullableString(record.guestPinHash),
+    expiryDate: asNullableString(record.expiryDate, MAX_DATE_LENGTH),
+    fullAccessPin: asNullableString(record.fullAccessPin, MAX_PIN_LENGTH),
+    guestPin: asNullableString(record.guestPin, MAX_PIN_LENGTH),
+    fullAccessPinHash: asNullableString(record.fullAccessPinHash, 200),
+    guestPinHash: asNullableString(record.guestPinHash, 200),
     allowSingleDownload: asBoolean(record.allowSingleDownload, true),
     allowBulkDownload: asBoolean(record.allowBulkDownload, false),
     whatsappEnabled: asBoolean(record.whatsappEnabled, false),
@@ -146,11 +165,16 @@ export function normalizeGalleryMeta(value: unknown): GalleryMetaConfig | null {
   const record = asRecord(value);
   if (!record) return null;
   return {
-    expiresAt: asNullableString(record.expiresAt),
-    storageTimeLabel: asNullableString(record.storageTimeLabel),
+    expiresAt: asNullableString(record.expiresAt, MAX_DATE_LENGTH),
+    storageTimeLabel: asNullableString(record.storageTimeLabel, MAX_STORAGE_LABEL_LENGTH),
+    customDomain:
+      normalizePublicOrigin(String(record.customDomain ?? ""), {
+        allowHttpLocalhost: process.env.NODE_ENV !== "production",
+      }) ?? null,
+    customDomainVerified: typeof record.customDomainVerified === "boolean" ? record.customDomainVerified : false,
     favoritesEnabled: asBoolean(record.favoritesEnabled, true),
     favoritesLimitSelected: asBoolean(record.favoritesLimitSelected, false),
-    favoritesName: asNullableString(record.favoritesName),
+    favoritesName: asNullableString(record.favoritesName, MAX_FAVORITES_NAME_LENGTH),
     favoritesListsCount: Math.max(0, asNumber(record.favoritesListsCount, 0)),
     selectionCompletedCount: Math.max(0, asNumber(record.selectionCompletedCount, 0)),
     favoritesMaxSelected:
@@ -159,7 +183,7 @@ export function normalizeGalleryMeta(value: unknown): GalleryMetaConfig | null {
         : Math.max(0, asNumber(record.favoritesMaxSelected, 0)),
     folders: asFolderMetaArray(record.folders),
     folderPhotosMap: asFolderPhotosMap(record.folderPhotosMap),
-    folderOrder: asStringArray(record.folderOrder),
+    folderOrder: asStringArray(record.folderOrder, MAX_FOLDER_ORDER_IDS, MAX_FOLDER_ID_LENGTH),
   };
 }
 
@@ -188,5 +212,20 @@ export function mergeGalleryMeta(existing: unknown, incoming: unknown): GalleryM
   const base = normalizeGalleryMeta(existing) ?? {};
   const next = normalizeGalleryMeta(incoming);
   if (!next) return null;
-  return { ...base, ...next };
+  // Merge customDomain carefully: if domain changes, clear verification flag.
+  const existingDomain = base.customDomain ?? null;
+  const incomingDomain = next.customDomain ?? null;
+  const customDomain = incomingDomain ?? existingDomain ?? null;
+  let customDomainVerified = base.customDomainVerified ?? false;
+  if (incomingDomain != null && incomingDomain !== existingDomain) {
+    // new domain was provided: require re-verification
+    customDomainVerified = false;
+  }
+
+  return {
+    ...base,
+    ...next,
+    customDomain,
+    customDomainVerified,
+  };
 }

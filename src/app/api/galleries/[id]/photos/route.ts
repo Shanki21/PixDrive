@@ -1,6 +1,9 @@
 import { isCloudinaryConfigured, uploadImageDataUrl } from "@/lib/cloudinary";
+import { normalizeSingleLine } from "@/lib/input-security";
 import prisma from "@/lib/prisma";
+import { rejectCrossOriginWrite } from "@/lib/request-security";
 import { getSessionEmailFromRequestAsync } from "@/lib/session";
+import { normalizePublicUrl } from "@/lib/url-security";
 import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
 
@@ -11,32 +14,11 @@ const MAX_EXTERNAL_URL_LENGTH = 2048;
 const MAX_PHOTO_NAME_LENGTH = 180;
 const ALLOWED_DATA_URL_MIME = /^data:image\/(jpeg|jpg|png|webp|gif);base64,/i;
 
-function isPrivateHostname(hostname: string) {
-  const lower = hostname.toLowerCase();
-  if (lower === "localhost" || lower.endsWith(".localhost")) return true;
-  if (lower === "::1") return true;
-  if (/^\d+\.\d+\.\d+\.\d+$/.test(lower)) {
-    const [a, b] = lower.split(".").map((v) => Number(v));
-    if (!Number.isFinite(a) || !Number.isFinite(b)) return true;
-    if (a === 10 || a === 127 || a === 0) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 169 && b === 254) return true;
-    if (a === 172 && b >= 16 && b <= 31) return true;
-  }
-  if (lower.startsWith("fc") || lower.startsWith("fd") || lower.startsWith("fe80")) return true;
-  return false;
-}
-
 function normalizeExternalImageUrl(value: string) {
   if (!value || value.length > MAX_EXTERNAL_URL_LENGTH) return null;
-  try {
-    const parsed = new URL(value);
-    if (parsed.protocol !== "https:") return null;
-    if (isPrivateHostname(parsed.hostname)) return null;
-    return parsed.toString();
-  } catch {
-    return null;
-  }
+  return normalizePublicUrl(value, {
+    allowHttpLocalhost: process.env.NODE_ENV !== "production",
+  });
 }
 
 export async function GET(
@@ -106,6 +88,11 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const blocked = rejectCrossOriginWrite(req);
+  if (blocked) {
+    return blocked;
+  }
+
   const { id } = await params;
   const email = await getSessionEmailFromRequestAsync(req);
   if (!email) {
@@ -140,7 +127,7 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const name = String(body?.name ?? "").trim();
+  const name = normalizeSingleLine(body?.name, MAX_PHOTO_NAME_LENGTH);
   const rawUrl = String(body?.url ?? "").trim();
   if (!name || !rawUrl) {
     return NextResponse.json({ error: "name and url are required" }, { status: 400 });

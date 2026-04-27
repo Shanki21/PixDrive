@@ -55,9 +55,8 @@ function Toggle({
       type="button"
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-        checked ? "bg-[#0f766e]" : "bg-[#d8e5df]"
-      } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${checked ? "bg-[#0f766e]" : "bg-[#d8e5df]"
+        } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
       aria-pressed={checked}
     >
       <span
@@ -109,9 +108,8 @@ function ControlToggleRow({
 }) {
   return (
     <div
-      className={`flex items-start justify-between gap-4 rounded-xl border border-[#e2eee8] bg-[#fbfdfc] px-4 py-3 ${
-        disabled ? "opacity-60" : ""
-      }`}
+      className={`flex items-start justify-between gap-4 rounded-xl border border-[#e2eee8] bg-[#fbfdfc] px-4 py-3 ${disabled ? "opacity-60" : ""
+        }`}
     >
       <div>
         <p className="text-sm font-semibold text-[#1f3f36]">{title}</p>
@@ -136,11 +134,10 @@ function CreateEventsPageContent() {
   const [description, setDescription] = useState("");
   const [brandingEnabled, setBrandingEnabled] = useState(false);
   const [favoritesEnabled, setFavoritesEnabled] = useState(true);
-  const [favoritesName, setFavoritesName] = useState("Selecting photos");
   const [favoritesLimitSelected, setFavoritesLimitSelected] = useState(false);
   const [favoritesMaxSelected, setFavoritesMaxSelected] = useState(1);
 
-  const [advancedOpen, setAdvancedOpen] = useState(true);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [expiryDate, setExpiryDate] = useState("");
   const [fullAccessPin, setFullAccessPin] = useState("");
   const [guestPin, setGuestPin] = useState("");
@@ -153,7 +150,7 @@ function CreateEventsPageContent() {
   const [oneQrAccessLevel, setOneQrAccessLevel] = useState<"full" | "guest">("guest");
   const [galleryAppEnabled, setGalleryAppEnabled] = useState(true);
   const [livenessDetectionEnabled, setLivenessDetectionEnabled] = useState(false);
-  const [published, setPublished] = useState(true);
+  const [published, setPublished] = useState(false);
   const [loadingEditData, setLoadingEditData] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -168,8 +165,47 @@ function CreateEventsPageContent() {
       };
     }
 
-    setLoadingEditData(true);
     setErrorMessage(null);
+
+    const applyGalleryData = (gallery: ExistingGalleryResponse) => {
+      const settings = gallery.settings ?? null;
+      const galleryMeta = gallery.meta ?? null;
+      const createdDate = toDateInputValue(gallery.createdAt) || todayDate;
+      const rawEventType = settings?.eventType?.trim();
+      const normalizedEventType =
+        rawEventType && EVENT_TYPES.includes(rawEventType as (typeof EVENT_TYPES)[number])
+          ? rawEventType
+          : rawEventType
+            ? "Other"
+            : EVENT_TYPES[0];
+
+      if (!active) return;
+
+      setEventName(gallery.name ?? "");
+      setStartDate(settings?.startDate ?? createdDate);
+      setEndDate(settings?.endDate ?? settings?.startDate ?? createdDate);
+      setEventType(normalizedEventType);
+      setEventLocation(settings?.eventLocation ?? "");
+      setDescription(settings?.description ?? "");
+      setBrandingEnabled(settings?.brandingEnabled ?? false);
+      setFavoritesEnabled(galleryMeta?.favoritesEnabled ?? true);
+      setFavoritesLimitSelected(galleryMeta?.favoritesLimitSelected ?? false);
+      setFavoritesMaxSelected(Math.max(1, galleryMeta?.favoritesMaxSelected ?? 1));
+      setExpiryDate(settings?.expiryDate ?? toDateInputValue(galleryMeta?.expiresAt) ?? "");
+      setFullAccessPin(settings?.fullAccessPin ?? "");
+      setGuestPin(settings?.guestPin ?? "");
+      setAllowSingleDownload(settings?.allowSingleDownload ?? true);
+      setAllowBulkDownload(settings?.allowBulkDownload ?? false);
+      setWhatsappEnabled(settings?.whatsappEnabled ?? false);
+      setEmailEnabled(settings?.emailEnabled ?? false);
+      setOneQrEnabled(settings?.oneQrEnabled ?? true);
+      setOneQrRequirePin(settings?.oneQrRequirePin ?? false);
+      setOneQrAccessLevel(settings?.oneQrAccessLevel ?? "guest");
+      setGalleryAppEnabled(settings?.galleryAppEnabled ?? true);
+      setLivenessDetectionEnabled(settings?.livenessDetectionEnabled ?? false);
+      setPublished(settings?.published ?? false);
+    };
+    setLoadingEditData(true);
 
     const loadForEdit = async () => {
       try {
@@ -180,43 +216,8 @@ function CreateEventsPageContent() {
         }
 
         const gallery = (await response.json()) as ExistingGalleryResponse;
-        const settings = gallery.settings ?? null;
-        const galleryMeta = gallery.meta ?? null;
-        const createdDate = toDateInputValue(gallery.createdAt) || todayDate;
-        const rawEventType = settings?.eventType?.trim();
-        const normalizedEventType =
-          rawEventType && EVENT_TYPES.includes(rawEventType as (typeof EVENT_TYPES)[number])
-            ? rawEventType
-            : rawEventType
-              ? "Other"
-              : EVENT_TYPES[0];
-
         if (!active) return;
-
-        setEventName(gallery.name ?? "");
-        setStartDate(settings?.startDate ?? createdDate);
-        setEndDate(settings?.endDate ?? settings?.startDate ?? createdDate);
-        setEventType(normalizedEventType);
-        setEventLocation(settings?.eventLocation ?? "");
-        setDescription(settings?.description ?? "");
-        setBrandingEnabled(settings?.brandingEnabled ?? false);
-        setFavoritesEnabled(galleryMeta?.favoritesEnabled ?? true);
-        setFavoritesName(galleryMeta?.favoritesName ?? "Selecting photos");
-        setFavoritesLimitSelected(galleryMeta?.favoritesLimitSelected ?? false);
-        setFavoritesMaxSelected(Math.max(1, galleryMeta?.favoritesMaxSelected ?? 1));
-        setExpiryDate(settings?.expiryDate ?? toDateInputValue(galleryMeta?.expiresAt) ?? "");
-        setFullAccessPin(settings?.fullAccessPin ?? "");
-        setGuestPin(settings?.guestPin ?? "");
-        setAllowSingleDownload(settings?.allowSingleDownload ?? true);
-        setAllowBulkDownload(settings?.allowBulkDownload ?? false);
-        setWhatsappEnabled(settings?.whatsappEnabled ?? false);
-        setEmailEnabled(settings?.emailEnabled ?? false);
-        setOneQrEnabled(settings?.oneQrEnabled ?? true);
-        setOneQrRequirePin(settings?.oneQrRequirePin ?? false);
-        setOneQrAccessLevel(settings?.oneQrAccessLevel ?? "guest");
-        setGalleryAppEnabled(settings?.galleryAppEnabled ?? true);
-        setLivenessDetectionEnabled(settings?.livenessDetectionEnabled ?? false);
-        setPublished(settings?.published ?? true);
+        applyGalleryData(gallery);
       } catch (error) {
         if (!active) return;
         const fallback = "Unable to load event details for editing.";
@@ -233,6 +234,17 @@ function CreateEventsPageContent() {
       active = false;
     };
   }, [editGalleryId, isEditMode, todayDate]);
+
+useEffect(() => {
+      if (!isEditMode) return;
+
+      return () => {
+        // reset to avoid leakage
+        setEventName("");
+        setEventLocation("");
+        setDescription("");
+      };
+    }, [editGalleryId]);
 
   const canSubmit = useMemo(() => {
     const hasValidName = eventName.trim().length > 0;
@@ -282,7 +294,7 @@ function CreateEventsPageContent() {
         storageTimeLabel: expiresAtIso ? "Custom expiry" : null,
         favoritesEnabled,
         favoritesLimitSelected,
-        favoritesName: favoritesName.trim() || "Selecting photos",
+        favoritesName: "Favorites", // fixed value
         favoritesMaxSelected: favoritesLimitSelected ? Math.max(1, favoritesMaxSelected) : null,
       };
 
@@ -488,16 +500,6 @@ function CreateEventsPageContent() {
             trailing={<Toggle checked={favoritesEnabled} onChange={setFavoritesEnabled} />}
           />
           <div className={`mt-4 space-y-4 ${favoritesEnabled ? "" : "opacity-60"}`}>
-            <label className="text-sm font-semibold text-[#2d4f46]">
-              Favorites Label
-              <input
-                value={favoritesName}
-                onChange={(e) => setFavoritesName(e.target.value)}
-                disabled={!favoritesEnabled}
-                placeholder="Selecting photos"
-                className="mt-1 h-12 w-full rounded-xl border border-[#d5e7df] bg-white px-4 text-sm text-[#1a352d] outline-none focus:border-[#0f766e] disabled:cursor-not-allowed disabled:bg-[#f7fbf9]"
-              />
-            </label>
             <ControlToggleRow
               title="Limit Selected Photos"
               description="Restrict how many photos each client can add to favorites."
@@ -676,11 +678,10 @@ function CreateEventsPageContent() {
                           type="button"
                           onClick={() => setOneQrAccessLevel("full")}
                           disabled={!oneQrEnabled}
-                          className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
-                            oneQrAccessLevel === "full"
+                          className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${oneQrAccessLevel === "full"
                               ? "border-[#0f766e] bg-[#eaf8f2] text-[#0f766e]"
                               : "border-[#d6e8df] bg-white text-[#36574d]"
-                          } ${!oneQrEnabled ? "cursor-not-allowed opacity-60" : ""}`}
+                            } ${!oneQrEnabled ? "cursor-not-allowed opacity-60" : ""}`}
                         >
                           Full Access
                         </button>
@@ -688,11 +689,10 @@ function CreateEventsPageContent() {
                           type="button"
                           onClick={() => setOneQrAccessLevel("guest")}
                           disabled={!oneQrEnabled}
-                          className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
-                            oneQrAccessLevel === "guest"
+                          className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${oneQrAccessLevel === "guest"
                               ? "border-[#0f766e] bg-[#eaf8f2] text-[#0f766e]"
                               : "border-[#d6e8df] bg-white text-[#36574d]"
-                          } ${!oneQrEnabled ? "cursor-not-allowed opacity-60" : ""}`}
+                            } ${!oneQrEnabled ? "cursor-not-allowed opacity-60" : ""}`}
                         >
                           Guest Access
                         </button>
@@ -773,3 +773,4 @@ export default function CreateEventsPage() {
     </Suspense>
   );
 }
+  

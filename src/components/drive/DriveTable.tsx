@@ -1,6 +1,7 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import {
   ArrowUpDown,
   Eye,
@@ -75,6 +76,7 @@ export default function DriveTable({
   onDuplicate,
   onDelete,
   onReorder,
+  onOpen,
 }: {
   galleries: MinimalGallery[];
   trashCount: number;
@@ -88,6 +90,7 @@ export default function DriveTable({
   onDuplicate: (gallery: MinimalGallery) => void;
   onDelete: (gallery: MinimalGallery) => void;
   onReorder: (draggedId: string, targetId: string) => void;
+  onOpen?: (gallery: MinimalGallery) => void;
 }) {
   const [openSort, setOpenSort] = useState(false);
   const [field, setField] = useState<SortField>("createdAt");
@@ -100,7 +103,7 @@ export default function DriveTable({
   const deferredQuery = useDeferredValue(query);
 
   useEffect(() => {
-    const onDocClick = (event: MouseEvent) => {
+    const onDocClick = (event: globalThis.MouseEvent) => {
       const target = event.target as HTMLElement;
       if (!target.closest("[data-sort-wrap]")) {
         setOpenSort(false);
@@ -298,9 +301,10 @@ export default function DriveTable({
           return (
             <article
               key={gallery.id}
-              className={`overflow-hidden rounded-3xl border bg-white shadow-[0_14px_35px_rgba(16,39,32,0.07)] ${
+              className={`overflow-hidden rounded-3xl border bg-white shadow-[0_14px_35px_rgba(16,39,32,0.07)] cursor-pointer ${
                 dragOverId === gallery.id ? "border-[#0f766e]" : "border-[#d8e8e1]"
               }`}
+              onClick={() => onOpen?.(gallery)}
               draggable
               onDragStart={(event) => {
                 event.dataTransfer.setData("text/gallery-id", gallery.id);
@@ -354,18 +358,24 @@ export default function DriveTable({
                 </div>
 
                 {gallery.pinned ? (
-                  <button
-                    type="button"
-                    onClick={() => onPinToggle(gallery)}
+                   <button
+                     type="button"
+                     onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                       e.stopPropagation();
+                       onPinToggle(gallery);
+                     }}
                     className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-[#0f766e]"
                     title="Unpin event"
                   >
                     <Pin className="h-4 w-4" />
                   </button>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => onPinToggle(gallery)}
+                   <button
+                     type="button"
+                     onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                       e.stopPropagation();
+                       onPinToggle(gallery);
+                     }}
                     className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/30 text-white"
                     title="Pin event"
                   >
@@ -411,7 +421,10 @@ export default function DriveTable({
                 <div className="grid grid-cols-[1fr_repeat(4,40px)] items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => onOpenQr(gallery)}
+                    onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                      e.stopPropagation();
+                      onOpenQr(gallery);
+                    }}
                     className="inline-flex items-center justify-center gap-2 rounded-full border border-[#d7e8e0] bg-white px-4 py-2 text-sm font-semibold text-[#23463d] transition hover:border-[#0f766e] hover:text-[#0f766e]"
                   >
                     <QrCode className="h-4 w-4" />
@@ -419,15 +432,20 @@ export default function DriveTable({
                   </button>
                   <button
                     type="button"
-                    onClick={() => onOpenQr(gallery)}
+                    onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                      e.stopPropagation();
+                      onOpenQr(gallery);
+                    }}
                     className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#d8e8e1] bg-white text-[#2f544a] hover:border-[#0f766e] hover:text-[#0f766e]"
                     title="Open in One QR"
                   >
-                    <QrCode className="h-4 w-4" />
                   </button>
                   <button
                     type="button"
-                    onClick={() => onSettings(gallery)}
+                    onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                      e.stopPropagation();
+                      onSettings(gallery);
+                    }}
                     className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#d8e8e1] bg-white text-[#2f544a] hover:border-[#0f766e] hover:text-[#0f766e]"
                     title="Edit event"
                   >
@@ -435,16 +453,22 @@ export default function DriveTable({
                   </button>
                   <button
                     type="button"
-                    onClick={() => onDelete(gallery)}
+                    onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                      e.stopPropagation();
+                      onDelete(gallery);
+                    }}
                     className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#f1d9dc] bg-[#fff7f8] text-[#cf224d] hover:border-[#ea9fb0]"
                     title="Delete event"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
                   <div className="relative" data-event-menu>
-                    <button
-                      type="button"
-                      onClick={() => setOpenMenuFor((current) => (current === gallery.id ? null : gallery.id))}
+                      <button
+                        type="button"
+                        onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                          e.stopPropagation();
+                          setOpenMenuFor((current) => (current === gallery.id ? null : gallery.id));
+                        }}
                       className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#d8e8e1] bg-white text-[#2f544a] hover:border-[#0f766e] hover:text-[#0f766e]"
                       title="More actions"
                     >
@@ -454,7 +478,8 @@ export default function DriveTable({
                       <div className="absolute right-0 top-11 z-20 w-56 overflow-hidden rounded-xl border border-[#d7e8e0] bg-white shadow-lg">
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                            e.stopPropagation();
                             setOpenMenuFor(null);
                             onPublishToggle(gallery);
                           }}
@@ -465,7 +490,8 @@ export default function DriveTable({
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                            e.stopPropagation();
                             setOpenMenuFor(null);
                             onPhotoSellingToggle(gallery);
                           }}
@@ -476,7 +502,8 @@ export default function DriveTable({
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                            e.stopPropagation();
                             setOpenMenuFor(null);
                             onPinToggle(gallery);
                           }}
@@ -487,7 +514,8 @@ export default function DriveTable({
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                            e.stopPropagation();
                             setOpenMenuFor(null);
                             onDuplicate(gallery);
                           }}
@@ -498,7 +526,8 @@ export default function DriveTable({
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                            e.stopPropagation();
                             setOpenMenuFor(null);
                             onDelete(gallery);
                           }}

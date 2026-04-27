@@ -1,6 +1,7 @@
 "use client";
 
-import { type ReactNode, useMemo, useState } from "react";
+import Link from "next/link";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
   BadgeDollarSign,
   Brush,
@@ -15,6 +16,14 @@ import {
 
 type SettingsTab = "profile" | "branding" | "domains" | "one-qr" | "integrations" | "plan" | "invoices";
 
+type ProfileResponse = {
+  name?: string | null;
+  occupation?: string | null;
+  phone?: string | null;
+  avatarUrl?: string | null;
+  socialAccounts?: Array<{ platform?: string | null; url?: string | null }> | null;
+};
+
 const tabs: Array<{ key: SettingsTab; label: string; icon: typeof UserRound }> = [
   { key: "profile", label: "Profile", icon: UserRound },
   { key: "branding", label: "Branding", icon: Brush },
@@ -24,6 +33,16 @@ const tabs: Array<{ key: SettingsTab; label: string; icon: typeof UserRound }> =
   { key: "plan", label: "My Plan", icon: BadgeDollarSign },
   { key: "invoices", label: "Invoices", icon: ClipboardList },
 ];
+
+function formatValue(value: string | null | undefined, fallback = "Not set yet") {
+  const next = String(value ?? "").trim();
+  return next || fallback;
+}
+
+function toStudioSlug(seed: string) {
+  const cleaned = seed.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return cleaned || "your-studio";
+}
 
 function TabButton({
   active,
@@ -52,53 +71,162 @@ function TabButton({
   );
 }
 
-function Card({ title, children }: { title: string; children: ReactNode }) {
+function Card({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
   return (
     <article className="rounded-2xl border border-[#d8e8e1] bg-white p-5 shadow-[0_12px_30px_rgba(16,39,32,0.05)]">
       <h3 className="text-lg font-semibold text-[#173029]">{title}</h3>
+      {description ? <p className="mt-1 text-sm text-[#5f7c73]">{description}</p> : null}
       <div className="mt-4 space-y-3">{children}</div>
     </article>
   );
 }
 
+function LabeledValue({
+  label,
+  value,
+  placeholder,
+}: {
+  label: string;
+  value?: string | null;
+  placeholder?: string;
+}) {
+  return (
+    <div className="block">
+      <span className="mb-1.5 block text-xs font-medium uppercase tracking-[0.1em] text-[#5f7c73]">
+        {label}
+      </span>
+      <div className="min-h-11 rounded-xl border border-[#d6e7e1] bg-white px-3 py-3 text-sm text-[#23463d]">
+        {formatValue(value, placeholder)}
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
+  const [profile, setProfile] = useState<ProfileResponse | null>(null);
+  const [accountEmail, setAccountEmail] = useState("");
+  const [loadingProfile, setLoadingProfile] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      try {
+        const [profileRes, meRes] = await Promise.all([
+          fetch("/api/auth/profile", { cache: "no-store" }),
+          fetch("/api/auth/me", { cache: "no-store" }),
+        ]);
+
+        if (!active) return;
+
+        if (profileRes.ok) {
+          const profileData = (await profileRes.json()) as { profile?: ProfileResponse | null };
+          setProfile(profileData.profile ?? null);
+        }
+
+        if (meRes.ok) {
+          const meData = (await meRes.json()) as { email?: string };
+          setAccountEmail(String(meData.email ?? "").trim().toLowerCase());
+        }
+      } catch {
+        // Keep the page usable with empty states.
+      } finally {
+        if (active) {
+          setLoadingProfile(false);
+        }
+      }
+    };
+
+    void load();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const studioSlug = useMemo(
+    () => toStudioSlug(accountEmail || profile?.name || "your-studio"),
+    [accountEmail, profile?.name]
+  );
+  const socialCount = Array.isArray(profile?.socialAccounts) ? profile?.socialAccounts.length : 0;
 
   const content = useMemo(() => {
     if (activeTab === "profile") {
       return (
         <div className="grid gap-5 lg:grid-cols-2">
-          <Card title="Personal Details">
-            <LabeledInput label="Full Name" value="Mridul Rawat" />
-            <LabeledInput label="Mobile Number" value="+91 75319 88764" />
-            <LabeledInput label="Email" value="mridulrrawat12@gmail.com" />
-            <LabeledInput label="Country" value="India" />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <LabeledInput label="State" value="Uttar Pradesh" />
-              <LabeledInput label="City" value="Noida" />
-            </div>
+          <Card
+            title="Personal Details"
+            description="Your contact card, dashboard identity, and client-facing profile data."
+          >
+            <LabeledValue label="Full Name" value={profile?.name} placeholder="Add your name in Card" />
+            <LabeledValue
+              label="Mobile Number"
+              value={profile?.phone}
+              placeholder="Add your phone number in Card"
+            />
+            <LabeledValue
+              label="Email"
+              value={accountEmail}
+              placeholder="Sign in to sync your account email"
+            />
+            <LabeledValue
+              label="Occupation"
+              value={profile?.occupation}
+              placeholder="Tell clients what you do"
+            />
           </Card>
 
-          <Card title="Company Details">
-            <LabeledInput label="Company Name" value="studio xo" />
-            <LabeledInput label="Industry" value="Photographer" />
-            <LabeledInput label="Area" value="Wedding" />
-            <LabeledInput label="Average Events / Year" value="Less than 10" />
+          <Card
+            title="Studio Snapshot"
+            description="A quick summary of the profile information currently connected to Pixora."
+          >
+            <LabeledValue
+              label="Studio Identity"
+              value={profile?.name || accountEmail}
+              placeholder="Create your studio identity"
+            />
+            <LabeledValue
+              label="Primary Role"
+              value={profile?.occupation}
+              placeholder="For example: Wedding photographer"
+            />
+            <LabeledValue
+              label="Social Accounts"
+              value={socialCount > 0 ? `${socialCount} connected` : ""}
+              placeholder="No social accounts connected yet"
+            />
+            <LabeledValue
+              label="Profile Status"
+              value={loadingProfile ? "Syncing profile..." : "Live in dashboard"}
+            />
           </Card>
 
           <div className="lg:col-span-2">
-            <Card title="Billing Details">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <LabeledInput label="Company Name (As Per GST/VAT)" value="" placeholder="Company name" />
-                <LabeledInput label="GST/VAT Number" value="" placeholder="GST/VAT number" />
-              </div>
-              <div className="pt-1">
-                <button
-                  type="button"
+            <Card
+              title="Profile Management"
+              description="Use the Card workspace to update your public-facing contact card, profile photo, and social links."
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#dce9e3] bg-[#f5fbf8] px-4 py-4">
+                <div>
+                  <p className="text-sm font-semibold text-[#173029]">Manage your Pixora card</p>
+                  <p className="mt-1 text-sm text-[#5f7c73]">
+                    Keep one professional source of truth for your brand contact details.
+                  </p>
+                </div>
+                <Link
+                  href="/dashboard/card"
                   className="inline-flex h-10 items-center rounded-xl bg-[#1f3d35] px-5 text-sm font-semibold text-white transition hover:bg-[#163029]"
                 >
-                  Save
-                </button>
+                  Open Card Editor
+                </Link>
               </div>
             </Card>
           </div>
@@ -110,59 +238,55 @@ export default function SettingsPage() {
       return (
         <div className="space-y-5">
           <div className="grid gap-5 lg:grid-cols-2">
-            <Card title="Connect Domain">
+            <Card
+              title="Custom Domain"
+              description="Point your own domain to Pixora when DNS and SSL automation are configured."
+            >
               <p className="text-sm text-[#5f7c73]">
-                Connect your own domain and display galleries under your branding.
+                Bring galleries under your own brand with a production domain like `gallery.yourstudio.com`.
               </p>
-              <button
-                type="button"
-                className="mt-2 inline-flex h-10 items-center rounded-full bg-[#7b899f] px-5 text-sm font-semibold text-white transition hover:bg-[#627088]"
-              >
-                Connect Domain
-              </button>
+              <div className="rounded-xl border border-dashed border-[#cde2d8] bg-[#f7fbf9] px-4 py-3 text-sm text-[#48665d]">
+                Domain onboarding is ready for infrastructure hookup.
+              </div>
             </Card>
-            <Card title="Connect Sub-Domain">
-              <p className="text-sm text-[#5f7c73]">
-                Use Pixora hosted sub-domain to launch fast with your studio name.
-              </p>
-              <button
-                type="button"
-                className="mt-2 inline-flex h-10 items-center rounded-full bg-[#7b899f] px-5 text-sm font-semibold text-white transition hover:bg-[#627088]"
-              >
-                Connect Sub-Domain
-              </button>
+            <Card
+              title="Pixora Sub-Domain"
+              description="Launch quickly with a hosted Pixora sub-domain while your custom domain is being prepared."
+            >
+              <div className="rounded-xl border border-[#e2ece8] bg-[#f6fbf9] px-4 py-3 text-sm text-[#23463d]">
+                <p className="font-semibold">site.pixora.ai/{studioSlug}</p>
+                <p className="mt-1 text-[#5f7c73]">
+                  Generated from your account identity and ready to configure.
+                </p>
+              </div>
             </Card>
           </div>
-
-          <Card title="Pixora Domains">
-            <div className="rounded-xl border border-[#e2ece8]">
-              <div className="grid grid-cols-2 gap-3 border-b border-[#e2ece8] bg-[#f6fbf9] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#5f7c73]">
-                <span>Domain Name</span>
-                <span>Status</span>
-              </div>
-              <div className="grid grid-cols-2 gap-3 px-4 py-3 text-sm text-[#23463d]">
-                <span className="inline-flex items-center gap-2">
-                  site.pixora.ai/studioxo
-                  <span className="rounded-full bg-[#eaf8f2] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#0f766e]">
-                    Primary
-                  </span>
-                </span>
-                <span>Active</span>
-              </div>
-            </div>
-          </Card>
         </div>
       );
     }
 
+    if (activeTab === "invoices") {
+      return (
+        <Card
+          title="Billing and Invoices"
+          description="Billing tooling is not connected yet, so invoices will appear here after payment flows are enabled."
+        >
+          <div className="rounded-xl border border-dashed border-[#d6e7df] bg-[#f8fbfa] px-4 py-4 text-sm text-[#5f7c73]">
+            No invoices are available yet.
+          </div>
+        </Card>
+      );
+    }
+
     return (
-      <Card title="Coming Soon">
+      <Card title="Coming Soon" description="This section is under Pixora theme migration and production hardening.">
         <p className="text-sm text-[#5f7c73]">
-          This section is under Pixora theme migration and production hardening.
+          The foundation is in place, and the live profile/domain surfaces are already using real data instead of
+          demo placeholders.
         </p>
       </Card>
     );
-  }, [activeTab]);
+  }, [accountEmail, activeTab, loadingProfile, profile, socialCount, studioSlug]);
 
   return (
     <div className="mx-auto w-full max-w-7xl rounded-3xl border border-[#d8e8e1] bg-[#f8fbfa] p-4 shadow-[0_20px_50px_rgba(16,39,32,0.08)] sm:p-6">
@@ -179,7 +303,13 @@ export default function SettingsPage() {
           </div>
           <nav className="mt-3 space-y-1">
             {tabs.map(({ key, label, icon }) => (
-              <TabButton key={key} active={activeTab === key} label={label} Icon={icon} onClick={() => setActiveTab(key)} />
+              <TabButton
+                key={key}
+                active={activeTab === key}
+                label={label}
+                Icon={icon}
+                onClick={() => setActiveTab(key)}
+              />
             ))}
           </nav>
         </aside>
@@ -191,7 +321,11 @@ export default function SettingsPage() {
                 <h1 className="text-2xl font-semibold tracking-[-0.02em] text-[#132723]">
                   {tabs.find((tab) => tab.key === activeTab)?.label ?? "Settings"}
                 </h1>
-                <p className="mt-1 text-sm text-[#5f7c73]">Reference layout with Pixora brand colors and spacing.</p>
+                <p className="mt-1 text-sm text-[#5f7c73]">
+                  {loadingProfile
+                    ? "Syncing your latest Pixora account data..."
+                    : "Live account settings with production-friendly empty states."}
+                </p>
               </div>
               <div className="inline-flex items-center gap-2 rounded-full border border-[#d9e9e3] bg-[#f3faf7] px-3 py-1 text-xs font-semibold text-[#0f766e]">
                 <Building2 className="h-3.5 w-3.5" />
@@ -204,27 +338,5 @@ export default function SettingsPage() {
         </section>
       </div>
     </div>
-  );
-}
-
-function LabeledInput({
-  label,
-  value,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  placeholder?: string;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-medium uppercase tracking-[0.1em] text-[#5f7c73]">{label}</span>
-      <input
-        readOnly
-        value={value}
-        placeholder={placeholder}
-        className="h-11 w-full rounded-xl border border-[#d6e7e1] bg-white px-3 text-sm text-[#23463d] outline-none"
-      />
-    </label>
   );
 }
