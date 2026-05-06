@@ -71,7 +71,7 @@ export async function GET(
 
     const photo = await prisma.photo.findFirst({
       where: { id: downloadId, galleryId: gallery.id },
-      select: { name: true, url: true },
+      select: { id: true, name: true, url: true },
     });
 
     if (!photo) {

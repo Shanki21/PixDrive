@@ -307,7 +307,7 @@ export default function ReviewsPage() {
                     <p className="text-xs text-[#8a7f73]">{review.galleryName}</p>
                   </div>
                 </div>
-                <p className="w-80 whitespace-pre-wrap break-words text-sm text-[#4a433d]">{review.text}</p>
+                <p className="w-80 whitespace-pre-wrap wrap-break-word text-sm text-[#4a433d]">{review.text}</p>
                 <span className="text-sm text-[#4a433d]">{formatDate(review.createdAt)}</span>
                 <button
                   type="button"

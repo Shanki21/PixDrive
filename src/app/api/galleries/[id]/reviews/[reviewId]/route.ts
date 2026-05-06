@@ -97,7 +97,8 @@ async function getOwnedReview(email: string, galleryId: string, reviewId: string
 }
 
 export const PATCH = withApiHandler(
-  withRateLimit(async (req: NextRequest, { params }: RouteContext) => {
+  withRateLimit(async (req: NextRequest, ...rest: unknown[]) => {
+    const { params } = rest[0] as RouteContext;
     const blocked = rejectCrossOriginWrite(req);
     if (blocked) {
       return blocked;
@@ -165,7 +166,8 @@ export const PATCH = withApiHandler(
 );
 
 export const DELETE = withApiHandler(
-  withRateLimit(async (req: NextRequest, { params }: RouteContext) => {
+  withRateLimit(async (req: NextRequest, ...rest: unknown[]) => {
+    const { params } = rest[0] as RouteContext;
     const blocked = rejectCrossOriginWrite(req);
     if (blocked) {
       return blocked;

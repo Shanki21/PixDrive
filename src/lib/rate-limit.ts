@@ -4,6 +4,10 @@ import { getSessionEmailFromRequestAsync } from "@/lib/session";
 import type { NextRequest, NextResponse } from "next/server";
 import { NextResponse as NR } from "next/server";
 
+declare global {
+  var wfRateLimitIdemp: Map<string, number> | undefined;
+}
+
 export function withRateLimit(
   handler: (req: NextRequest, ...rest: unknown[]) => Promise<NextResponse> | NextResponse,
   opts?: { keyPrefix?: string; limit?: number; windowMs?: number; dedupeMs?: number }
@@ -14,11 +18,6 @@ export function withRateLimit(
   const dedupeMs = opts?.dedupeMs ?? 5_000;
 
   // simple in-memory dedupe map for Idempotency-Key to avoid processing duplicate
-  declare global {
-    // global variable to store recent idempotency entries between HMR reloads
-    // eslint rules not needed here
-    var wfRateLimitIdemp: Map<string, number> | undefined;
-  }
 
   const idempStore = globalThis.wfRateLimitIdemp ?? new Map<string, number>();
   if (!globalThis.wfRateLimitIdemp) globalThis.wfRateLimitIdemp = idempStore;
@@ -47,13 +46,13 @@ export function withRateLimit(
     // Prefer user-specific throttle when a session email is available
     let principalKey: string | null = null;
     try {
-      const email = await getSessionEmailFromRequestAsync(req as unknown as Request);
+      const email = await getSessionEmailFromRequestAsync(req);
       if (email) principalKey = `user:${email}`;
     } catch {
       // ignore errors reading session; fallback to IP
     }
 
-    const ip = getClientIp(req as unknown as Request) ?? "unknown";
+    const ip = getClientIp(req) ?? "unknown";
     const keyPrincipal = principalKey ? `${prefix}:${principalKey}` : `${prefix}:ip:${ip}`;
     const throttle = await checkIpThrottle({ key: keyPrincipal, limit, windowMs });
     if (!throttle.ok) {

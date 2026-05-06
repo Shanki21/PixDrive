@@ -93,7 +93,8 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 }
 
 export const POST = withApiHandler(
-  withRateLimit(async (req: NextRequest, { params }: RouteContext) => {
+  withRateLimit(async (req: NextRequest, ...rest: unknown[]) => {
+    const { params } = rest[0] as RouteContext;
     const blocked = rejectCrossOriginWrite(req);
     if (blocked) {
       return blocked;

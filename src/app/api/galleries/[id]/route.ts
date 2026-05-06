@@ -93,13 +93,13 @@ export async function GET(
 }
 
 export const PATCH = withApiHandler(
-  withRateLimit(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  withRateLimit(async (req: NextRequest, ...rest: unknown[]) => {
+  const { params } = rest[0] as { params: Promise<{ id: string }> };
+  const { id } = await params;
   const blocked = rejectCrossOriginWrite(req);
   if (blocked) {
     return blocked;
   }
-
-  const { id } = await params;
   const email = await getSessionEmailFromRequestAsync(req);
   if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -175,13 +175,13 @@ export const PATCH = withApiHandler(
 );
 
 export const DELETE = withApiHandler(
-  withRateLimit(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  withRateLimit(async (req: NextRequest, ...rest: unknown[]) => {
+    const { params } = rest[0] as { params: Promise<{ id: string }> };
+    const { id } = await params;
     const blocked = rejectCrossOriginWrite(req);
     if (blocked) {
       return blocked;
     }
-
-    const { id } = await params;
     const email = await getSessionEmailFromRequestAsync(req);
     if (!email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

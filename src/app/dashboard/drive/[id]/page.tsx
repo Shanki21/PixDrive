@@ -1451,7 +1451,7 @@ export default function DriveDetailPage() {
                 const selectionKey = getFavoriteSelectionKey(selection);
                 const isActive = activeFavoriteFolder && getFavoriteSelectionKey(activeFavoriteFolder) === selectionKey;
                 return (
-                  <div key={selectionKey} className="relative min-w-52 max-w-[260px] flex-1">
+                  <div key={selectionKey} className="relative min-w-52 max-w-65 flex-1">
                     <button
                       type="button"
                       onClick={() => setSelectedFavoriteFolderKey(selectionKey)}

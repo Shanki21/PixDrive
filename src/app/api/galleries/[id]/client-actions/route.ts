@@ -202,11 +202,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export const POST = withApiHandler(
-  withRateLimit(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  withRateLimit(async (req: NextRequest, ...rest: unknown[]) => {
+    const { params } = rest[0] as { params: Promise<{ id: string }> };
+    const { id } = await params;
     const blocked = rejectCrossOriginWrite(req);
     if (blocked) return blocked;
-
-    const { id } = await params;
     const body = await req.json().catch(() => null);
     const actions = normalizeActions(body);
 

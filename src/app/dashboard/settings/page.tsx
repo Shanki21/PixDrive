@@ -101,7 +101,7 @@ function LabeledValue({
 }) {
   return (
     <div className="block">
-      <span className="mb-1.5 block text-xs font-medium uppercase tracking-[0.1em] text-[#7a6a55]">
+      <span className="mb-1.5 block text-xs font-medium uppercase tracking-widest text-[#7a6a55]">
         {label}
       </span>
       <div className="min-h-11 rounded-xl border border-[#d6e7e1] bg-white px-3 py-3 text-sm text-[#5b3a23]">

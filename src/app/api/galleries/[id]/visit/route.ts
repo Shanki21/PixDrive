@@ -18,14 +18,15 @@ import { withApiHandler } from "@/lib/withApiHandler";
 import { withRateLimit } from "@/lib/rate-limit";
 
 export const POST = withApiHandler(
-  withRateLimit(async (req: NextRequest, { params }: RouteContext) => {
+  withRateLimit(async (req: NextRequest, ...rest: unknown[]) => {
+    const { params } = rest[0] as RouteContext;
+    const { id: galleryId } = await params;
     const blocked = rejectCrossOriginWrite(req);
     if (blocked) {
       return blocked;
     }
 
     try {
-      const { id: galleryId } = await params;
       const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
       const clientKey = normalizeClientKey(body.clientKey);
       const clientLocation = normalizeOptionalSingleLine(body.clientLocation, MAX_CLIENT_LOCATION_LENGTH);

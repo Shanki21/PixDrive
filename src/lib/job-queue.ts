@@ -8,7 +8,7 @@ const queueKey = "wf:jobs:emails";
 
 const memoryQueue: string[] = [];
 
-async function runUpstashPipeline(commands: Array<Array<string | number>>): Promise<unknown[] | null> {
+async function runUpstashPipeline(commands: Array<Array<string | number>>): Promise<Array<{ result?: unknown }> | null> {
   if (!upstashUrl || !upstashToken) return null;
   const response = await fetchWithRetry(`${upstashUrl}/pipeline`, {
     method: "POST",
@@ -20,7 +20,7 @@ async function runUpstashPipeline(commands: Array<Array<string | number>>): Prom
     cache: "no-store",
   }, { dedupeKey: `upstash:pipeline:${JSON.stringify(commands).slice(0,200)}` });
   if (!response.ok) throw new Error(`Upstash request failed with status ${response.status}`);
-  return (await response.json()) as unknown[];
+  return (await response.json()) as Array<{ result?: unknown }>;
 }
 
 export async function enqueueSendOtp(params: { to: string; otp: string }) {
