@@ -68,7 +68,7 @@ export default function Navbar({
         </Link>
         <Link
           className={`rounded-full px-4 py-2 text-sm font-semibold sm:px-5 ${
-            isDrive ? "bg-[#2a85b8] text-white" : "bg-white text-[#15161a]"
+            isDrive ? "bg-[#2a85b8] text-white" : "bg-white text-[#2a170d]"
           }`}
           href="/signup"
         >

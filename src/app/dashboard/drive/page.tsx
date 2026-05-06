@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import fetchWithRetry from "@/lib/fetchWithRetry";
 import { useRouter } from "next/navigation";
 import DriveHeader from "@/components/drive/DriveHeader";
 import DriveTable from "@/components/drive/DriveTable";
@@ -41,7 +42,7 @@ export default function DrivePage() {
 
   useEffect(() => {
     const load = async () => {
-      const res = await fetch("/api/galleries", { cache: "no-store" });
+      const res = await fetchWithRetry("/api/galleries", { cache: "no-store" }, { dedupeKey: `client:galleries:list` });
       const contentType = res.headers.get("content-type") ?? "";
       if (!res.ok || !contentType.includes("application/json")) {
         return;
@@ -118,16 +119,16 @@ export default function DrivePage() {
 
       <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <article className="rounded-2xl border border-[#d3e8df] bg-white p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-[#5f7f74]">Active Events</p>
-          <p className="mt-2 text-2xl font-semibold text-[#142924]">{galleries.length}</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-[#7a6a55]">Active Events</p>
+          <p className="mt-2 text-2xl font-semibold text-[#2a170d]">{galleries.length}</p>
         </article>
         <article className="rounded-2xl border border-[#d3e8df] bg-white p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-[#5f7f74]">Files Managed</p>
-          <p className="mt-2 text-2xl font-semibold text-[#142924]">{totalFiles}</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-[#7a6a55]">Files Managed</p>
+          <p className="mt-2 text-2xl font-semibold text-[#2a170d]">{totalFiles}</p>
         </article>
         <article className="rounded-2xl border border-[#d3e8df] bg-white p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-[#5f7f74]">Pinned Priority</p>
-          <p className="mt-2 text-2xl font-semibold text-[#142924]">{pinnedCount}</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-[#7a6a55]">Pinned Priority</p>
+          <p className="mt-2 text-2xl font-semibold text-[#2a170d]">{pinnedCount}</p>
         </article>
       </div>
 
@@ -162,11 +163,12 @@ export default function DrivePage() {
             const nextPublished = !(gallery.published ?? true);
             const payload: GalleryEventSettings = { published: nextPublished };
             try {
-              const res = await fetch(`/api/galleries/${encodeURIComponent(gallery.id)}`, {
+              const dedupe = `galleries:patch:settings:${gallery.id}`;
+              const res = await fetchWithRetry(`/api/galleries/${encodeURIComponent(gallery.id)}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ settings: payload }),
-              });
+              }, { dedupeKey: dedupe, idempotencyKey: `${dedupe}:${Date.now()}` });
               if (!res.ok) return;
               setGalleries((prev) =>
                 prev.map((item) => (item.id === gallery.id ? { ...item, published: nextPublished } : item))
@@ -179,11 +181,12 @@ export default function DrivePage() {
             const nextPhotoSelling = !(gallery.photoSellingEnabled ?? false);
             const payload: GalleryEventSettings = { photoSellingEnabled: nextPhotoSelling };
             try {
-              const res = await fetch(`/api/galleries/${encodeURIComponent(gallery.id)}`, {
+              const dedupe = `galleries:patch:photoSelling:${gallery.id}`;
+              const res = await fetchWithRetry(`/api/galleries/${encodeURIComponent(gallery.id)}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ settings: payload }),
-              });
+              }, { dedupeKey: dedupe, idempotencyKey: `${dedupe}:${Date.now()}` });
               if (!res.ok) return;
               setGalleries((prev) =>
                 prev.map((item) =>
@@ -207,9 +210,10 @@ export default function DrivePage() {
           }}
           onDelete={async (gallery) => {
             try {
-              const res = await fetch(`/api/galleries/${encodeURIComponent(gallery.id)}`, {
+              const dedupe = `galleries:delete:${gallery.id}`;
+              const res = await fetchWithRetry(`/api/galleries/${encodeURIComponent(gallery.id)}`, {
                 method: "DELETE",
-              });
+              }, { dedupeKey: dedupe, idempotencyKey: dedupe });
               if (!res.ok) return;
 
               const deleted: MinimalGallery = {
@@ -251,7 +255,7 @@ export default function DrivePage() {
           <button
             type="button"
             onClick={() => setTab("galleries")}
-            className="rounded-xl border border-[#d2e7de] bg-white px-4 py-2 text-sm font-semibold text-[#25493f] transition hover:border-[#0f766e] hover:text-[#0f766e]"
+            className="rounded-xl border border-[#ead7c5] bg-white px-4 py-2 text-sm font-semibold text-[#5b3a23] transition hover:border-[#7a3f13] hover:text-[#7a3f13]"
           >
             Back to My Events
           </button>

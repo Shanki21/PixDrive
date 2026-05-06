@@ -74,7 +74,8 @@ function toNumber(value: unknown) {
 
 async function runUpstashPipeline(commands: Array<Array<string | number>>) {
   if (!upstashUrl || !upstashToken) return null;
-  const response = await fetch(`${upstashUrl}/pipeline`, {
+  const { default: fetchWithRetry } = await import("@/lib/fetchWithRetry");
+  const response = await fetchWithRetry(`${upstashUrl}/pipeline`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${upstashToken}`,
@@ -82,7 +83,7 @@ async function runUpstashPipeline(commands: Array<Array<string | number>>) {
     },
     body: JSON.stringify(commands),
     cache: "no-store",
-  });
+  }, { dedupeKey: `upstash:pipeline:${JSON.stringify(commands).slice(0,200)}` });
 
   if (!response.ok) {
     throw new Error(`Upstash request failed with status ${response.status}`);

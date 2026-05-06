@@ -29,11 +29,11 @@ export default function Workflow() {
               <Card className="p-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div className="flex items-start gap-4">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#cde6e2] bg-[#eef6f5] text-[#0f766e]">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#ead7c5] bg-[#eef6f5] text-[#7a3f13]">
                       <step.Icon className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-[14px] font-medium text-[#0f766e]">Step {index + 1}</p>
+                      <p className="text-[14px] font-medium text-[#7a3f13]">Step {index + 1}</p>
                       <h3 className="mt-1 text-[20px] font-medium text-[#111111]">{step.label}</h3>
                       <p className="mt-2 max-w-[760px] text-[16px] text-[#666666]">{step.detail}</p>
                     </div>

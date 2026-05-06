@@ -15,6 +15,8 @@ import { getSessionEmailFromRequestAsync } from "@/lib/session";
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import slugify from "slugify";
+import { withApiHandler } from "@/lib/withApiHandler";
+import { withRateLimit } from "@/lib/rate-limit";
 
 const MAX_GALLERY_NAME_LENGTH = 160;
 
@@ -165,56 +167,58 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
-  const blocked = rejectCrossOriginWrite(req);
-  if (blocked) {
-    return blocked;
-  }
-
-  try {
-    const email = await getSessionEmail(req);
-    if (!email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export const POST = withApiHandler(
+  withRateLimit(async (req: NextRequest) => {
+    const blocked = rejectCrossOriginWrite(req);
+    if (blocked) {
+      return blocked;
     }
 
-    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    try {
+      const email = await getSessionEmail(req);
+      if (!email) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
 
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: {},
-      create: { email },
-    });
+      const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 
-    const name = normalizeSingleLine(body?.name, MAX_GALLERY_NAME_LENGTH);
-    const safeName = name || "Untitled gallery";
-    const settings = normalizeEventSettings(body?.settings) ?? {};
-    const meta = normalizeGalleryMeta(body?.meta) ?? {};
-    const secureSettings = await secureEventSettingsForStorage(settings);
+      const user = await prisma.user.upsert({
+        where: { email },
+        update: {},
+        create: { email },
+      });
 
-    const gallery = await prisma.gallery.create({
-      data: {
-        name: safeName,
-        slug: `${slugify(safeName, { lower: true, strict: true }) || "gallery"}-${Date.now()}`,
-        userId: user.id,
-        settings: secureSettings ?? Prisma.JsonNull,
-        meta: meta ?? Prisma.JsonNull,
-      },
-    });
+      const name = normalizeSingleLine(body?.name, MAX_GALLERY_NAME_LENGTH);
+      const safeName = name || "Untitled gallery";
+      const settings = normalizeEventSettings(body?.settings) ?? {};
+      const meta = normalizeGalleryMeta(body?.meta) ?? {};
+      const secureSettings = await secureEventSettingsForStorage(settings);
 
-    return NextResponse.json({
-      ...gallery,
-      settings: maskEventSettingsPins(normalizeEventSettings(gallery.settings) ?? {}),
-      meta: normalizeGalleryMeta(gallery.meta) ?? {},
-    });
-  } catch (error) {
-    console.error("Failed to create gallery:", error);
-    return NextResponse.json(
-      {
-        error: isPrismaUnavailableError(error)
-          ? getPrismaUnavailableMessage()
-          : "Unable to create gallery",
-      },
-      { status: isPrismaUnavailableError(error) ? 503 : 500 }
-    );
-  }
-}
+      const gallery = await prisma.gallery.create({
+        data: {
+          name: safeName,
+          slug: `${slugify(safeName, { lower: true, strict: true }) || "gallery"}-${Date.now()}`,
+          userId: user.id,
+          settings: secureSettings ?? Prisma.JsonNull,
+          meta: meta ?? Prisma.JsonNull,
+        },
+      });
+
+      return NextResponse.json({
+        ...gallery,
+        settings: maskEventSettingsPins(normalizeEventSettings(gallery.settings) ?? {}),
+        meta: normalizeGalleryMeta(gallery.meta) ?? {},
+      });
+    } catch (error) {
+      console.error("Failed to create gallery:", error);
+      return NextResponse.json(
+        {
+          error: isPrismaUnavailableError(error)
+            ? getPrismaUnavailableMessage()
+            : "Unable to create gallery",
+        },
+        { status: isPrismaUnavailableError(error) ? 503 : 500 }
+      );
+    }
+  }, { keyPrefix: "galleries:create", limit: 10, windowMs: 60 * 60 * 1000 })
+);

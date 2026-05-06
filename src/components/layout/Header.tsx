@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import fetchWithRetry from "@/lib/fetchWithRetry";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, CalendarClock, ChevronDown, LogOut, Plus, Search, Settings2, UserRound } from "lucide-react";
+import { Bell, CalendarClock, ChevronDown, LogOut, Plus, Search, Settings2 } from "lucide-react";
 
 export default function Topbar() {
   const router = useRouter();
@@ -16,7 +17,7 @@ export default function Topbar() {
     weekday: "short",
     month: "short",
     day: "numeric",
-  });
+  }).toUpperCase();
 
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
@@ -34,7 +35,7 @@ export default function Topbar() {
 
     const loadMe = async () => {
       try {
-        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const res = await fetchWithRetry("/api/auth/me", { cache: "no-store" }, { dedupeKey: `client:me:load` });
         if (!res.ok) return;
         const data = (await res.json()) as { email?: string };
         const email = String(data.email ?? "").trim().toLowerCase();
@@ -63,7 +64,7 @@ export default function Topbar() {
     if (loggingOut) return;
     setLoggingOut(true);
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      await fetchWithRetry("/api/auth/logout", { method: "POST" }, { dedupeKey: `client:logout:${profileEmail}` });
     } catch {
       // Ignore logout API failures and continue client redirect.
     } finally {
@@ -75,31 +76,31 @@ export default function Topbar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 border-b border-[#d7e7e0] bg-[#f7faf8]/95 px-4 py-4 backdrop-blur md:px-8 md:py-5">
+    <header className="sticky top-0 z-30 border-b border-[#ead7c5] bg-[#fffaf4]/92 px-4 py-4 backdrop-blur md:px-8 md:py-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <label className="relative block min-w-[220px] flex-1 md:max-w-[560px]">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5f7a71]" />
+        <label className="relative block min-w-[220px] flex-1 md:max-w-[620px]">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a3f13]" />
           <input
-            className="h-11 w-full rounded-xl border border-[#d1e6dd] bg-white pl-9 pr-3 text-sm text-[#1d3831] placeholder:text-[#79948b] focus:border-[#0f766e] focus:outline-none"
+            className="h-12 w-full rounded-2xl border border-[#ead7c5] bg-[#fffdf8] pl-11 pr-4 text-sm text-[#3a2112] shadow-sm placeholder:text-[#a0866e] focus:border-[#7a3f13] focus:outline-none focus:shadow-[0_0_0_4px_rgba(122,63,19,0.1)]"
             placeholder="Search events, documents, guests..."
           />
         </label>
 
         <div className="flex items-center gap-2">
-          <div className="hidden items-center gap-2 rounded-xl border border-[#d1e6dd] bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#2f6156] sm:inline-flex">
+          <div className="hidden h-12 items-center gap-2 rounded-2xl border border-[#ead7c5] bg-[#fffdf8] px-4 text-xs font-semibold uppercase tracking-[0.12em] text-[#5b3a23] shadow-sm sm:inline-flex">
             <CalendarClock className="h-4 w-4" />
             {today}
           </div>
           <Link
             href="/dashboard/create-events"
-            className="inline-flex items-center gap-1 rounded-xl bg-[#0f766e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#115e59]"
+            className="inline-flex h-12 items-center gap-2 rounded-2xl bg-[#5b2b0c] px-5 text-sm font-semibold text-white shadow-[0_14px_24px_rgba(91,43,12,0.22)] transition hover:bg-[#7a3f13]"
           >
             <Plus className="h-4 w-4" />
             Create Event
           </Link>
           <button
             type="button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#d1e6dd] bg-white text-[#2d554b] hover:bg-[#eef7f3]"
+            className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[#ead7c5] bg-[#fffdf8] text-[#5b3a23] shadow-sm hover:bg-[#f4e5d3]"
             aria-label="Notifications"
           >
             <Bell className="h-4 w-4" />
@@ -108,25 +109,25 @@ export default function Topbar() {
             <button
               type="button"
               onClick={() => setMenuOpen((prev) => !prev)}
-              className="inline-flex items-center gap-2 rounded-xl border border-[#d1e6dd] bg-white px-2.5 py-2 text-[#2d554b] hover:bg-[#eef7f3]"
+              className="inline-flex h-12 items-center gap-2 rounded-2xl border border-[#ead7c5] bg-[#fffdf8] px-2.5 text-[#5b3a23] shadow-sm hover:bg-[#f4e5d3]"
               aria-label="Account menu"
             >
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-[#e7f4ef]">
-                <UserRound className="h-4 w-4" />
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#d8b895] bg-[#f4e5d3] text-xs font-semibold">
+                {profileInitials.slice(0, 1)}
               </span>
               <span className="hidden text-xs font-semibold sm:inline">{profileInitials}</span>
               <ChevronDown className="h-3.5 w-3.5" />
             </button>
             {menuOpen ? (
-              <div className="absolute right-0 top-full z-40 mt-3 w-64 overflow-hidden rounded-2xl border border-[#d4e8df] bg-white shadow-xl">
-                <div className="px-4 py-3 text-sm text-[#537269]">
-                  <p className="font-semibold text-[#142622]">Profile</p>
+              <div className="absolute right-0 top-full z-40 mt-3 w-64 overflow-hidden rounded-2xl border border-[#eadccf] bg-white shadow-xl">
+                <div className="px-4 py-3 text-sm text-[#7a6a55]">
+                  <p className="font-semibold text-[#2a170d]">Profile</p>
                   <p className="text-xs">{profileEmail}</p>
                 </div>
-                <div className="h-px bg-[#edf5f1]" />
+                <div className="h-px bg-[#f4eadf]" />
                 <Link
                   href="/dashboard/qr-code"
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-[#2d554b] hover:bg-[#f4faf7]"
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-[#5b3a23] hover:bg-[#fff7ee]"
                 >
                   <Settings2 className="h-4 w-4" />
                   One QR
@@ -145,7 +146,7 @@ export default function Topbar() {
           </div>
         </div>
       </div>
-      <div className="mt-3 flex items-center gap-2 text-xs font-medium text-[#608178] sm:hidden">
+      <div className="mt-3 flex items-center gap-2 text-xs font-medium text-[#7a6a55] sm:hidden">
         <CalendarClock className="h-3.5 w-3.5" />
         <span>{today}</span>
       </div>

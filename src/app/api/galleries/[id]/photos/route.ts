@@ -6,6 +6,8 @@ import { getSessionEmailFromRequestAsync } from "@/lib/session";
 import { normalizePublicUrl } from "@/lib/url-security";
 import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
+import { withApiHandler } from "@/lib/withApiHandler";
+import { withRateLimit } from "@/lib/rate-limit";
 
 const MAX_URL_LENGTH = 6_000_000;
 const MAX_PAGE_SIZE = 120;
@@ -84,100 +86,99 @@ export async function GET(
   });
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const blocked = rejectCrossOriginWrite(req);
-  if (blocked) {
-    return blocked;
-  }
-
-  const { id } = await params;
-  const email = await getSessionEmailFromRequestAsync(req);
-  if (!email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true },
-  });
-
-  if (!user) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  const gallery = await prisma.gallery.findFirst({
-    where: {
-      id,
-      userId: user.id,
-    },
-    select: { id: true },
-  });
-
-  if (!gallery) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  let body: { name?: unknown; url?: unknown };
-  try {
-    body = (await req.json()) as { name?: unknown; url?: unknown };
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-
-  const name = normalizeSingleLine(body?.name, MAX_PHOTO_NAME_LENGTH);
-  const rawUrl = String(body?.url ?? "").trim();
-  if (!name || !rawUrl) {
-    return NextResponse.json({ error: "name and url are required" }, { status: 400 });
-  }
-  if (name.length > MAX_PHOTO_NAME_LENGTH) {
-    return NextResponse.json({ error: "Photo name is too long." }, { status: 400 });
-  }
-
-  let url = rawUrl;
-  const isDataUrl = url.startsWith(DATA_URL_PREFIX);
-  if (isDataUrl) {
-    if (!ALLOWED_DATA_URL_MIME.test(url)) {
-      return NextResponse.json({ error: "Unsupported image format." }, { status: 400 });
+export const POST = withApiHandler(
+  withRateLimit(async (req: NextRequest, ...rest: unknown[]) => {
+    const { params } = rest[0] as { params: Promise<{ id: string }> };
+    const { id } = await params;
+    const blocked = rejectCrossOriginWrite(req);
+    if (blocked) {
+      return blocked;
     }
-  } else {
-    const external = normalizeExternalImageUrl(url);
-    if (!external) {
-      return NextResponse.json({ error: "Only secure public HTTPS image URLs are allowed." }, { status: 400 });
-    }
-    url = external;
-  }
-
-  if (url.length > MAX_URL_LENGTH) {
-    return NextResponse.json({ error: "Image payload is too large" }, { status: 413 });
-  }
-
-  try {
-    let finalUrl = url;
-    if (url.startsWith(DATA_URL_PREFIX)) {
-      if (!isCloudinaryConfigured()) {
-        return NextResponse.json(
-          { error: "Cloudinary is not configured. Configure media environment variables." },
-          { status: 500 }
-        );
-      }
-      const uploaded = await uploadImageDataUrl(url);
-      finalUrl = uploaded.url;
+    const email = await getSessionEmailFromRequestAsync(req);
+    if (!email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const photo = await prisma.photo.create({
-      data: {
-        name,
-        url: finalUrl,
-        galleryId: gallery.id,
-      },
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
     });
 
-    return NextResponse.json(photo);
-  } catch (error) {
-    console.error("Failed to create photo:", error);
-    return NextResponse.json({ error: "Unable to save photo" }, { status: 500 });
-  }
-}
+    if (!user) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const gallery = await prisma.gallery.findFirst({
+      where: {
+        id,
+        userId: user.id,
+      },
+      select: { id: true },
+    });
+
+    if (!gallery) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    let body: { name?: unknown; url?: unknown };
+    try {
+      body = (await req.json()) as { name?: unknown; url?: unknown };
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    const name = normalizeSingleLine(body?.name, MAX_PHOTO_NAME_LENGTH);
+    const rawUrl = String(body?.url ?? "").trim();
+    if (!name || !rawUrl) {
+      return NextResponse.json({ error: "name and url are required" }, { status: 400 });
+    }
+    if (name.length > MAX_PHOTO_NAME_LENGTH) {
+      return NextResponse.json({ error: "Photo name is too long." }, { status: 400 });
+    }
+
+    let url = rawUrl;
+    const isDataUrl = url.startsWith(DATA_URL_PREFIX);
+    if (isDataUrl) {
+      if (!ALLOWED_DATA_URL_MIME.test(url)) {
+        return NextResponse.json({ error: "Unsupported image format." }, { status: 400 });
+      }
+    } else {
+      const external = normalizeExternalImageUrl(url);
+      if (!external) {
+        return NextResponse.json({ error: "Only secure public HTTPS image URLs are allowed." }, { status: 400 });
+      }
+      url = external;
+    }
+
+    if (url.length > MAX_URL_LENGTH) {
+      return NextResponse.json({ error: "Image payload is too large" }, { status: 413 });
+    }
+
+    try {
+      let finalUrl = url;
+      if (url.startsWith(DATA_URL_PREFIX)) {
+        if (!isCloudinaryConfigured()) {
+          return NextResponse.json(
+            { error: "Cloudinary is not configured. Configure media environment variables." },
+            { status: 500 }
+          );
+        }
+        const uploaded = await uploadImageDataUrl(url);
+        finalUrl = uploaded.url;
+      }
+
+      const photo = await prisma.photo.create({
+        data: {
+          name,
+          url: finalUrl,
+          galleryId: gallery.id,
+        },
+      });
+
+      return NextResponse.json(photo);
+    } catch (error) {
+      console.error("Failed to create photo:", error);
+      return NextResponse.json({ error: "Unable to save photo" }, { status: 500 });
+    }
+  }, { keyPrefix: "gallery:photos", limit: 200, windowMs: 15 * 60 * 1000 })
+);

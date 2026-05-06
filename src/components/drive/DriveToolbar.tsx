@@ -7,7 +7,7 @@ export default function DriveToolbar({ onAdd }: { onAdd: () => void }) {
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4">
         <button
           onClick={onAdd}
-          className="rounded-xl bg-[#0e7ac4] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0b649f]"
+          className="rounded-xl bg-[#7a3f13] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#5b2b0c]"
         >
           + Create event
         </button>
@@ -15,7 +15,7 @@ export default function DriveToolbar({ onAdd }: { onAdd: () => void }) {
       </div>
 
       <div className="self-end sm:self-auto">
-        <a href="#" className="text-sm font-semibold text-[#0c6fb2] hover:underline">
+        <a href="#" className="text-sm font-semibold text-[#7a3f13] hover:underline">
           Event setup guide
         </a>
       </div>

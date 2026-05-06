@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import fetchWithRetry from "@/lib/fetchWithRetry";
 import AddGalleryModal from "@/components/drive/AddGalleryModal";
 import type { GalleryMetaConfig } from "@/lib/gallery-config";
 import { MinimalGallery } from "@/types/DriveTableTypes";
@@ -341,8 +342,8 @@ export default function DriveDetailPage() {
       setError(null);
       try {
         const [galleryRes, photosRes] = await Promise.all([
-          fetch(`/api/galleries/${galleryId}`),
-          fetch(`/api/galleries/${galleryId}/photos?take=120`),
+          fetchWithRetry(`/api/galleries/${galleryId}`, {}, { dedupeKey: `client:galleries:load:${galleryId}` }),
+          fetchWithRetry(`/api/galleries/${galleryId}/photos?take=120`, {}, { dedupeKey: `client:galleries:photos:${galleryId}:take=120` }),
         ]);
 
         const galleryType = galleryRes.headers.get("content-type") ?? "";
@@ -412,8 +413,8 @@ export default function DriveDetailPage() {
     const loadServerClientSignals = async () => {
       try {
         const [favoritesRes, downloadsRes] = await Promise.all([
-          fetch(`/api/galleries/${galleryId}/client-actions?action=favorite`),
-          fetch(`/api/galleries/${galleryId}/client-actions?action=download`),
+          fetchWithRetry(`/api/galleries/${galleryId}/client-actions?action=favorite`, {}, { dedupeKey: `client:galleries:client-actions:${galleryId}:favorite` }),
+          fetchWithRetry(`/api/galleries/${galleryId}/client-actions?action=download`, {}, { dedupeKey: `client:galleries:client-actions:${galleryId}:download` }),
         ]);
 
         if (favoritesRes.ok) {
@@ -487,7 +488,7 @@ export default function DriveDetailPage() {
   useEffect(() => {
     if (!galleryId || !gallery) return;
     const timeout = window.setTimeout(() => {
-      void fetch(`/api/galleries/${encodeURIComponent(galleryId)}`, {
+      void fetchWithRetry(`/api/galleries/${encodeURIComponent(galleryId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -497,7 +498,7 @@ export default function DriveDetailPage() {
             folderOrder,
           },
         }),
-      });
+      }, { dedupeKey: `client:galleries:meta:patch:${galleryId}`, idempotencyKey: `client:galleries:meta:patch:${galleryId}:${Date.now()}` });
     }, 450);
     return () => window.clearTimeout(timeout);
   }, [folderOrder, folderPhotos, folders, gallery, galleryId]);
@@ -552,6 +553,21 @@ export default function DriveDetailPage() {
       favoriteFolders[0]
     );
   }, [favoriteFolders, selectedFavoriteFolderKey]);
+
+  const activeFavoritePhotos = useMemo(() => {
+    return activeFavoriteFolder ? activeFavoriteFolder.items : favoritePhotos;
+  }, [activeFavoriteFolder, favoritePhotos]);
+
+  const sortedFavoritePhotos = useMemo(() => {
+    if (sortMode === "latest") return activeFavoritePhotos;
+    return [...activeFavoritePhotos].sort((a, b) => a.name.localeCompare(b.name));
+  }, [activeFavoritePhotos, sortMode]);
+
+  const visibleFavoritePhotos = useMemo(() => {
+    const query = photoSearch.trim().toLowerCase();
+    if (!query) return sortedFavoritePhotos;
+    return sortedFavoritePhotos.filter((photo) => photo.name.toLowerCase().includes(query));
+  }, [sortedFavoritePhotos, photoSearch]);
 
   const selectedFolderDescription = useMemo(() => {
     if (selectedFolderId === "photos") return "";
@@ -624,11 +640,11 @@ export default function DriveDetailPage() {
       for (const file of files) {
         const dataUrl = await preparePhotoUpload(file);
 
-        const res = await fetch(`/api/galleries/${galleryId}/photos`, {
+        const res = await fetchWithRetry(`/api/galleries/${galleryId}/photos`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name: file.name, url: dataUrl }),
-        });
+        }, { dedupeKey: `drive:upload:${galleryId}:${file.name}`, idempotencyKey: `drive:upload:${galleryId}:${file.name}:${Date.now()}` });
 
         if (!res.ok) {
           if (res.status === 413) {
@@ -691,11 +707,12 @@ export default function DriveDetailPage() {
     if (!nextName || nextName === photo.name) return;
 
     try {
-      const res = await fetch(`/api/photos/${photoId}`, {
+      const dedupe = `drive:photo:rename:${photoId}:${nextName}`;
+      const res = await fetchWithRetry(`/api/photos/${photoId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: nextName }),
-      });
+      }, { dedupeKey: dedupe, idempotencyKey: dedupe });
       if (!res.ok) return;
       setPhotos((prev) => prev.map((item) => (item.id === photoId ? { ...item, name: nextName } : item)));
     } catch {
@@ -705,7 +722,7 @@ export default function DriveDetailPage() {
 
   const downloadPhoto = async (photo: GalleryPhoto) => {
     try {
-      const response = await fetch(photo.url);
+      const response = await fetchWithRetry(photo.url, { method: "GET" }, { dedupeKey: `drive:photo:fetch:${photo.id}` });
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -723,11 +740,12 @@ export default function DriveDetailPage() {
   const setPhotoAsCover = async (photoId: string) => {
     if (!galleryId) return;
     try {
-      const res = await fetch(`/api/galleries/${galleryId}/cover`, {
+      const dedupe = `drive:photo:setcover:${galleryId}:${photoId}`;
+      const res = await fetchWithRetry(`/api/galleries/${galleryId}/cover`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ photoId }),
-      });
+      }, { dedupeKey: dedupe, idempotencyKey: dedupe });
       if (!res.ok) return;
       setCoverPhotoId(photoId);
       setActiveTab("gallery");
@@ -741,7 +759,8 @@ export default function DriveDetailPage() {
     if (!confirmed) return;
 
     try {
-      const res = await fetch(`/api/photos/${photoId}`, { method: "DELETE" });
+      const dedupe = `drive:photo:delete:${photoId}`;
+      const res = await fetchWithRetry(`/api/photos/${photoId}`, { method: "DELETE" }, { dedupeKey: dedupe, idempotencyKey: dedupe });
       if (!res.ok) return;
 
       setPhotos((prev) => prev.filter((item) => item.id !== photoId));
@@ -838,7 +857,8 @@ export default function DriveDetailPage() {
     setFavoriteIds(nextFavoriteIds);
 
     if (selection.clientKey) {
-      void fetch(`/api/galleries/${galleryId}/client-actions`, {
+      const dedupe = `client-actions:favorite:${galleryId}:${selection.clientKey}:${photoId}`;
+      void fetchWithRetry(`/api/galleries/${galleryId}/client-actions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -853,7 +873,7 @@ export default function DriveDetailPage() {
             },
           ],
         }),
-      });
+      }, { dedupeKey: dedupe, idempotencyKey: dedupe });
     }
 
     const stillExists = nextSelections.some(
@@ -904,7 +924,7 @@ export default function DriveDetailPage() {
 
       await Promise.all(
         items.map(async (photo, index) => {
-          const response = await fetch(photo.url);
+          const response = await fetchWithRetry(photo.url, { method: "GET" }, { dedupeKey: `drive:photo:fetch:${photo.id}` });
           const blob = await response.blob();
           const baseName = sanitizeFileName(photo.name || `photo-${index + 1}`);
           const extMatch = baseName.match(/\.[a-z0-9]+$/i);
@@ -1046,10 +1066,10 @@ export default function DriveDetailPage() {
   if (error || !gallery) {
     return (
       <div className="mx-auto w-full max-w-6xl px-6 py-16 text-center">
-        <h1 className="font-display text-3xl font-semibold text-[#15161a]">Gallery unavailable</h1>
+        <h1 className="font-display text-3xl font-semibold text-[#2a170d]">Gallery unavailable</h1>
         <p className="mt-3 text-sm text-[#8a7f73]">{error ?? "This gallery could not be loaded."}</p>
         <button
-          className="mt-6 rounded-full bg-[#101114] px-6 py-2.5 text-sm font-semibold text-white"
+          className="mt-6 rounded-full bg-[#2a170d] px-6 py-2.5 text-sm font-semibold text-white"
           onClick={() => router.push("/dashboard/drive")}
         >
           Back to Drive
@@ -1060,35 +1080,34 @@ export default function DriveDetailPage() {
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 md:px-6 md:py-8">
-      <section className="relative overflow-hidden rounded-[30px] border border-[#d7e8e1] bg-white shadow-[0_22px_44px_rgba(12,46,38,0.08)]">
-        <div className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-[radial-gradient(circle,rgba(15,118,110,0.2)_0%,rgba(15,118,110,0)_70%)]" />
-        <div className="pointer-events-none absolute -left-28 bottom-0 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(37,99,235,0.16)_0%,rgba(37,99,235,0)_72%)]" />
+      <section className="relative overflow-hidden rounded-[30px] border border-[#eadccf] bg-white shadow-[0_22px_44px_rgba(12,46,38,0.08)]">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[#ead7c5]" />
 
         <div className="relative flex flex-col gap-6 px-5 pb-6 pt-7 md:px-8 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <button
               type="button"
-              className="inline-flex items-center gap-2 text-sm font-semibold text-[#5f7b73] transition hover:text-[#153730]"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-[#7a6a55] transition hover:text-[#2a170d]"
               onClick={() => router.push("/dashboard/drive")}
             >
               <span aria-hidden="true">&larr;</span>
               Back to My Events
             </button>
 
-            <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#0f766e]">Pixora Upload Studio</p>
-            <h1 className="mt-2 text-3xl font-bold tracking-[-0.03em] text-[#122520] md:text-4xl">{gallery.name}</h1>
+            <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7a3f13]">Pixora Upload Studio</p>
+            <h1 className="font-display mt-2 text-3xl font-bold text-[#2a170d] md:text-4xl">{gallery.name}</h1>
             <p className="mt-2 text-sm text-[#58726a]">
               Saved until {formatDate(initialGallery?.expiresAt ?? null)}
             </p>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              <span className="rounded-full border border-[#cfe4db] bg-[#f4fbf8] px-3 py-1 text-xs font-semibold text-[#145045]">
+              <span className="rounded-full border border-[#ead7c5] bg-[#fff7ee] px-3 py-1 text-xs font-semibold text-[#7a3f13]">
                 {photos.length} photos
               </span>
-              <span className="rounded-full border border-[#d8e4fa] bg-[#f4f8ff] px-3 py-1 text-xs font-semibold text-[#1f4f93]">
+              <span className="rounded-full border border-[#ead7c5] bg-[#fff4e8] px-3 py-1 text-xs font-semibold text-[#1f4f93]">
                 {favoritePhotos.length} favorites
               </span>
-              <span className="rounded-full border border-[#d7e7de] bg-[#f8fbfa] px-3 py-1 text-xs font-semibold text-[#49685f]">
+              <span className="rounded-full border border-[#d7e7de] bg-[#fffaf4] px-3 py-1 text-xs font-semibold text-[#49685f]">
                 {downloadedIds.size} downloads
               </span>
             </div>
@@ -1099,7 +1118,7 @@ export default function DriveDetailPage() {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#0f766e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#115e59] disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#7a3f13] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#5b2b0c] disabled:cursor-not-allowed disabled:opacity-70"
             >
               <UploadCloud className="h-4 w-4" />
               {uploading ? "Uploading..." : "Upload Photos"}
@@ -1108,7 +1127,7 @@ export default function DriveDetailPage() {
             <button
               type="button"
               onClick={openOneQrTab}
-              className="rounded-xl border border-[#d0e5dc] bg-white px-4 py-2.5 text-sm font-semibold text-[#21453d] transition hover:border-[#0f766e] hover:text-[#0f766e]"
+              className="rounded-xl border border-[#ead7c5] bg-white px-4 py-2.5 text-sm font-semibold text-[#5b3a23] transition hover:border-[#7a3f13] hover:text-[#7a3f13]"
             >
               One QR
             </button>
@@ -1116,7 +1135,7 @@ export default function DriveDetailPage() {
         </div>
       </section>
 
-      <div className="mt-6 flex flex-wrap gap-2 rounded-2xl border border-[#d7e8e1] bg-white p-2">
+      <div className="mt-6 flex flex-wrap gap-2 rounded-2xl border border-[#eadccf] bg-white p-2">
         {[
           { id: "gallery", label: "Gallery" },
           { id: "favorites", label: `Favorites (${favoritePhotos.length})` },
@@ -1126,8 +1145,8 @@ export default function DriveDetailPage() {
             type="button"
             className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
               activeTab === tab.id
-                ? "bg-[linear-gradient(140deg,#0f766e_0%,#1d4ed8_120%)] text-white shadow-[0_8px_20px_rgba(15,118,110,0.25)]"
-                : "text-[#4e6b62] hover:bg-[#f2faf7] hover:text-[#173a31]"
+                ? "bg-[linear-gradient(140deg,#7a3f13_0%,#8b4a18_120%)] text-white shadow-[0_8px_20px_rgba(122,63,19,0.25)]"
+                : "text-[#4e6b62] hover:bg-[#f2faf7] hover:text-[#2a170d]"
             }`}
             onClick={() => setActiveTab(tab.id as typeof activeTab)}
           >
@@ -1147,7 +1166,7 @@ export default function DriveDetailPage() {
 
       {activeTab === "gallery" && (
         <div className="mt-6 space-y-6">
-          <section className="rounded-3xl border border-[#d7e8e1] bg-white p-4 shadow-[0_12px_28px_rgba(13,46,39,0.06)] md:p-5">
+          <section className="rounded-3xl border border-[#eadccf] bg-white p-4 shadow-[0_12px_28px_rgba(13,46,39,0.06)] md:p-5">
             <div className="relative z-20 flex flex-wrap items-stretch gap-3">
               {orderedFolderIds.map((folderId) => {
                 const isPhotos = folderId === "photos";
@@ -1163,12 +1182,12 @@ export default function DriveDetailPage() {
                       onClick={() => setSelectedFolderId(folderId)}
                       className={`w-full rounded-2xl border px-4 py-3.5 pr-12 text-left text-sm transition ${
                         selectedFolderId === folderId
-                          ? "border-[#0f766e] bg-[linear-gradient(150deg,#ebf8f4_0%,#f2f9ff_100%)] text-[#112c26]"
-                          : "border-[#dcebe5] bg-[#fbfdfc] text-[#4e6b62] hover:border-[#c4ddd3] hover:bg-white"
+                          ? "border-[#7a3f13] bg-[linear-gradient(150deg,#ebf8f4_0%,#f2f9ff_100%)] text-[#2a170d]"
+                          : "border-[#dcebe5] bg-[#fffdf8] text-[#4e6b62] hover:border-[#c4ddd3] hover:bg-white"
                       }`}
                     >
                       <p className="flex items-center gap-2 font-semibold">
-                        {!isPhotos && folder?.hidden ? <Lock className="h-4 w-4 text-[#5b7a70]" /> : null}
+                        {!isPhotos && folder?.hidden ? <Lock className="h-4 w-4 text-[#7a6a55]" /> : null}
                         <span>{isPhotos ? "Photos" : folder?.name}</span>
                       </p>
                       <p className="mt-1 text-xs text-[#628178]">
@@ -1183,14 +1202,14 @@ export default function DriveDetailPage() {
                         event.stopPropagation();
                         setMenuOpenFor((prev) => (prev === menuId ? null : menuId));
                       }}
-                      className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full border border-[#d8e9e2] bg-white text-[#2a4d44] shadow-sm transition hover:bg-[#eff8f4]"
+                      className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full border border-[#eadccf] bg-white text-[#2a4d44] shadow-sm transition hover:bg-[#eff8f4]"
                     >
                       <MoreVertical className="h-4 w-4" />
                     </button>
 
                     {menuOpenFor === menuId ? (
                       <div
-                        className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-[#d9e8e2] bg-white shadow-2xl"
+                        className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-[#eadccf] bg-white shadow-2xl"
                         onClick={(event) => event.stopPropagation()}
                       >
                         <div className="py-2 text-sm text-[#2a4a42]">
@@ -1240,7 +1259,7 @@ export default function DriveDetailPage() {
 
               <button
                 type="button"
-                className="min-w-52 rounded-2xl border border-dashed border-[#bfd8ce] bg-[#f7fcfa] px-4 py-3.5 text-left text-sm font-semibold text-[#2f5a4f] transition hover:border-[#0f766e] hover:bg-white"
+                className="min-w-52 rounded-2xl border border-dashed border-[#d8b895] bg-[#f7fcfa] px-4 py-3.5 text-left text-sm font-semibold text-[#6d4426] transition hover:border-[#7a3f13] hover:bg-white"
                 onClick={() => {
                   setEditingFolderId(null);
                   setFolderName("");
@@ -1254,17 +1273,17 @@ export default function DriveDetailPage() {
             </div>
           </section>
 
-          <section className="rounded-3xl border border-[#d7e8e1] bg-white p-5 shadow-[0_12px_28px_rgba(13,46,39,0.06)] md:p-6">
+          <section className="rounded-3xl border border-[#eadccf] bg-white p-5 shadow-[0_12px_28px_rgba(13,46,39,0.06)] md:p-6">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div>
-                <p className="text-sm font-semibold text-[#173a31]">
+                <p className="text-sm font-semibold text-[#2a170d]">
                   {selectedFolderId === "photos" ? "All Photos" : folders.find((folder) => folder.id === selectedFolderId)?.name ?? "Folder"}
                   <span className="ml-2 text-[#67857c]">{visibleFolderPhotos.length} shown / {activeFolderPhotos.length} files</span>
                 </p>
                 {selectedFolderDescription ? (
-                  <p className="mt-1 text-sm text-[#5f7c73]">{selectedFolderDescription}</p>
+                  <p className="mt-1 text-sm text-[#7a6a55]">{selectedFolderDescription}</p>
                 ) : (
-                  <p className="mt-1 text-sm text-[#5f7c73]">Upload, organize, and publish with a clean workflow.</p>
+                  <p className="mt-1 text-sm text-[#7a6a55]">Upload, organize, and publish with a clean workflow.</p>
                 )}
               </div>
 
@@ -1275,7 +1294,7 @@ export default function DriveDetailPage() {
                     value={photoSearch}
                     onChange={(event) => setPhotoSearch(event.target.value)}
                     placeholder="Search by filename"
-                    className="h-11 w-full rounded-xl border border-[#d5e7df] bg-white pl-9 pr-3 text-sm text-[#1e3b34] placeholder:text-[#7c988f] focus:border-[#0f766e] focus:outline-none"
+                    className="h-11 w-full rounded-xl border border-[#ead7c5] bg-white pl-9 pr-3 text-sm text-[#3a2112] placeholder:text-[#a0866e] focus:border-[#7a3f13] focus:outline-none"
                   />
                 </label>
 
@@ -1284,7 +1303,7 @@ export default function DriveDetailPage() {
                   <select
                     value={sortMode}
                     onChange={(event) => setSortMode(event.target.value as "latest" | "name")}
-                    className="h-11 w-full appearance-none rounded-xl border border-[#d5e7df] bg-white pl-9 pr-3 text-sm font-medium text-[#1e3b34] focus:border-[#0f766e] focus:outline-none"
+                    className="h-11 w-full appearance-none rounded-xl border border-[#ead7c5] bg-white pl-9 pr-3 text-sm font-medium text-[#3a2112] focus:border-[#7a3f13] focus:outline-none"
                   >
                     <option value="latest">Newest uploads</option>
                     <option value="name">Name A-Z</option>
@@ -1295,8 +1314,8 @@ export default function DriveDetailPage() {
           </section>
 
           {visibleFolderPhotos.length === 0 ? (
-            <div className="rounded-3xl border border-[#d7e8e1] bg-white px-6 py-14 text-center shadow-[0_12px_28px_rgba(13,46,39,0.06)]">
-              <p className="text-lg font-semibold text-[#173a31]">
+            <div className="rounded-3xl border border-[#eadccf] bg-white px-6 py-14 text-center shadow-[0_12px_28px_rgba(13,46,39,0.06)]">
+              <p className="text-lg font-semibold text-[#2a170d]">
                 {activeFolderPhotos.length === 0 ? "No files in this folder yet" : "No files match this search"}
               </p>
               <p className="mt-2 text-sm text-[#65837a]">
@@ -1308,7 +1327,7 @@ export default function DriveDetailPage() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#0f766e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#115e59]"
+                  className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#7a3f13] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#5b2b0c]"
                 >
                   <UploadCloud className="h-4 w-4" />
                   Upload Photos
@@ -1324,7 +1343,7 @@ export default function DriveDetailPage() {
                 return (
                   <article
                     key={photo.id}
-                    className="group overflow-hidden rounded-2xl border border-[#d9e9e3] bg-white p-2 shadow-[0_10px_26px_rgba(16,39,32,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(16,39,32,0.09)]"
+                    className="group overflow-hidden rounded-2xl border border-[#eadccf] bg-white p-2 shadow-[0_10px_26px_rgba(73,39,20,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(73,39,20,0.09)]"
                   >
                     <div className="relative overflow-hidden rounded-xl">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1383,7 +1402,7 @@ export default function DriveDetailPage() {
                                 action.danger
                                   ? "text-[#e11d48] hover:bg-[#fff0f4]"
                                   : action.active
-                                    ? "text-[#0f766e] hover:bg-[#e9f7f2]"
+                                    ? "text-[#7a3f13] hover:bg-[#e9f7f2]"
                                     : "text-[#315a50] hover:bg-[#edf6f2]"
                               }`}
                             >
@@ -1394,7 +1413,7 @@ export default function DriveDetailPage() {
                       </div>
 
                       {isCover ? (
-                        <span className="absolute bottom-2 left-2 rounded-full bg-[#0f766e] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white">
+                        <span className="absolute bottom-2 left-2 rounded-full bg-[#7a3f13] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white">
                           Cover
                         </span>
                       ) : null}
@@ -1425,114 +1444,176 @@ export default function DriveDetailPage() {
         </div>
       )}
       {activeTab === "favorites" && (
-        <div className="mt-8 space-y-8">
-          {favoriteFolders.length === 0 ? (
-            <div className="rounded-[26px] border border-[#e3d8cc] bg-white p-10 text-center text-[#8a7f73]">
-              No favorites yet. Favorites will appear here when clients like photos in the gallery.
-            </div>
-          ) : (
-            <>
-              <div className="relative z-20 flex flex-wrap items-stretch gap-4">
-                {favoriteFolders.map((selection) => {
-                  const selectionKey = getFavoriteSelectionKey(selection);
-                  return (
+        <div className="mt-6 space-y-6">
+          <section className="rounded-3xl border border-[#eadccf] bg-white p-4 shadow-[0_12px_28px_rgba(13,46,39,0.06)] md:p-5">
+            <div className="relative z-20 flex flex-wrap items-stretch gap-3">
+              {favoriteFolders.map((selection) => {
+                const selectionKey = getFavoriteSelectionKey(selection);
+                const isActive = activeFavoriteFolder && getFavoriteSelectionKey(activeFavoriteFolder) === selectionKey;
+                return (
+                  <div key={selectionKey} className="relative min-w-52 max-w-65 flex-1">
                     <button
-                      key={selectionKey}
                       type="button"
                       onClick={() => setSelectedFavoriteFolderKey(selectionKey)}
-                      className={`min-w-48 rounded-xl border px-4 py-3 text-left text-sm ${
-                        activeFavoriteFolder && getFavoriteSelectionKey(activeFavoriteFolder) === selectionKey
-                          ? "border-[#15161a] bg-white text-[#15161a]"
-                          : "border-[#e3d8cc] bg-white/60 text-[#6b645c]"
+                      className={`w-full rounded-2xl border px-4 py-3.5 pr-12 text-left text-sm transition ${
+                        isActive
+                          ? "border-[#7a3f13] bg-[linear-gradient(150deg,#ebf8f4_0%,#f2f9ff_100%)] text-[#2a170d]"
+                          : "border-[#dcebe5] bg-[#fffdf8] text-[#4e6b62] hover:border-[#c4ddd3] hover:bg-white"
                       }`}
                     >
-                      <p className="font-semibold">{selection.folderName}</p>
-                      <p className="mt-1 text-xs text-[#8a7f73]">{selection.folderDescription}</p>
+                      <p className="flex items-center gap-2 font-semibold">{selection.folderName}</p>
+                      <p className="mt-1 text-xs text-[#628178]">{selection.items.length} files</p>
                     </button>
-                  );
-                })}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-[#eadccf] bg-white p-5 shadow-[0_12px_28px_rgba(13,46,39,0.06)] md:p-6">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-[#2a170d]">
+                  {activeFavoriteFolder ? activeFavoriteFolder.folderName : "All Favorites"}
+                  <span className="ml-2 text-[#67857c]">{visibleFavoritePhotos.length} shown / {activeFavoritePhotos.length} files</span>
+                </p>
+                <p className="mt-1 text-sm text-[#7a6a55]">Favorites from client selections.</p>
               </div>
 
-              {activeFavoriteFolder ? (
-                <div>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-[#8a7f73]">
-                      Favorites folder - {activeFavoriteFolder.items.length} files
-                    </p>
-                    <div className="flex flex-wrap gap-3">
-                    </div>
-                  </div>
+              <div className="flex w-full flex-col gap-3 sm:flex-row xl:w-auto">
+                <label className="relative w-full sm:w-72">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6f8b83]" />
+                  <input
+                    value={photoSearch}
+                    onChange={(event) => setPhotoSearch(event.target.value)}
+                    placeholder="Search by filename"
+                    className="h-11 w-full rounded-xl border border-[#ead7c5] bg-white pl-9 pr-3 text-sm text-[#3a2112] placeholder:text-[#a0866e] focus:border-[#7a3f13] focus:outline-none"
+                  />
+                </label>
 
-                  <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    {activeFavoriteFolder.items.map((photo) => {
-                      return (
-                        <div key={photo.id} className="group relative">
-                          <div className="relative">
-                            <div className="mb-2 flex w-25 items-center overflow-visible rounded-full border border-[#e3d8cc] bg-white/90 opacity-0 shadow transition group-hover:opacity-100">
-                              {[
-                                {
-                                  label: "Open in One QR",
-                                  icon: LinkIcon,
-                                  onClick: openOneQrTab,
-                                  active: false,
-                                  danger: false,
-                                },
-                                {
-                                  label: "Download photo",
-                                  icon: ArrowDownToLine,
-                                  onClick: () => downloadPhoto(photo),
-                                  active: false,
-                                  danger: false,
-                                },
-                                {
-                                  label: "Remove from favorites",
-                                  icon: HeartMinusIcon,
-                                  onClick: () => removeFavoritePhoto(activeFavoriteFolder, photo.id),
-                                  active: true,
-                                  danger: true,
-                                },
-                              ].map((action) => {
-                                const Icon = action.icon;
-                                return (
-                                  <div key={action.label} className="group/action relative">
-                                    <button
-                                      type="button"
-                                      onClick={action.onClick}
-                                      className={`flex h-8 w-8 items-center justify-center transition ${
-                                        action.danger
-                                          ? "text-[#e11d48] hover:bg-[#fde8ee]"
-                                          : action.active
-                                            ? "text-[#d97757] hover:bg-[#f2ece4]"
-                                            : "text-[#4a433d] hover:bg-[#f2ece4]"
-                                      }`}
-                                    >
-                                      <Icon className={`h-4 w-4 ${action.active ? "fill-current" : ""}`} />
-                                    </button>
-                                    <div className="pointer-events-none absolute -top-12 left-1/2 z-20 -translate-x-1/2 rounded-lg bg-[#2a2928] px-3 py-2 text-xs font-semibold text-white opacity-0 shadow-lg transition group-hover/action:opacity-100">
-                                      {action.label}
-                                      <span className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-[#2a2928]" />
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            <div className="h-56 w-full overflow-hidden rounded-[14px] shadow-sm">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={photo.url} alt={photo.name} className="h-full w-full object-cover" />
-                            </div>
-                          </div>
-                          <div className="pt-2">
-                            <p className="truncate text-xs font-semibold uppercase tracking-[0.2em] text-[#6b645c]">
-                              {photo.name}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-            </>
+                <label className="relative w-full sm:w-44">
+                  <SlidersHorizontal className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6f8b83]" />
+                  <select
+                    value={sortMode}
+                    onChange={(event) => setSortMode(event.target.value as "latest" | "name")}
+                    className="h-11 w-full appearance-none rounded-xl border border-[#ead7c5] bg-white pl-9 pr-3 text-sm font-medium text-[#3a2112] focus:border-[#7a3f13] focus:outline-none"
+                  >
+                    <option value="latest">Newest uploads</option>
+                    <option value="name">Name A-Z</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          {visibleFavoritePhotos.length === 0 ? (
+            <div className="rounded-3xl border border-[#eadccf] bg-white px-6 py-14 text-center shadow-[0_12px_28px_rgba(13,46,39,0.06)]">
+              <p className="text-lg font-semibold text-[#2a170d]">
+                {activeFavoritePhotos.length === 0 ? "No favorite files yet" : "No files match this search"}
+              </p>
+              <p className="mt-2 text-sm text-[#65837a]">
+                {activeFavoritePhotos.length === 0 ? "Favorites will appear here when clients like photos." : "Try another filename keyword or switch sort mode."}
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {visibleFavoritePhotos.map((photo) => {
+                const isDownloaded = downloadedIds.has(photo.id);
+                const isLiked = favoriteIds.has(photo.id);
+                const isCover = coverPhotoId === photo.id;
+                return (
+                  <article
+                    key={photo.id}
+                    className="group overflow-hidden rounded-2xl border border-[#eadccf] bg-white p-2 shadow-[0_10px_26px_rgba(73,39,20,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(73,39,20,0.09)]"
+                  >
+                    <div className="relative overflow-hidden rounded-xl">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photo.url}
+                        alt={photo.name}
+                        className="h-56 w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                      />
+
+                      <div className="absolute inset-x-2 top-1 flex flex-wrap items-center gap-1 rounded-xl bg-white/90 p-1.5 opacity-0 shadow-sm backdrop-blur transition group-hover:opacity-70">
+                        {[
+                          {
+                            label: isCover ? "Cover selected" : "Set cover",
+                            icon: Star,
+                            onClick: () => setPhotoAsCover(photo.id),
+                            active: isCover,
+                            danger: false,
+                          },
+                          {
+                            label: "Open in One QR",
+                            icon: LinkIcon,
+                            onClick: () => openPhotoInOneQr(photo.id),
+                            active: false,
+                            danger: false,
+                          },
+                          {
+                            label: "Download",
+                            icon: ArrowDownToLine,
+                            onClick: () => downloadPhoto(photo),
+                            active: false,
+                            danger: false,
+                          },
+                          {
+                            label: "Remove from favorites",
+                            icon: HeartMinusIcon,
+                            onClick: () => activeFavoriteFolder && removeFavoritePhoto(activeFavoriteFolder, photo.id),
+                            active: true,
+                            danger: true,
+                          },
+                        ].map((action) => {
+                          const Icon = action.icon;
+                          return (
+                            <button
+                              key={action.label}
+                              type="button"
+                              title={action.label}
+                              onClick={action.onClick}
+                              className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition ${
+                                action.danger
+                                  ? "text-[#e11d48] hover:bg-[#fff0f4]"
+                                  : action.active
+                                    ? "text-[#7a3f13] hover:bg-[#e9f7f2]"
+                                    : "text-[#315a50] hover:bg-[#edf6f2]"
+                              }`}
+                            >
+                              <Icon className={`h-3.5 w-3.5 ${action.active ? "fill-current" : ""}`} />
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {isCover ? (
+                        <span className="absolute bottom-2 left-2 rounded-full bg-[#7a3f13] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white">
+                          Cover
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="px-1 pb-1 pt-3">
+                      <p className="truncate text-sm font-semibold text-[#18352e]">{photo.name}</p>
+                      <div className="mt-2 flex items-center gap-1.5">
+                        {isDownloaded ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-[#edf6f2] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#2b6659]">
+                            <ArrowDownToLine className="h-3 w-3" />
+                            Downloaded
+                          </span>
+                        ) : null}
+                        {isLiked ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-[#fff1f4] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#d81b60]">
+                            <Heart className="h-3 w-3 fill-current" />
+                            Liked
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
           )}
         </div>
       )}
@@ -1556,11 +1637,11 @@ export default function DriveDetailPage() {
               selectionCompletedCount: updated.selectionCompletedCount ?? 0,
               favoritesMaxSelected: updated.favoritesMaxSelected ?? null,
             };
-            void fetch(`/api/galleries/${encodeURIComponent(updated.id)}`, {
+            void fetchWithRetry(`/api/galleries/${encodeURIComponent(updated.id)}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ name: updated.name, meta: metaPayload }),
-            });
+            }, { dedupeKey: `client:galleries:meta:patch:${updated.id}`, idempotencyKey: `client:galleries:meta:patch:${updated.id}:${Date.now()}` });
             setGallery((prev) =>
               prev
                 ? {
@@ -1581,7 +1662,7 @@ export default function DriveDetailPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-xl rounded-2xl bg-white p-8 shadow-2xl">
             <div className="flex items-center justify-between">
-              <h3 className="text-2xl font-semibold text-[#15161a]">Create favorites folder</h3>
+              <h3 className="text-2xl font-semibold text-[#2a170d]">Create favorites folder</h3>
               <button
                 type="button"
                 className="h-9 w-9 rounded-full bg-[#f0e6db] text-[#6b645c]"
@@ -1596,7 +1677,7 @@ export default function DriveDetailPage() {
               </button>
             </div>
             <div className="mt-6 space-y-4 rounded-xl bg-[#f8f4ee] p-6">
-              <label className="block text-sm font-semibold text-[#15161a]">
+              <label className="block text-sm font-semibold text-[#2a170d]">
                 Folder name
                 <input
                   value={favoriteFolderName}
@@ -1605,7 +1686,7 @@ export default function DriveDetailPage() {
                   className="mt-2 h-11 w-full rounded-md border border-[#e3d8cc] bg-white px-3"
                 />
               </label>
-              <label className="block text-sm font-semibold text-[#15161a]">
+              <label className="block text-sm font-semibold text-[#2a170d]">
                 Description
                 <textarea
                   value={favoriteFolderDescription}
@@ -1631,7 +1712,7 @@ export default function DriveDetailPage() {
               <button
                 type="button"
                 onClick={createFavoriteFolder}
-                className="rounded-md bg-[#101114] px-6 py-2 text-sm font-semibold text-white"
+                className="rounded-md bg-[#2a170d] px-6 py-2 text-sm font-semibold text-white"
               >
                 Save folder
               </button>
@@ -1644,7 +1725,7 @@ export default function DriveDetailPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-2xl rounded-2xl bg-white p-8 shadow-2xl">
             <div className="flex items-center justify-between">
-              <h3 className="text-2xl font-semibold text-[#15161a]">
+              <h3 className="text-2xl font-semibold text-[#2a170d]">
                 {editingFolderId ? "Edit folder" : "Adding a new folder"}
               </h3>
               <button
@@ -1662,7 +1743,7 @@ export default function DriveDetailPage() {
               </button>
             </div>
             <div className="mt-6 space-y-4 rounded-xl bg-[#f8f4ee] p-6">
-              <label className="block text-sm font-semibold text-[#15161a]">
+              <label className="block text-sm font-semibold text-[#2a170d]">
                 Folder name
                 <input
                   value={folderName}
@@ -1671,7 +1752,7 @@ export default function DriveDetailPage() {
                   className="mt-2 h-11 w-full rounded-md border border-[#e3d8cc] bg-white px-3"
                 />
               </label>
-              <label className="block text-sm font-semibold text-[#15161a]">
+              <label className="block text-sm font-semibold text-[#2a170d]">
                 Description
                 <textarea
                   value={folderDescription}
@@ -1686,7 +1767,7 @@ export default function DriveDetailPage() {
             </div>
             <div className="mt-6 flex items-center justify-between rounded-xl border border-[#e3d8cc] bg-white px-5 py-4">
               <div>
-                <p className="text-sm font-semibold text-[#15161a]">Hide folder</p>
+                <p className="text-sm font-semibold text-[#2a170d]">Hide folder</p>
                 <p className="text-xs text-[#8a7f73]">
                   Hidden folders are only visible with a password or via a direct link.
                 </p>
@@ -1694,7 +1775,7 @@ export default function DriveDetailPage() {
               <button
                 type="button"
                 onClick={() => setFolderHidden((prev) => !prev)}
-                className={`relative h-6 w-11 rounded-full transition ${folderHidden ? "bg-[#101114]" : "bg-[#e3d8cc]"
+                className={`relative h-6 w-11 rounded-full transition ${folderHidden ? "bg-[#2a170d]" : "bg-[#e3d8cc]"
                   }`}
               >
                 <span
@@ -1720,7 +1801,7 @@ export default function DriveDetailPage() {
               <button
                 type="button"
                 onClick={onCreateFolder}
-                className="rounded-md bg-[#101114] px-6 py-2 text-sm font-semibold text-white"
+                className="rounded-md bg-[#2a170d] px-6 py-2 text-sm font-semibold text-white"
               >
                 {editingFolderId ? "Save" : "Add"}
               </button>

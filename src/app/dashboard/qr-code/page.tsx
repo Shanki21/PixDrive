@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import fetchWithRetry from "@/lib/fetchWithRetry";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Copy, Download, ExternalLink, QrCode, RefreshCw } from "lucide-react";
@@ -41,7 +42,7 @@ export default function QrCodePage() {
         if (isRefresh && active) {
           setRefreshing(true);
         }
-        const response = await fetch("/api/galleries");
+        const response = await fetchWithRetry("/api/galleries", {}, { dedupeKey: `client:galleries:list` });
         const contentType = response.headers.get("content-type") ?? "";
         if (!response.ok || !contentType.includes("application/json")) {
           if (active) setGalleries([]);
@@ -124,7 +125,7 @@ export default function QrCodePage() {
   const downloadQr = async () => {
     if (!qrImageUrl || !selectedGallery || typeof document === "undefined") return;
     try {
-      const response = await fetch(qrImageUrl);
+      const response = await fetchWithRetry(qrImageUrl, { method: "GET" }, { dedupeKey: `qr:download:${selectedId}` });
       if (!response.ok) throw new Error("QR fetch failed");
       const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
@@ -143,23 +144,23 @@ export default function QrCodePage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6">
-      <section className="rounded-[28px] border border-[#d8e8e2] bg-white p-6 shadow-[0_20px_55px_rgba(16,39,32,0.08)] md:p-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#0f766e]">QR Code Delivery</p>
-        <h1 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-[#101c19] sm:text-4xl">Share event access with QR</h1>
-        <p className="mt-3 max-w-2xl text-sm text-[#57726a] sm:text-base">
+      <section className="rounded-[28px] border border-[#eadccf] bg-white p-6 shadow-[0_20px_55px_rgba(73,39,20,0.08)] md:p-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7a3f13]">QR Code Delivery</p>
+        <h1 className="font-display mt-3 text-3xl font-bold text-[#2a170d] sm:text-4xl">Share event access with QR</h1>
+        <p className="mt-3 max-w-2xl text-sm text-[#7a6a55] sm:text-base">
           Select a gallery, generate a QR code, and place it on invitation cards, venue stands, or WhatsApp messages
           for instant client access.
         </p>
       </section>
 
       <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_420px]">
-        <article className="rounded-3xl border border-[#d9e8e2] bg-white p-6 shadow-[0_10px_30px_rgba(16,39,32,0.06)]">
-          <label className="text-xs font-semibold uppercase tracking-[0.14em] text-[#6a857d]">
+        <article className="rounded-3xl border border-[#eadccf] bg-white p-6 shadow-[0_10px_30px_rgba(73,39,20,0.06)]">
+          <label className="text-xs font-semibold uppercase tracking-[0.14em] text-[#8a735f]">
             Choose Event
             <select
               value={selectedId}
               onChange={(event) => setSelectedId(event.target.value)}
-              className="mt-2 h-11 w-full rounded-xl border border-[#d5e7df] bg-white px-3 text-sm text-[#1e3832] outline-none focus:border-[#0f766e]"
+              className="mt-2 h-11 w-full rounded-xl border border-[#ead7c5] bg-white px-3 text-sm text-[#3a2112] outline-none focus:border-[#7a3f13]"
               disabled={loading || shareReadyGalleries.length === 0}
             >
               {shareReadyGalleries.map((gallery) => (
@@ -171,21 +172,21 @@ export default function QrCodePage() {
           </label>
 
           {loading ? (
-            <div className="mt-6 h-40 animate-pulse rounded-2xl border border-[#e4efe9] bg-[#f7fbf9]" />
+            <div className="mt-6 h-40 animate-pulse rounded-2xl border border-[#f0e4d7] bg-[#fffaf4]" />
           ) : selectedGallery ? (
-            <div className="mt-6 rounded-2xl border border-[#e3eee8] bg-[#f7fbf9] p-5">
-              <p className="text-sm font-semibold text-[#1a352e]">{selectedGallery.name}</p>
-              <p className="mt-1 text-xs text-[#6d887f]">
+            <div className="mt-6 rounded-2xl border border-[#f0e4d7] bg-[#fffaf4] p-5">
+              <p className="text-sm font-semibold text-[#3a2112]">{selectedGallery.name}</p>
+              <p className="mt-1 text-xs text-[#8a735f]">
                 Created {formatDate(selectedGallery.createdAt)} - {selectedGallery.filesCount ?? 0} photos
               </p>
-              <p className="mt-4 break-all rounded-xl border border-[#d9e8e1] bg-white px-3 py-2 text-xs text-[#49665d]">
+              <p className="mt-4 break-all rounded-xl border border-[#d9e8e1] bg-white px-3 py-2 text-xs text-[#7a6a55]">
                 {publicGalleryUrl}
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => void copyLink()}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#0f766e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#115e59]"
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#7a3f13] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#5b2b0c]"
                 >
                   <Copy className="h-4 w-4" />
                   {copied ? "Copied" : "Copy Link"}
@@ -193,7 +194,7 @@ export default function QrCodePage() {
                 <button
                   type="button"
                   onClick={() => void downloadQr()}
-                  className="inline-flex items-center gap-2 rounded-xl border border-[#d6e7df] bg-white px-4 py-2 text-sm font-semibold text-[#27453e] transition hover:border-[#0f766e] hover:text-[#0f766e]"
+                  className="inline-flex items-center gap-2 rounded-xl border border-[#ead7c5] bg-white px-4 py-2 text-sm font-semibold text-[#5b3a23] transition hover:border-[#7a3f13] hover:text-[#7a3f13]"
                 >
                   <Download className="h-4 w-4" />
                   Download QR
@@ -202,7 +203,7 @@ export default function QrCodePage() {
                   href={publicGalleryUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded-xl border border-[#d6e7df] bg-white px-4 py-2 text-sm font-semibold text-[#27453e] transition hover:border-[#0f766e] hover:text-[#0f766e]"
+                  className="inline-flex items-center gap-2 rounded-xl border border-[#ead7c5] bg-white px-4 py-2 text-sm font-semibold text-[#5b3a23] transition hover:border-[#7a3f13] hover:text-[#7a3f13]"
                 >
                   <ExternalLink className="h-4 w-4" />
                   Open Gallery
@@ -210,25 +211,25 @@ export default function QrCodePage() {
               </div>
             </div>
           ) : galleries.length > 0 ? (
-            <div className="mt-6 rounded-2xl border border-dashed border-[#d2e4db] bg-[#f9fcfa] p-6 text-center text-sm text-[#648178]">
+            <div className="mt-6 rounded-2xl border border-dashed border-[#d2e4db] bg-[#fffdf8] p-6 text-center text-sm text-[#7a6a55]">
               No share-ready event found. Publish an event, enable One QR, and make sure it has not expired.
             </div>
           ) : (
-            <div className="mt-6 rounded-2xl border border-dashed border-[#d2e4db] bg-[#f9fcfa] p-6 text-center text-sm text-[#648178]">
+            <div className="mt-6 rounded-2xl border border-dashed border-[#d2e4db] bg-[#fffdf8] p-6 text-center text-sm text-[#7a6a55]">
               No events available yet. Create an event first to generate a QR code.
             </div>
           )}
         </article>
 
-        <article className="rounded-3xl border border-[#d9e8e2] bg-white p-6 text-center shadow-[0_10px_30px_rgba(16,39,32,0.06)]">
-          <div className="mx-auto inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#edf7f3] text-[#0f766e]">
+        <article className="rounded-3xl border border-[#eadccf] bg-white p-6 text-center shadow-[0_10px_30px_rgba(73,39,20,0.06)]">
+          <div className="mx-auto inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#f4e5d3] text-[#7a3f13]">
             <QrCode className="h-6 w-6" />
           </div>
-          <h2 className="mt-3 text-xl font-semibold text-[#132723]">QR Preview</h2>
-          <p className="mt-1 text-sm text-[#607d74]">Scan to open the selected event gallery.</p>
+          <h2 className="mt-3 text-xl font-semibold text-[#2a170d]">QR Preview</h2>
+          <p className="mt-1 text-sm text-[#7a6a55]">Scan to open the selected event gallery.</p>
 
           {qrImageUrl && !qrImageFailed ? (
-            <div className="mx-auto mt-5 w-fit rounded-3xl border border-[#dcebe4] bg-[#f8fbf9] p-4">
+            <div className="mx-auto mt-5 w-fit rounded-3xl border border-[#dcebe4] bg-[#fffaf4] p-4">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={qrImageUrl}
@@ -238,7 +239,7 @@ export default function QrCodePage() {
               />
             </div>
           ) : (
-            <div className="mt-5 flex h-72 items-center justify-center rounded-3xl border border-dashed border-[#d4e6dd] bg-[#f9fcfa] text-sm text-[#66857b]">
+            <div className="mt-5 flex h-72 items-center justify-center rounded-3xl border border-dashed border-[#d4e6dd] bg-[#fffdf8] text-sm text-[#7a6a55]">
               {selectedGallery
                 ? "Unable to load QR preview right now. You can still copy the link."
                 : "Waiting for event selection"}
@@ -252,7 +253,7 @@ export default function QrCodePage() {
               setRefreshing(true);
               void (async () => {
                 try {
-                  const response = await fetch("/api/galleries", { cache: "no-store" });
+                  const response = await fetchWithRetry("/api/galleries", { cache: "no-store" }, { dedupeKey: `client:galleries:list:refresh` });
                   const contentType = response.headers.get("content-type") ?? "";
                   if (!response.ok || !contentType.includes("application/json")) {
                     return;
@@ -266,7 +267,7 @@ export default function QrCodePage() {
               })();
             }}
             disabled={refreshing}
-            className="mt-5 inline-flex items-center gap-2 rounded-xl border border-[#d6e7df] bg-white px-4 py-2 text-sm font-semibold text-[#27453e] transition hover:border-[#0f766e] hover:text-[#0f766e]"
+            className="mt-5 inline-flex items-center gap-2 rounded-xl border border-[#ead7c5] bg-white px-4 py-2 text-sm font-semibold text-[#5b3a23] transition hover:border-[#7a3f13] hover:text-[#7a3f13]"
           >
             <RefreshCw className="h-4 w-4" />
             {refreshing ? "Refreshing..." : "Refresh"}

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
+import fetchWithRetry from "@/lib/fetchWithRetry";
 import {
   BadgeDollarSign,
   Brush,
@@ -61,8 +62,8 @@ function TabButton({
       onClick={onClick}
       className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium transition ${
         active
-          ? "bg-[#eef8f4] text-[#0f766e] shadow-[inset_0_0_0_1px_rgba(15,118,110,0.16)]"
-          : "text-[#3e5e53] hover:bg-[#f6fbf9]"
+          ? "bg-[#f6eadb] text-[#7a3f13] shadow-[inset_0_0_0_1px_rgba(122,63,19,0.16)]"
+          : "text-[#3e5e53] hover:bg-[#fffaf4]"
       }`}
     >
       <Icon className="h-4 w-4" />
@@ -81,9 +82,9 @@ function Card({
   children: ReactNode;
 }) {
   return (
-    <article className="rounded-2xl border border-[#d8e8e1] bg-white p-5 shadow-[0_12px_30px_rgba(16,39,32,0.05)]">
-      <h3 className="text-lg font-semibold text-[#173029]">{title}</h3>
-      {description ? <p className="mt-1 text-sm text-[#5f7c73]">{description}</p> : null}
+    <article className="rounded-2xl border border-[#eadccf] bg-white p-5 shadow-[0_12px_30px_rgba(73,39,20,0.05)]">
+      <h3 className="text-lg font-semibold text-[#2a170d]">{title}</h3>
+      {description ? <p className="mt-1 text-sm text-[#7a6a55]">{description}</p> : null}
       <div className="mt-4 space-y-3">{children}</div>
     </article>
   );
@@ -100,10 +101,10 @@ function LabeledValue({
 }) {
   return (
     <div className="block">
-      <span className="mb-1.5 block text-xs font-medium uppercase tracking-[0.1em] text-[#5f7c73]">
+      <span className="mb-1.5 block text-xs font-medium uppercase tracking-widest text-[#7a6a55]">
         {label}
       </span>
-      <div className="min-h-11 rounded-xl border border-[#d6e7e1] bg-white px-3 py-3 text-sm text-[#23463d]">
+      <div className="min-h-11 rounded-xl border border-[#d6e7e1] bg-white px-3 py-3 text-sm text-[#5b3a23]">
         {formatValue(value, placeholder)}
       </div>
     </div>
@@ -122,8 +123,8 @@ export default function SettingsPage() {
     const load = async () => {
       try {
         const [profileRes, meRes] = await Promise.all([
-          fetch("/api/auth/profile", { cache: "no-store" }),
-          fetch("/api/auth/me", { cache: "no-store" }),
+          fetchWithRetry("/api/auth/profile", { cache: "no-store" }, { dedupeKey: `client:profile:load` }),
+          fetchWithRetry("/api/auth/me", { cache: "no-store" }, { dedupeKey: `client:me:load` }),
         ]);
 
         if (!active) return;
@@ -214,16 +215,16 @@ export default function SettingsPage() {
               title="Profile Management"
               description="Use the Card workspace to update your public-facing contact card, profile photo, and social links."
             >
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#dce9e3] bg-[#f5fbf8] px-4 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#efe1d3] bg-[#f5fbf8] px-4 py-4">
                 <div>
-                  <p className="text-sm font-semibold text-[#173029]">Manage your Pixora card</p>
-                  <p className="mt-1 text-sm text-[#5f7c73]">
+                  <p className="text-sm font-semibold text-[#2a170d]">Manage your Pixora card</p>
+                  <p className="mt-1 text-sm text-[#7a6a55]">
                     Keep one professional source of truth for your brand contact details.
                   </p>
                 </div>
                 <Link
                   href="/dashboard/card"
-                  className="inline-flex h-10 items-center rounded-xl bg-[#1f3d35] px-5 text-sm font-semibold text-white transition hover:bg-[#163029]"
+                  className="inline-flex h-10 items-center rounded-xl bg-[#3a2112] px-5 text-sm font-semibold text-white transition hover:bg-[#163029]"
                 >
                   Open Card Editor
                 </Link>
@@ -242,10 +243,10 @@ export default function SettingsPage() {
               title="Custom Domain"
               description="Point your own domain to Pixora when DNS and SSL automation are configured."
             >
-              <p className="text-sm text-[#5f7c73]">
+              <p className="text-sm text-[#7a6a55]">
                 Bring galleries under your own brand with a production domain like `gallery.yourstudio.com`.
               </p>
-              <div className="rounded-xl border border-dashed border-[#cde2d8] bg-[#f7fbf9] px-4 py-3 text-sm text-[#48665d]">
+              <div className="rounded-xl border border-dashed border-[#ead7c5] bg-[#fffaf4] px-4 py-3 text-sm text-[#7a6a55]">
                 Domain onboarding is ready for infrastructure hookup.
               </div>
             </Card>
@@ -253,9 +254,9 @@ export default function SettingsPage() {
               title="Pixora Sub-Domain"
               description="Launch quickly with a hosted Pixora sub-domain while your custom domain is being prepared."
             >
-              <div className="rounded-xl border border-[#e2ece8] bg-[#f6fbf9] px-4 py-3 text-sm text-[#23463d]">
+              <div className="rounded-xl border border-[#f0e4d7] bg-[#fffaf4] px-4 py-3 text-sm text-[#5b3a23]">
                 <p className="font-semibold">site.pixora.ai/{studioSlug}</p>
-                <p className="mt-1 text-[#5f7c73]">
+                <p className="mt-1 text-[#7a6a55]">
                   Generated from your account identity and ready to configure.
                 </p>
               </div>
@@ -271,7 +272,7 @@ export default function SettingsPage() {
           title="Billing and Invoices"
           description="Billing tooling is not connected yet, so invoices will appear here after payment flows are enabled."
         >
-          <div className="rounded-xl border border-dashed border-[#d6e7df] bg-[#f8fbfa] px-4 py-4 text-sm text-[#5f7c73]">
+          <div className="rounded-xl border border-dashed border-[#ead7c5] bg-[#fffaf4] px-4 py-4 text-sm text-[#7a6a55]">
             No invoices are available yet.
           </div>
         </Card>
@@ -280,7 +281,7 @@ export default function SettingsPage() {
 
     return (
       <Card title="Coming Soon" description="This section is under Pixora theme migration and production hardening.">
-        <p className="text-sm text-[#5f7c73]">
+        <p className="text-sm text-[#7a6a55]">
           The foundation is in place, and the live profile/domain surfaces are already using real data instead of
           demo placeholders.
         </p>
@@ -289,16 +290,16 @@ export default function SettingsPage() {
   }, [accountEmail, activeTab, loadingProfile, profile, socialCount, studioSlug]);
 
   return (
-    <div className="mx-auto w-full max-w-7xl rounded-3xl border border-[#d8e8e1] bg-[#f8fbfa] p-4 shadow-[0_20px_50px_rgba(16,39,32,0.08)] sm:p-6">
+    <div className="mx-auto w-full max-w-7xl rounded-3xl border border-[#eadccf] bg-[#fffaf4] p-4 shadow-[0_20px_50px_rgba(73,39,20,0.08)] sm:p-6">
       <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
-        <aside className="rounded-2xl border border-[#d8e8e1] bg-white p-4">
+        <aside className="rounded-2xl border border-[#eadccf] bg-white p-4">
           <div className="flex items-center gap-2 border-b border-[#e4efea] pb-3">
-            <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#eef8f4] text-[#0f766e]">
+            <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#f6eadb] text-[#7a3f13]">
               <IdCard className="h-4 w-4" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-[#173029]">Settings</p>
-              <p className="text-xs text-[#5f7c73]">Manage your Pixora account</p>
+              <p className="text-sm font-semibold text-[#2a170d]">Settings</p>
+              <p className="text-xs text-[#7a6a55]">Manage your Pixora account</p>
             </div>
           </div>
           <nav className="mt-3 space-y-1">
@@ -315,19 +316,19 @@ export default function SettingsPage() {
         </aside>
 
         <section className="space-y-5">
-          <header className="rounded-2xl border border-[#d8e8e1] bg-white p-5">
+          <header className="rounded-2xl border border-[#eadccf] bg-white p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h1 className="text-2xl font-semibold tracking-[-0.02em] text-[#132723]">
+                <h1 className="text-2xl font-semibold tracking-[-0.02em] text-[#2a170d]">
                   {tabs.find((tab) => tab.key === activeTab)?.label ?? "Settings"}
                 </h1>
-                <p className="mt-1 text-sm text-[#5f7c73]">
+                <p className="mt-1 text-sm text-[#7a6a55]">
                   {loadingProfile
                     ? "Syncing your latest Pixora account data..."
                     : "Live account settings with production-friendly empty states."}
                 </p>
               </div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#d9e9e3] bg-[#f3faf7] px-3 py-1 text-xs font-semibold text-[#0f766e]">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[#eadccf] bg-[#fff7ee] px-3 py-1 text-xs font-semibold text-[#7a3f13]">
                 <Building2 className="h-3.5 w-3.5" />
                 Pixora Theme
               </div>

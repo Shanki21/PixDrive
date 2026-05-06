@@ -44,7 +44,10 @@ async function sendWithResend({ to, otp }: SendOtpParams): Promise<SendOtpResult
   }
 
   try {
-    const res = await fetch("https://api.resend.com/emails", {
+    // Use fetchWithRetry to add brief retry/backoff on transient network errors
+    // import locally to avoid adding runtime import at module top-level in some runtimes
+    const { default: fetchWithRetry } = await import("@/lib/fetchWithRetry");
+    const res = await fetchWithRetry("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -56,7 +59,7 @@ async function sendWithResend({ to, otp }: SendOtpParams): Promise<SendOtpResult
         subject: "Your pixora OTP code",
         html: buildOtpHtml(otp),
       }),
-    });
+    }, { dedupeKey: `resend:${to}:${otp.slice(0,4)}` });
 
     if (res.ok) {
       return { ok: true, provider: "resend" };

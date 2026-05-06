@@ -11,6 +11,8 @@ import { getClientIp } from "@/lib/request-ip";
 import { rejectCrossOriginWrite } from "@/lib/request-security";
 import { normalizePublicUrl } from "@/lib/url-security";
 import { NextRequest, NextResponse } from "next/server";
+import { withApiHandler } from "@/lib/withApiHandler";
+import { withRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -90,70 +92,73 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   }
 }
 
-export async function POST(req: NextRequest, { params }: RouteContext) {
-  const blocked = rejectCrossOriginWrite(req);
-  if (blocked) {
-    return blocked;
-  }
-
-  try {
-    const { id: galleryId } = await params;
-    const access = await getAccessibleGallery(req, galleryId);
-    if (!access.ok) {
-      return NextResponse.json({ ok: false, message: access.message }, { status: access.status });
+export const POST = withApiHandler(
+  withRateLimit(async (req: NextRequest, ...rest: unknown[]) => {
+    const { params } = rest[0] as RouteContext;
+    const blocked = rejectCrossOriginWrite(req);
+    if (blocked) {
+      return blocked;
     }
 
-    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-    const reviewerName = normalizeSingleLine(body?.reviewerName, MAX_REVIEWER_NAME_LENGTH);
-    const text = normalizeMultiline(body?.text, MAX_REVIEW_TEXT_LENGTH);
-    const rawSocialLink = normalizeOptionalSingleLine(body?.socialLink, 2048);
-    const socialLink = rawSocialLink
-      ? normalizePublicUrl(rawSocialLink, { allowHttpLocalhost: process.env.NODE_ENV !== "production" })
-      : null;
-    if (rawSocialLink && !socialLink) {
-      return NextResponse.json({ ok: false, message: "Invalid social link." }, { status: 400 });
-    }
+    try {
+      const { id: galleryId } = await params;
+      const access = await getAccessibleGallery(req, galleryId);
+      if (!access.ok) {
+        return NextResponse.json({ ok: false, message: access.message }, { status: access.status });
+      }
 
-    const clientLocation = normalizeOptionalSingleLine(body?.clientLocation, MAX_CLIENT_LOCATION_LENGTH);
-    const userAgent = normalizeOptionalSingleLine(req.headers.get("user-agent"), MAX_USER_AGENT_LENGTH);
-    const clientIp = getClientIp(req) ?? "unknown";
+      const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      const reviewerName = normalizeSingleLine(body?.reviewerName, MAX_REVIEWER_NAME_LENGTH);
+      const text = normalizeMultiline(body?.text, MAX_REVIEW_TEXT_LENGTH);
+      const rawSocialLink = normalizeOptionalSingleLine(body?.socialLink, 2048);
+      const socialLink = rawSocialLink
+        ? normalizePublicUrl(rawSocialLink, { allowHttpLocalhost: process.env.NODE_ENV !== "production" })
+        : null;
+      if (rawSocialLink && !socialLink) {
+        return NextResponse.json({ ok: false, message: "Invalid social link." }, { status: 400 });
+      }
 
-    if (!reviewerName || text.length < MIN_REVIEW_TEXT_LENGTH) {
-      return NextResponse.json({ ok: false, message: "Invalid review" }, { status: 400 });
-    }
+      const clientLocation = normalizeOptionalSingleLine(body?.clientLocation, MAX_CLIENT_LOCATION_LENGTH);
+      const userAgent = normalizeOptionalSingleLine(req.headers.get("user-agent"), MAX_USER_AGENT_LENGTH);
+      const clientIp = getClientIp(req) ?? "unknown";
 
-    const reviewLimit = await checkIpThrottle({
-      key: `gallery:review:${galleryId}:${clientIp}`,
-      limit: 6,
-      windowMs: 60 * 60 * 1000,
-    });
-    if (!reviewLimit.ok) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "Too many review submissions. Try again later.",
-          retryAfterSeconds: reviewLimit.retryAfterSeconds,
+      if (!reviewerName || text.length < MIN_REVIEW_TEXT_LENGTH) {
+        return NextResponse.json({ ok: false, message: "Invalid review" }, { status: 400 });
+      }
+
+      const reviewLimit = await checkIpThrottle({
+        key: `gallery:review:${galleryId}:${clientIp}`,
+        limit: 6,
+        windowMs: 60 * 60 * 1000,
+      });
+      if (!reviewLimit.ok) {
+        return NextResponse.json(
+          {
+            ok: false,
+            message: "Too many review submissions. Try again later.",
+            retryAfterSeconds: reviewLimit.retryAfterSeconds,
+          },
+          { status: 429 }
+        );
+      }
+
+      const review = await prisma.review.create({
+        data: {
+          galleryId,
+          reviewerName,
+          text,
+          socialLink: socialLink ?? null,
+          clientIp,
+          clientLocation,
+          userAgent,
+          published: false,
         },
-        { status: 429 }
-      );
+      });
+
+      return NextResponse.json({ ok: true, review: serializeReview(review) });
+    } catch (error) {
+      console.error("/api/galleries/[id]/reviews POST error", error);
+      return NextResponse.json({ ok: false, message: "Unable to save review." }, { status: 500 });
     }
-
-    const review = await prisma.review.create({
-      data: {
-        galleryId,
-        reviewerName,
-        text,
-        socialLink: socialLink ?? null,
-        clientIp,
-        clientLocation,
-        userAgent,
-        published: false,
-      },
-    });
-
-    return NextResponse.json({ ok: true, review: serializeReview(review) });
-  } catch (error) {
-    console.error("/api/galleries/[id]/reviews POST error", error);
-    return NextResponse.json({ ok: false, message: "Unable to save review." }, { status: 500 });
-  }
-}
+  }, { keyPrefix: "gallery:review", limit: 10, windowMs: 60 * 60 * 1000 })
+);

@@ -14,7 +14,7 @@ export default function MobileNav() {
   ];
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[#d6e7df] bg-[#f7faf8]/95 backdrop-blur md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[#ead7c5] bg-[#fffaf4]/95 backdrop-blur md:hidden">
       <ul className="flex overflow-x-auto px-2 py-2">
         {items.map((item) => {
           const Icon = item.icon;
@@ -27,7 +27,7 @@ export default function MobileNav() {
               <Link
                 href={item.href}
                 className={`flex flex-col items-center gap-1 rounded-xl px-2 py-2 text-[11px] font-semibold transition ${
-                  active ? "bg-[#0f766e] text-white" : "text-[#35534c]"
+                  active ? "bg-[#5b2b0c] text-white shadow-[0_10px_18px_rgba(91,43,12,0.2)]" : "text-[#6d4426]"
                 }`}
               >
                 <Icon className="h-4 w-4" />
