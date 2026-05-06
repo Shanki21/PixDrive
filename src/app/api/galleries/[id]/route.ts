@@ -12,6 +12,8 @@ import prisma from "@/lib/prisma";
 import { getSessionEmailFromRequestAsync } from "@/lib/session";
 import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
+import { withApiHandler } from "@/lib/withApiHandler";
+import { withRateLimit } from "@/lib/rate-limit";
 
 const MAX_GALLERY_NAME_LENGTH = 160;
 
@@ -90,10 +92,8 @@ export async function GET(
   });
 }
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withApiHandler(
+  withRateLimit(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const blocked = rejectCrossOriginWrite(req);
   if (blocked) {
     return blocked;
@@ -171,71 +171,71 @@ export async function PATCH(
     settings: maskEventSettingsPins(normalizeEventSettings(gallery.settings)),
     meta: normalizeGalleryMeta(gallery.meta),
   });
-}
+}, { keyPrefix: "gallery:update", limit: 10, windowMs: 60 * 60 * 1000 })
+);
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const blocked = rejectCrossOriginWrite(req);
-  if (blocked) {
-    return blocked;
-  }
+export const DELETE = withApiHandler(
+  withRateLimit(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+    const blocked = rejectCrossOriginWrite(req);
+    if (blocked) {
+      return blocked;
+    }
 
-  const { id } = await params;
-  const email = await getSessionEmailFromRequestAsync(req);
-  if (!email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+    const { id } = await params;
+    const email = await getSessionEmailFromRequestAsync(req);
+    if (!email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true },
-  });
-
-  if (!user) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  const existing = await prisma.gallery.findFirst({
-    where: { id, userId: user.id },
-    select: { id: true },
-  });
-
-  if (!existing) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  await prisma.$transaction(async (tx) => {
-    await tx.gallery.updateMany({
-      where: { id: existing.id, coverPhotoId: { not: null } },
-      data: { coverPhotoId: null },
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
     });
 
-    await tx.galleryVisit.deleteMany({
-      where: { galleryId: existing.id },
+    if (!user) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const existing = await prisma.gallery.findFirst({
+      where: { id, userId: user.id },
+      select: { id: true },
     });
 
-    await tx.review.deleteMany({
-      where: { galleryId: existing.id },
+    if (!existing) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.gallery.updateMany({
+        where: { id: existing.id, coverPhotoId: { not: null } },
+        data: { coverPhotoId: null },
+      });
+
+      await tx.galleryVisit.deleteMany({
+        where: { galleryId: existing.id },
+      });
+
+      await tx.review.deleteMany({
+        where: { galleryId: existing.id },
+      });
+
+      await tx.clientProfile.deleteMany({
+        where: { galleryId: existing.id },
+      });
+
+      await tx.clientPhotoAction.deleteMany({
+        where: { galleryId: existing.id },
+      });
+
+      await tx.photo.deleteMany({
+        where: { galleryId: existing.id },
+      });
+
+      await tx.gallery.delete({
+        where: { id: existing.id },
+      });
     });
 
-    await tx.clientProfile.deleteMany({
-      where: { galleryId: existing.id },
-    });
-
-    await tx.clientPhotoAction.deleteMany({
-      where: { galleryId: existing.id },
-    });
-
-    await tx.photo.deleteMany({
-      where: { galleryId: existing.id },
-    });
-
-    await tx.gallery.delete({
-      where: { id: existing.id },
-    });
-  });
-
-  return NextResponse.json({ ok: true });
-}
+    return NextResponse.json({ ok: true });
+  }, { keyPrefix: "gallery:delete", limit: 5, windowMs: 60 * 60 * 1000 })
+);

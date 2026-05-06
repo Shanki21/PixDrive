@@ -8,6 +8,8 @@ import { rejectCrossOriginWrite } from "@/lib/request-security";
 import { getSessionEmailFromRequestAsync } from "@/lib/session";
 import { normalizePublicUrl } from "@/lib/url-security";
 import { NextRequest, NextResponse } from "next/server";
+import { withApiHandler } from "@/lib/withApiHandler";
+import { withRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -78,68 +80,70 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ ok: true, profile: user.profile ?? null });
 }
 
-export async function PATCH(req: NextRequest) {
-  const blocked = rejectCrossOriginWrite(req);
-  if (blocked) {
-    return blocked;
-  }
-
-  const email = await getSessionEmailFromRequestAsync(req);
-  if (!email) return NextResponse.json({ ok: false, authenticated: false }, { status: 401 });
-
-  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) return NextResponse.json({ ok: false, message: "User not found" }, { status: 404 });
-
-  const updateData: Prisma.UserProfileUpdateInput = {};
-  const createData: Prisma.UserProfileCreateInput = {
-    user: {
-      connect: { id: user.id },
-    },
-  };
-
-  if ("name" in body) {
-    const name = normalizeOptionalSingleLine(body.name, MAX_PROFILE_NAME_LENGTH);
-    updateData.name = name;
-    createData.name = name;
-  }
-
-  if ("occupation" in body) {
-    const occupation = normalizeOptionalSingleLine(body.occupation, MAX_OCCUPATION_LENGTH);
-    updateData.occupation = occupation;
-    createData.occupation = occupation;
-  }
-
-  if ("phone" in body) {
-    const phone = normalizeOptionalSingleLine(body.phone, MAX_PHONE_LENGTH);
-    updateData.phone = phone;
-    createData.phone = phone;
-  }
-
-  if ("avatarUrl" in body) {
-    const avatarUrl = normalizeAvatarUrl(body.avatarUrl);
-    if (avatarUrl === undefined) {
-      return NextResponse.json({ ok: false, message: "Invalid avatar image." }, { status: 400 });
-    }
-    updateData.avatarUrl = avatarUrl;
-    createData.avatarUrl = avatarUrl;
-  }
-
-  if ("socialAccounts" in body) {
-    const socialAccounts = normalizeSocialAccounts(body.socialAccounts);
-    if (socialAccounts === undefined) {
-      return NextResponse.json({ ok: false, message: "Invalid social accounts." }, { status: 400 });
+export const PATCH = withApiHandler(
+  withRateLimit(async (req: NextRequest) => {
+    const blocked = rejectCrossOriginWrite(req);
+    if (blocked) {
+      return blocked;
     }
 
-    updateData.socialAccounts = socialAccounts as Prisma.InputJsonValue;
-    createData.socialAccounts = socialAccounts as Prisma.InputJsonValue;
-  }
+    const email = await getSessionEmailFromRequestAsync(req);
+    if (!email) return NextResponse.json({ ok: false, authenticated: false }, { status: 401 });
 
-  const profile = await prisma.userProfile.upsert({
-    where: { userId: user.id },
-    update: updateData,
-    create: createData,
-  });
+    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return NextResponse.json({ ok: false, message: "User not found" }, { status: 404 });
 
-  return NextResponse.json({ ok: true, profile });
-}
+    const updateData: Prisma.UserProfileUpdateInput = {};
+    const createData: Prisma.UserProfileCreateInput = {
+      user: {
+        connect: { id: user.id },
+      },
+    };
+
+    if ("name" in body) {
+      const name = normalizeOptionalSingleLine(body.name, MAX_PROFILE_NAME_LENGTH);
+      updateData.name = name;
+      createData.name = name;
+    }
+
+    if ("occupation" in body) {
+      const occupation = normalizeOptionalSingleLine(body.occupation, MAX_OCCUPATION_LENGTH);
+      updateData.occupation = occupation;
+      createData.occupation = occupation;
+    }
+
+    if ("phone" in body) {
+      const phone = normalizeOptionalSingleLine(body.phone, MAX_PHONE_LENGTH);
+      updateData.phone = phone;
+      createData.phone = phone;
+    }
+
+    if ("avatarUrl" in body) {
+      const avatarUrl = normalizeAvatarUrl(body.avatarUrl);
+      if (avatarUrl === undefined) {
+        return NextResponse.json({ ok: false, message: "Invalid avatar image." }, { status: 400 });
+      }
+      updateData.avatarUrl = avatarUrl;
+      createData.avatarUrl = avatarUrl;
+    }
+
+    if ("socialAccounts" in body) {
+      const socialAccounts = normalizeSocialAccounts(body.socialAccounts);
+      if (socialAccounts === undefined) {
+        return NextResponse.json({ ok: false, message: "Invalid social accounts." }, { status: 400 });
+      }
+
+      updateData.socialAccounts = socialAccounts as Prisma.InputJsonValue;
+      createData.socialAccounts = socialAccounts as Prisma.InputJsonValue;
+    }
+
+    const profile = await prisma.userProfile.upsert({
+      where: { userId: user.id },
+      update: updateData,
+      create: createData,
+    });
+
+    return NextResponse.json({ ok: true, profile });
+  }, { keyPrefix: "auth:profile:update", limit: 30, windowMs: 60 * 60 * 1000 })
+);

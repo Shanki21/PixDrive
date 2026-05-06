@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import fetchWithRetry from "@/lib/fetchWithRetry";
 import {
   ArrowDownTrayIcon,
   ArrowLeftIcon,
@@ -317,7 +318,7 @@ export default function DiskGalleryClient({
 
     void (async () => {
       try {
-        await fetch(`/api/galleries/${galleryId}/visit`, {
+        await fetchWithRetry(`/api/galleries/${galleryId}/visit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -325,7 +326,7 @@ export default function DiskGalleryClient({
             clientLocation:
               typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : null,
           }),
-        });
+        }, { dedupeKey: `visit:${galleryId}:${key}`, idempotencyKey: `visit:${galleryId}:${key}` });
       } catch {
         // ignore visit tracking failures
       }
@@ -355,9 +356,11 @@ export default function DiskGalleryClient({
     let active = true;
 
     const loadServerFavorites = async () => {
-      try {
-        const response = await fetch(
-          `/api/galleries/${galleryId}/client-actions?clientKey=${encodeURIComponent(clientKey)}&action=favorite`
+        try {
+        const response = await fetchWithRetry(
+          `/api/galleries/${galleryId}/client-actions?clientKey=${encodeURIComponent(clientKey)}&action=favorite`,
+          { method: "GET" },
+          { dedupeKey: `client-favorites:${galleryId}:${clientKey}` }
         );
         if (!response.ok) return;
         const data = (await response.json()) as {
@@ -443,7 +446,10 @@ export default function DiskGalleryClient({
   ) => {
     if (!clientKey || actions.length === 0) return;
     try {
-      await fetch(`/api/galleries/${galleryId}/client-actions`, {
+      const dedupe = `client-actions:${galleryId}:${clientKey}:${actions
+        .map((a) => `${a.action}:${a.photoId}`)
+        .join(",")}`;
+      await fetchWithRetry(`/api/galleries/${galleryId}/client-actions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -452,7 +458,7 @@ export default function DiskGalleryClient({
             clientKey,
           })),
         }),
-      });
+      }, { dedupeKey: dedupe, idempotencyKey: dedupe });
     } catch {
       // Ignore tracking failures to keep UI responsive.
     }
@@ -587,7 +593,8 @@ export default function DiskGalleryClient({
       }
 
       try {
-        await fetch(`/api/galleries/${galleryId}/reviews`, {
+        const dedupe = `review:${galleryId}:${trimmedName}:${trimmedReview.slice(0, 40)}`;
+        await fetchWithRetry(`/api/galleries/${galleryId}/reviews`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -596,7 +603,7 @@ export default function DiskGalleryClient({
             socialLink: trimmedSocial || null,
             clientLocation,
           }),
-        });
+        }, { dedupeKey: dedupe, idempotencyKey: dedupe });
       } catch {
         // Ignore review submission failures to keep UI responsive.
       }
@@ -616,7 +623,7 @@ export default function DiskGalleryClient({
   const downloadSinglePhoto = async (photo: GalleryPhoto) => {
     const url = new URL(`/api/disk/${gallerySlug}/photos`, window.location.origin);
     url.searchParams.set("downloadId", photo.id);
-    const response = await fetch(url.toString(), { method: "GET" });
+    const response = await fetchWithRetry(url.toString(), { method: "GET" }, { dedupeKey: `download:${photo.id}` });
     if (!response.ok) {
       return false;
     }
@@ -634,7 +641,7 @@ export default function DiskGalleryClient({
       if (!clientKey) return false;
       url.searchParams.set("clientKey", clientKey);
     }
-    const response = await fetch(url.toString(), { method: "GET" });
+    const response = await fetchWithRetry(url.toString(), { method: "GET" }, { dedupeKey: `download-zip:${gallerySlug}:${scope}:${clientKey ?? ""}` });
     if (!response.ok) {
       return false;
     }
@@ -724,7 +731,7 @@ export default function DiskGalleryClient({
       const url = new URL(`/api/disk/${gallerySlug}/photos`, window.location.origin);
       url.searchParams.set("take", "60");
       if (nextCursor) url.searchParams.set("cursor", nextCursor);
-      const res = await fetch(url.toString());
+      const res = await fetchWithRetry(url.toString(), { method: "GET" }, { dedupeKey: `loadmore:${gallerySlug}:${nextCursor ?? "start"}` });
       const contentType = res.headers.get("content-type") ?? "";
       if (!res.ok || !contentType.includes("application/json")) {
         return;
@@ -764,7 +771,7 @@ export default function DiskGalleryClient({
     setUnlocking(true);
     setUnlockError(null);
     try {
-      const response = await fetch("/api/disk", {
+      const response = await fetchWithRetry("/api/disk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -772,7 +779,7 @@ export default function DiskGalleryClient({
           slug: gallerySlug,
           pin: pinValue.trim(),
         }),
-      });
+      }, { dedupeKey: `unlock:${gallerySlug}:${pinValue.trim()}`, idempotencyKey: `unlock:${gallerySlug}:${pinValue.trim()}` });
       const data = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
       if (!response.ok || !data?.ok) {
         setUnlockError(data?.error ?? "Unable to unlock gallery.");
@@ -788,7 +795,7 @@ export default function DiskGalleryClient({
 
   if (isLocked) {
     return (
-      <div className="min-h-screen bg-[#f4faf7] text-[#10221d]">
+      <div className="min-h-screen bg-[#fff7ee] text-[#10221d]">
         <section className="relative h-[54vh] min-h-96 w-full overflow-hidden">
           {coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -805,7 +812,7 @@ export default function DiskGalleryClient({
             </p>
           </div>
         </section>
-        <section className="mx-auto mt-10 w-full max-w-lg rounded-3xl border border-[#d8e9e2] bg-white p-8 shadow-[0_18px_38px_rgba(15,118,110,0.16)]">
+        <section className="mx-auto mt-10 w-full max-w-lg rounded-3xl border border-[#eadccf] bg-white p-8 shadow-[0_18px_38px_rgba(122,63,19,0.16)]">
           <h2 className="text-center text-2xl font-semibold text-[#123229]">Enter Gallery PIN</h2>
           <p className="mt-2 text-center text-sm text-[#5c7d72]">
             This gallery is protected. Enter the event PIN to continue.
@@ -815,7 +822,7 @@ export default function DiskGalleryClient({
               value={pinValue}
               onChange={(e) => setPinValue(e.target.value)}
               placeholder="PIN"
-              className="h-12 w-full rounded-xl border border-[#d8e9e2] px-4 text-base outline-none focus:border-[#0f766e]"
+              className="h-12 w-full rounded-xl border border-[#eadccf] px-4 text-base outline-none focus:border-[#7a3f13]"
               autoComplete="one-time-code"
               inputMode="numeric"
             />
@@ -823,7 +830,7 @@ export default function DiskGalleryClient({
             <button
               type="submit"
               disabled={unlocking}
-              className="h-12 w-full rounded-xl bg-[#0f766e] px-6 text-base font-semibold text-white transition hover:bg-[#115e59] disabled:opacity-60"
+              className="h-12 w-full rounded-xl bg-[#7a3f13] px-6 text-base font-semibold text-white transition hover:bg-[#5b2b0c] disabled:opacity-60"
             >
               {unlocking ? "Unlocking..." : "Unlock Gallery"}
             </button>
@@ -834,7 +841,7 @@ export default function DiskGalleryClient({
   }
 
   return (
-    <div className="min-h-screen bg-[#f4faf7] text-[#10221d]">
+    <div className="min-h-screen bg-[#fff7ee] text-[#10221d]">
       <section className="relative h-[74vh] min-h-115 w-full overflow-hidden">
         {coverUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -857,12 +864,12 @@ export default function DiskGalleryClient({
         </div>
       </section>
 
-      <section className="sticky top-0 z-20 border-b border-[#d8e9e2] bg-white/85 backdrop-blur">
+      <section className="sticky top-0 z-20 border-b border-[#eadccf] bg-white/85 backdrop-blur">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-end gap-4 px-4 py-4 sm:px-8">
           {favoritesEnabled ? (
             <button
               type="button"
-              className="inline-flex items-center text-[#4f6d63] hover:text-[#0f766e]"
+              className="inline-flex items-center text-[#4f6d63] hover:text-[#7a3f13]"
               onClick={() => setIsIdentityModalOpen(true)}
               aria-label="Favorites"
             >
@@ -871,7 +878,7 @@ export default function DiskGalleryClient({
           ) : null}
           <button
             type="button"
-            className="inline-flex items-center text-[#4f6d63] hover:text-[#0f766e]"
+            className="inline-flex items-center text-[#4f6d63] hover:text-[#7a3f13]"
             onClick={() => openShareModal(window.location.href)}
             aria-label="Share gallery"
           >
@@ -879,7 +886,7 @@ export default function DiskGalleryClient({
           </button>
           <button
             type="button"
-            className="inline-flex items-center text-[#4f6d63] hover:text-[#0f766e]"
+            className="inline-flex items-center text-[#4f6d63] hover:text-[#7a3f13]"
             onClick={() => {
               setReviewSubmitted(false);
               setReviewError(null);
@@ -889,21 +896,21 @@ export default function DiskGalleryClient({
           >
             <ChatBubbleOvalLeftEllipsisIcon className="h-6 w-6" />
           </button>
-          <span className="rounded-full border border-[#d3e6de] bg-[#eef8f4] px-3 py-1 text-xs font-semibold text-[#2f5c4f]">
+          <span className="rounded-full border border-[#d3e6de] bg-[#f6eadb] px-3 py-1 text-xs font-semibold text-[#2f5c4f]">
             Expires on {formatDateLabel(expiresAt)}
           </span>
           {bulkDownloadAllowed ? (
             <div className="relative">
               <button
-                className="rounded-full bg-[#0f766e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#115e59]"
+                className="rounded-full bg-[#7a3f13] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#5b2b0c]"
                 onClick={() => setIsDownloadMenuOpen((v) => !v)}
               >
                 Download files
               </button>
               {isDownloadMenuOpen ? (
-              <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-[#d9e8e2] bg-white p-2 shadow-xl shadow-[#0f766e]/10">
+              <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-[#eadccf] bg-white p-2 shadow-xl shadow-[#7a3f13]/10">
                 <button
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-[#eef8f4]"
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-[#f6eadb]"
                   onClick={onDownloadAll}
                 >
                   <ArrowDownTrayIcon className="h-4 w-4" />
@@ -914,7 +921,7 @@ export default function DiskGalleryClient({
                 </button>
                 {favoritesEnabled ? (
                   <button
-                    className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-[#eef8f4]"
+                    className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-[#f6eadb]"
                     onClick={onDownloadFavorites}
                   >
                     <HeartSolidIcon className="h-4 w-4" />
@@ -966,7 +973,7 @@ export default function DiskGalleryClient({
                   return (
                     <figure
                       key={photo.id}
-                      className="group relative overflow-hidden rounded-[20px] border border-[#d7e9e1] bg-white shadow-[0_14px_30px_rgba(15,118,110,0.12)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(15,118,110,0.2)]"
+                      className="group relative overflow-hidden rounded-[20px] border border-[#eadccf] bg-white shadow-[0_14px_30px_rgba(122,63,19,0.12)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(122,63,19,0.2)]"
                     >
                     <button
                       type="button"
@@ -1021,7 +1028,7 @@ export default function DiskGalleryClient({
                         <button
                           type="button"
                           className={`rounded-full p-2 text-white shadow-md ${
-                            isLiked ? "bg-[#0f766e]" : "bg-black/55"
+                            isLiked ? "bg-[#7a3f13]" : "bg-black/55"
                           } ${disableLike ? "cursor-not-allowed opacity-60" : ""}`}
                           onClick={() => toggleLike(photo.id)}
                           disabled={disableLike}
@@ -1047,7 +1054,7 @@ export default function DiskGalleryClient({
             <div ref={loadMoreRef} />
           </>
         ) : (
-          <div className="rounded-2xl border border-[#d7e9e1] bg-white px-6 py-12 text-center text-[#5d7f73]">
+          <div className="rounded-2xl border border-[#eadccf] bg-white px-6 py-12 text-center text-[#5d7f73]">
             No photos uploaded yet.
           </div>
         )}
@@ -1153,7 +1160,7 @@ export default function DiskGalleryClient({
             >
               <XMarkIcon className="h-5 w-5" />
             </button>
-            <h3 className="font-display text-center text-2xl font-semibold text-[#15161a]">
+            <h3 className="font-display text-center text-2xl font-semibold text-[#2a170d]">
               Save your favorites
             </h3>
             <p className="mt-1.5 text-center text-base text-[#8a7f73]">
@@ -1180,7 +1187,7 @@ export default function DiskGalleryClient({
               <div className="flex justify-center pt-2">
                 <button
                   type="submit"
-                  className="h-12 min-w-48 rounded-full bg-[#101114] px-6 text-lg font-semibold text-white"
+                  className="h-12 min-w-48 rounded-full bg-[#2a170d] px-6 text-lg font-semibold text-white"
                 >
                   Continue
                 </button>
@@ -1201,14 +1208,14 @@ export default function DiskGalleryClient({
             >
               <XMarkIcon className="h-5 w-5" />
             </button>
-            <h3 className="text-center text-2xl font-semibold text-[#15161a]">Share link</h3>
+            <h3 className="text-center text-2xl font-semibold text-[#2a170d]">Share link</h3>
             <div className="mx-auto mt-7 rounded-[18px] border border-[#e6ddd3] bg-white px-5 py-4 text-base text-[#6b645c]">
               <p className="break-all">{shareUrl}</p>
             </div>
             <div className="mt-6 flex justify-center">
               <button
                 type="button"
-                className="rounded-2xl bg-[#101114] px-8 py-3 text-base font-semibold text-white"
+                className="rounded-2xl bg-[#2a170d] px-8 py-3 text-base font-semibold text-white"
                 onClick={() => void copyShareLink()}
               >
                 {shareCopied ? "Copied" : "Copy the link"}
@@ -1218,7 +1225,7 @@ export default function DiskGalleryClient({
             <div className="mt-5 flex items-center justify-center gap-4">
               <button
                 type="button"
-                className="text-2xl font-semibold text-[#15161a]"
+                className="text-2xl font-semibold text-[#2a170d]"
                 onClick={() =>
                   openShareWindow(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`)
                 }
@@ -1228,7 +1235,7 @@ export default function DiskGalleryClient({
               </button>
               <button
                 type="button"
-                className="rounded-full border border-[#15161a] px-3 py-1.5 text-xs font-semibold text-[#15161a]"
+                className="rounded-full border border-[#2a170d] px-3 py-1.5 text-xs font-semibold text-[#2a170d]"
                 onClick={() => openShareWindow(`https://wa.me/?text=${encodeURIComponent(shareUrl)}`)}
                 aria-label="Share on WhatsApp"
               >
@@ -1236,7 +1243,7 @@ export default function DiskGalleryClient({
               </button>
               <button
                 type="button"
-                className="rounded-full bg-[#15161a] px-3 py-1.5 text-xs font-semibold text-white"
+                className="rounded-full bg-[#2a170d] px-3 py-1.5 text-xs font-semibold text-white"
                 onClick={() => openShareWindow(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}`)}
                 aria-label="Share on Telegram"
               >
@@ -1258,24 +1265,24 @@ export default function DiskGalleryClient({
             >
               <XMarkIcon className="h-5 w-5" />
             </button>
-            <h3 className="text-center text-2xl font-semibold text-[#15161a]">Leave review</h3>
+            <h3 className="text-center text-2xl font-semibold text-[#2a170d]">Leave review</h3>
             <p className="mt-3 text-center text-base text-[#7a736d]">Please write your review</p>
             <form className="mx-auto mt-7 max-w-xl" onSubmit={submitReview}>
               <div className="space-y-4">
                 <input
-                  className="h-14 w-full rounded-[18px] border border-[#e6ddd3] px-5 text-base text-[#15161a] outline-none"
+                  className="h-14 w-full rounded-[18px] border border-[#e6ddd3] px-5 text-base text-[#2a170d] outline-none"
                   placeholder="Your name"
                   value={reviewName}
                   onChange={(event) => setReviewName(event.target.value)}
                 />
                 <input
-                  className="h-14 w-full rounded-[18px] border border-[#e6ddd3] px-5 text-base text-[#15161a] outline-none"
+                  className="h-14 w-full rounded-[18px] border border-[#e6ddd3] px-5 text-base text-[#2a170d] outline-none"
                   placeholder="Social media link (optional)"
                   value={reviewSocialLink}
                   onChange={(event) => setReviewSocialLink(event.target.value)}
                 />
                 <textarea
-                  className="min-h-36 w-full rounded-[18px] border border-[#e6ddd3] px-5 py-4 text-base text-[#15161a] outline-none"
+                  className="min-h-36 w-full rounded-[18px] border border-[#e6ddd3] px-5 py-4 text-base text-[#2a170d] outline-none"
                   placeholder="Your review"
                   value={reviewText}
                   onChange={(event) => setReviewText(event.target.value)}
@@ -1289,7 +1296,7 @@ export default function DiskGalleryClient({
               <div className="mt-7 flex justify-center">
                 <button
                   type="submit"
-                  className="rounded-2xl bg-[#101114] px-10 py-3 text-base font-semibold text-white"
+                  className="rounded-2xl bg-[#2a170d] px-10 py-3 text-base font-semibold text-white"
                 >
                   Submit
                 </button>

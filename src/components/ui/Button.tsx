@@ -20,9 +20,11 @@ export function buttonClasses({
   className?: string;
 }) {
   return clsx(
-    "inline-flex items-center justify-center rounded-full font-semibold transition",
+    "inline-flex items-center justify-center rounded-2xl font-semibold transition",
     "hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50",
-    variant === "primary" ? "bg-[#0f766e] text-white hover:bg-[#115e59]" : "border border-[#E5E5E5] bg-white text-[#111111] hover:border-[#0f766e]",
+    variant === "primary"
+      ? "bg-[#5b2b0c] text-white shadow-[0_12px_22px_rgba(91,43,12,0.2)] hover:bg-[#7a3f13]"
+      : "border border-[#ead7c5] bg-[#fffdf8] text-[#2a170d] hover:border-[#7a3f13] hover:text-[#7a3f13]",
     size === "sm" && "h-10 px-4 text-sm",
     size === "md" && "h-11 px-6 text-sm",
     size === "lg" && "h-12 px-8 text-base",

@@ -51,11 +51,12 @@ export function saveGalleryMeta(galleryId: string, meta: GalleryMeta) {
   // Also attempt to persist gallery meta to server for authenticated users (non-blocking)
   (async () => {
     try {
-      await fetch(`/api/galleries/${encodeURIComponent(galleryId)}`, {
+      const { default: fetchWithRetry } = await import("@/lib/fetchWithRetry");
+      await fetchWithRetry(`/api/galleries/${encodeURIComponent(galleryId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ meta: all[galleryId] }),
-      });
+      }, { dedupeKey: `client:saveMeta:${galleryId}` });
     } catch {
       // ignore network errors; localStorage will act as fallback
     }

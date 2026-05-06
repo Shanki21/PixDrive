@@ -13,6 +13,8 @@ import { rejectCrossOriginWrite } from "@/lib/request-security";
 import type { Prisma } from "@prisma/client";
 import { getSessionEmailFromRequestAsync } from "@/lib/session";
 import { NextRequest, NextResponse } from "next/server";
+import { withApiHandler } from "@/lib/withApiHandler";
+import { withRateLimit } from "@/lib/rate-limit";
 
 type ClientActionPayload = {
   photoId: string;
@@ -199,152 +201,154 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json({ photoIds, clientName, clientEmail });
 }
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const blocked = rejectCrossOriginWrite(req);
-  if (blocked) return blocked;
+export const POST = withApiHandler(
+  withRateLimit(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+    const blocked = rejectCrossOriginWrite(req);
+    if (blocked) return blocked;
 
-  const { id } = await params;
-  const body = await req.json().catch(() => null);
-  const actions = normalizeActions(body);
+    const { id } = await params;
+    const body = await req.json().catch(() => null);
+    const actions = normalizeActions(body);
 
-  if (actions.length === 0) {
-    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
-  }
+    if (actions.length === 0) {
+      return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    }
 
-  const gallery = await prisma.gallery.findUnique({
-    where: { id },
-    select: { id: true, settings: true, meta: true },
-  });
+    const gallery = await prisma.gallery.findUnique({
+      where: { id },
+      select: { id: true, settings: true, meta: true },
+    });
 
-  if (!gallery) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+    if (!gallery) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
 
-  const settings = normalizeEventSettings(gallery.settings);
-  const meta = normalizeGalleryMeta(gallery.meta);
+    const settings = normalizeEventSettings(gallery.settings);
+    const meta = normalizeGalleryMeta(gallery.meta);
 
-  const isPublished = settings?.published ?? true;
-  const expiresAt = meta?.expiresAt ? new Date(meta.expiresAt) : null;
-  const isExpired = expiresAt ? expiresAt.getTime() <= Date.now() : false;
+    const isPublished = settings?.published ?? true;
+    const expiresAt = meta?.expiresAt ? new Date(meta.expiresAt) : null;
+    const isExpired = expiresAt ? expiresAt.getTime() <= Date.now() : false;
 
-  if (!isPublished || isExpired) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+    if (!isPublished || isExpired) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
 
-  const requiredPin = getRequiredGalleryPin(gallery.settings);
-  if (requiredPin && !hasGalleryAccessFromRequest(req, gallery.id)) {
-    return NextResponse.json({ error: "PIN required." }, { status: 401 });
-  }
+    const requiredPin = getRequiredGalleryPin(gallery.settings);
+    if (requiredPin && !hasGalleryAccessFromRequest(req, gallery.id)) {
+      return NextResponse.json({ error: "PIN required." }, { status: 401 });
+    }
 
-  const clientIp = getClientIp(req) ?? "unknown";
-  const throttle = await checkIpThrottle({
-    key: `gallery:client-actions:${id}:${clientIp}`,
-    limit: 160,
-    windowMs: 15 * 60 * 1000,
-  });
+    const clientIp = getClientIp(req) ?? "unknown";
+    const throttle = await checkIpThrottle({
+      key: `gallery:client-actions:${id}:${clientIp}`,
+      limit: 160,
+      windowMs: 15 * 60 * 1000,
+    });
 
-  if (!throttle.ok) {
-    return NextResponse.json(
-      { error: "Too many requests", retryAfterSeconds: throttle.retryAfterSeconds },
-      { status: 429 }
+    if (!throttle.ok) {
+      return NextResponse.json(
+        { error: "Too many requests", retryAfterSeconds: throttle.retryAfterSeconds },
+        { status: 429 }
+      );
+    }
+
+    // 🔥 BATCH OPTIMIZATION STARTS HERE
+
+    const photoIds = [...new Set(actions.map(a => a.photoId))];
+
+    const [validPhotos, existingActions] = await Promise.all([
+      prisma.photo.findMany({
+        where: { galleryId: id, id: { in: photoIds } },
+        select: { id: true },
+      }),
+      prisma.clientPhotoAction.findMany({
+        where: {
+          galleryId: id,
+          OR: actions.map(a => ({
+            photoId: a.photoId,
+            clientKey: a.clientKey,
+            action: a.action,
+          })),
+        },
+      }),
+    ]);
+
+    const validPhotoSet = new Set(validPhotos.map(p => p.id));
+
+    const existingSet = new Set(
+      existingActions.map(
+        a => `${a.photoId}-${a.clientKey}-${a.action}`
+      )
     );
-  }
 
-  // 🔥 BATCH OPTIMIZATION STARTS HERE
+    const createOps: Prisma.PrismaPromise<unknown>[] = [];
+    const updateOps: Prisma.PrismaPromise<unknown>[] = [];
 
-  const photoIds = [...new Set(actions.map(a => a.photoId))];
+    for (const action of actions) {
+      if (!validPhotoSet.has(action.photoId)) continue;
 
-  const [validPhotos, existingActions] = await Promise.all([
-    prisma.photo.findMany({
-      where: { galleryId: id, id: { in: photoIds } },
-      select: { id: true },
-    }),
-    prisma.clientPhotoAction.findMany({
-      where: {
-        galleryId: id,
-        OR: actions.map(a => ({
-          photoId: a.photoId,
-          clientKey: a.clientKey,
-          action: a.action,
-        })),
-      },
-    }),
-  ]);
+      const key = `${action.photoId}-${action.clientKey}-${action.action}`;
+      const exists = existingSet.has(key);
 
-  const validPhotoSet = new Set(validPhotos.map(p => p.id));
+      if (action.action === "favorite") {
+        const liked = action.liked ?? true;
 
-  const existingSet = new Set(
-    existingActions.map(
-      a => `${a.photoId}-${a.clientKey}-${a.action}`
-    )
-  );
+        if (liked && !exists) {
+          createOps.push(
+            prisma.clientPhotoAction.create({
+              data: { galleryId: id, ...action, action: "favorite" },
+            })
+          );
 
-  const createOps: Prisma.PrismaPromise<any>[] = [];
-  const updateOps: Prisma.PrismaPromise<any>[] = [];
+          updateOps.push(
+            prisma.photo.update({
+              where: { id: action.photoId },
+              data: { favoriteCount: { increment: 1 } },
+            })
+          );
+        }
 
-  for (const action of actions) {
-    if (!validPhotoSet.has(action.photoId)) continue;
+        if (!liked && exists) {
+          createOps.push(
+            prisma.clientPhotoAction.delete({
+              where: {
+                photoId_clientKey_action: {
+                  photoId: action.photoId,
+                  clientKey: action.clientKey,
+                  action: "favorite",
+                },
+              },
+            })
+          );
 
-    const key = `${action.photoId}-${action.clientKey}-${action.action}`;
-    const exists = existingSet.has(key);
+          updateOps.push(
+            prisma.photo.update({
+              where: { id: action.photoId },
+              data: { favoriteCount: { decrement: 1 } },
+            })
+          );
+        }
+      }
 
-    if (action.action === "favorite") {
-      const liked = action.liked ?? true;
-
-      if (liked && !exists) {
+      if (action.action === "download" && !exists) {
         createOps.push(
           prisma.clientPhotoAction.create({
-            data: { galleryId: id, ...action, action: "favorite" },
+            data: { galleryId: id, ...action, action: "download" },
           })
         );
 
         updateOps.push(
           prisma.photo.update({
             where: { id: action.photoId },
-            data: { favoriteCount: { increment: 1 } },
-          })
-        );
-      }
-
-      if (!liked && exists) {
-        createOps.push(
-          prisma.clientPhotoAction.delete({
-            where: {
-              photoId_clientKey_action: {
-                photoId: action.photoId,
-                clientKey: action.clientKey,
-                action: "favorite",
-              },
-            },
-          })
-        );
-
-        updateOps.push(
-          prisma.photo.update({
-            where: { id: action.photoId },
-            data: { favoriteCount: { decrement: 1 } },
+            data: { downloadCount: { increment: 1 } },
           })
         );
       }
     }
 
-    if (action.action === "download" && !exists) {
-      createOps.push(
-        prisma.clientPhotoAction.create({
-          data: { galleryId: id, ...action, action: "download" },
-        })
-      );
+    await prisma.$transaction([...createOps, ...updateOps]);
 
-      updateOps.push(
-        prisma.photo.update({
-          where: { id: action.photoId },
-          data: { downloadCount: { increment: 1 } },
-        })
-      );
-    }
-  }
-
-  await prisma.$transaction([...createOps, ...updateOps]);
-
-  return NextResponse.json({ ok: true });
-}
+    return NextResponse.json({ ok: true });
+  }, { keyPrefix: "gallery:client-actions", limit: 1000, windowMs: 15 * 60 * 1000 })
+);

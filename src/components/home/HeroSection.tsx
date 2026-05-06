@@ -48,21 +48,11 @@ export default function HeroSection({
     <section
       className={`relative flex min-h-screen items-center overflow-hidden text-white ${
         isDrive
-          ? "bg-[radial-gradient(circle_at_top,#132331,#0a1420,#060b12)]"
-          : "bg-[radial-gradient(circle_at_top,#2b1d1a,#140f13,#0b0a0d)]"
+          ? "bg-[linear-gradient(145deg,#3a2112,#2a170d,#160c07)]"
+          : "bg-[linear-gradient(145deg,#5b2b0c,#2a170d,#160c07)]"
       }`}
     >
       <div className="absolute inset-0">
-        <div
-          className={`absolute -left-32 -top-32 h-96 w-96 rounded-full blur-3xl ${
-            isDrive ? "bg-[#57a7d9]/25" : "bg-[#d97757]/30"
-          }`}
-        />
-        <div
-          className={`absolute right-0 top-1/3 h-80 w-80 rounded-full blur-3xl ${
-            isDrive ? "bg-[#8bc5dd]/18" : "bg-[#5b7b8a]/25"
-          }`}
-        />
         <div className={`absolute inset-0 ${isDrive ? "bg-[#04101b]/42" : "bg-black/35"}`} />
       </div>
 

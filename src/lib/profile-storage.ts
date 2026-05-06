@@ -72,7 +72,8 @@ export function saveProfile(next: DashboardProfile) {
   // Fire-and-forget: persist profile to server for authenticated users
   (async () => {
     try {
-      await fetch("/api/auth/profile", {
+      const { default: fetchWithRetry } = await import("@/lib/fetchWithRetry");
+      await fetchWithRetry("/api/auth/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -82,7 +83,7 @@ export function saveProfile(next: DashboardProfile) {
           avatarUrl: next.avatarDataUrl || undefined,
           socialAccounts: next.socialAccounts || undefined,
         }),
-      });
+      }, { dedupeKey: `client:profile:save:${next.email || "unknown"}` });
     } catch {
       // ignore network failures; profile remains in localStorage as fallback
     }

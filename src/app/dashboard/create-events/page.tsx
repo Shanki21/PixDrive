@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
+import fetchWithRetry from "@/lib/fetchWithRetry";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   BadgeCheck,
@@ -55,7 +56,7 @@ function Toggle({
       type="button"
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${checked ? "bg-[#0f766e]" : "bg-[#d8e5df]"
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${checked ? "bg-[#7a3f13]" : "bg-[#e3cdb8]"
         } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
       aria-pressed={checked}
     >
@@ -80,12 +81,12 @@ function SectionHeader({
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="flex items-center gap-3">
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#eef7f3] text-[#0f766e]">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#f4e5d3] text-[#7a3f13]">
           {icon}
         </span>
         <div>
-          <p className="text-base font-semibold text-[#173029]">{title}</p>
-          <p className="text-xs text-[#6a877e]">{subtitle}</p>
+          <p className="text-base font-semibold text-[#2a170d]">{title}</p>
+          <p className="text-xs text-[#8a735f]">{subtitle}</p>
         </div>
       </div>
       {trailing ?? null}
@@ -108,12 +109,12 @@ function ControlToggleRow({
 }) {
   return (
     <div
-      className={`flex items-start justify-between gap-4 rounded-xl border border-[#e2eee8] bg-[#fbfdfc] px-4 py-3 ${disabled ? "opacity-60" : ""
+      className={`flex items-start justify-between gap-4 rounded-xl border border-[#f0e4d7] bg-[#fffdf8] px-4 py-3 ${disabled ? "opacity-60" : ""
         }`}
     >
       <div>
         <p className="text-sm font-semibold text-[#1f3f36]">{title}</p>
-        <p className="mt-1 text-xs text-[#6f8b82]">{description}</p>
+        <p className="mt-1 text-xs text-[#8a735f]">{description}</p>
       </div>
       <Toggle checked={value} onChange={onChange} disabled={disabled} />
     </div>
@@ -207,9 +208,9 @@ function CreateEventsPageContent() {
     };
     setLoadingEditData(true);
 
-    const loadForEdit = async () => {
+        const loadForEdit = async () => {
       try {
-        const response = await fetch(`/api/galleries/${encodeURIComponent(editGalleryId)}`, { cache: "no-store" });
+        const response = await fetchWithRetry(`/api/galleries/${encodeURIComponent(editGalleryId)}`, { cache: "no-store", method: "GET" }, { dedupeKey: `galleries:load:${editGalleryId}` });
         const contentType = response.headers.get("content-type") ?? "";
         if (!response.ok || !contentType.includes("application/json")) {
           throw new Error("Unable to load event details for editing.");
@@ -235,16 +236,16 @@ function CreateEventsPageContent() {
     };
   }, [editGalleryId, isEditMode, todayDate]);
 
-useEffect(() => {
-      if (!isEditMode) return;
+  useEffect(() => {
+    if (!isEditMode) return;
 
-      return () => {
-        // reset to avoid leakage
-        setEventName("");
-        setEventLocation("");
-        setDescription("");
-      };
-    }, [editGalleryId]);
+    return () => {
+      // reset to avoid leakage
+      setEventName("");
+      setEventLocation("");
+      setDescription("");
+    };
+  }, [editGalleryId, isEditMode]);
 
   const canSubmit = useMemo(() => {
     const hasValidName = eventName.trim().length > 0;
@@ -299,7 +300,7 @@ useEffect(() => {
       };
 
       if (isEditMode) {
-        const response = await fetch(`/api/galleries/${encodeURIComponent(editGalleryId)}`, {
+        const response = await fetchWithRetry(`/api/galleries/${encodeURIComponent(editGalleryId)}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -307,7 +308,7 @@ useEffect(() => {
             settings: settingsPayload,
             meta: metaPayload,
           }),
-        });
+        }, { dedupeKey: `galleries:patch:${editGalleryId}`, idempotencyKey: `galleries:patch:${editGalleryId}:${Date.now()}` });
         const contentType = response.headers.get("content-type") ?? "";
         if (!response.ok || !contentType.includes("application/json")) {
           throw new Error("Unable to save event changes.");
@@ -317,7 +318,7 @@ useEffect(() => {
         return;
       }
 
-      const response = await fetch("/api/galleries", {
+      const response = await fetchWithRetry("/api/galleries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -325,7 +326,7 @@ useEffect(() => {
           settings: settingsPayload,
           meta: metaPayload,
         }),
-      });
+      }, { dedupeKey: `galleries:create:${safeName}`, idempotencyKey: `galleries:create:${Date.now()}` });
       const contentType = response.headers.get("content-type") ?? "";
       if (!response.ok || !contentType.includes("application/json")) {
         throw new Error("Unable to create event.");
@@ -346,11 +347,11 @@ useEffect(() => {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6">
-      <section className="rounded-[28px] border border-[#d7e8e1] bg-white p-6 shadow-[0_20px_55px_rgba(16,39,32,0.08)] md:p-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#0f766e]">
+      <section className="rounded-[28px] border border-[#eadccf] bg-white p-6 shadow-[0_20px_55px_rgba(73,39,20,0.08)] md:p-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7a3f13]">
           {isEditMode ? "Edit Event" : "Create Event"}
         </p>
-        <h1 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-[#101c19] sm:text-4xl">
+        <h1 className="font-display mt-3 text-3xl font-bold text-[#2a170d] sm:text-4xl">
           {isEditMode ? "Update your Pixora event" : "Build a new Pixora event"}
         </h1>
         <p className="mt-2 text-sm text-[#5e7b72]">
@@ -360,11 +361,11 @@ useEffect(() => {
         </p>
 
         <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_80px_1fr] sm:items-center">
-          <div className="rounded-2xl border border-[#d4e8de] bg-[#eff9f4] px-4 py-3 text-sm font-semibold text-[#1a4539]">
+          <div className="rounded-2xl border border-[#d4e8de] bg-[#f5eadb] px-4 py-3 text-sm font-semibold text-[#5b3a23]">
             1. Event Details
           </div>
-          <div className="hidden h-px bg-[#dce9e3] sm:block" />
-          <div className="rounded-2xl border border-[#dce9e3] bg-[#f7fbf9] px-4 py-3 text-sm font-semibold text-[#5f7c73]">
+          <div className="hidden h-px bg-[#efe1d3] sm:block" />
+          <div className="rounded-2xl border border-[#efe1d3] bg-[#fffaf4] px-4 py-3 text-sm font-semibold text-[#7a6a55]">
             2. Advanced Control Board
           </div>
         </div>
@@ -372,68 +373,68 @@ useEffect(() => {
 
       <form onSubmit={onSubmit} className="space-y-6">
         {loadingEditData ? (
-          <div className="rounded-xl border border-[#d6e8df] bg-[#f4fbf8] px-4 py-3 text-sm font-medium text-[#2d4f46]">
+          <div className="rounded-xl border border-[#ead7c5] bg-[#fff7ee] px-4 py-3 text-sm font-medium text-[#5b3a23]">
             Loading event details...
           </div>
         ) : null}
 
-        <section className="rounded-3xl border border-[#d9e8e2] bg-white p-6 shadow-[0_10px_30px_rgba(16,39,32,0.06)]">
+        <section className="rounded-3xl border border-[#eadccf] bg-white p-6 shadow-[0_10px_30px_rgba(73,39,20,0.06)]">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-semibold text-[#173029]">Event Details</h2>
-              <p className="mt-1 text-sm text-[#68857c]">Capture your core event information.</p>
+              <h2 className="text-2xl font-semibold text-[#2a170d]">Event Details</h2>
+              <p className="mt-1 text-sm text-[#8a735f]">Capture your core event information.</p>
             </div>
-            <div className="flex items-center gap-2 rounded-full border border-[#d6e8df] bg-[#f5fbf8] px-3 py-1">
-              <span className="text-xs font-semibold text-[#517268]">Published</span>
+            <div className="flex items-center gap-2 rounded-full border border-[#ead7c5] bg-[#f5fbf8] px-3 py-1">
+              <span className="text-xs font-semibold text-[#7a6a55]">Published</span>
               <Toggle checked={published} onChange={setPublished} />
             </div>
           </div>
 
           <div className="mt-5 space-y-4">
             <div>
-              <label className="text-sm font-semibold text-[#2d4f46]">Event Name</label>
+              <label className="text-sm font-semibold text-[#5b3a23]">Event Name</label>
               <input
                 value={eventName}
                 onChange={(e) => setEventName(e.target.value)}
                 placeholder="Enter event name"
-                className="mt-1 h-12 w-full rounded-xl border border-[#d5e7df] bg-white px-4 text-sm text-[#1a352d] outline-none focus:border-[#0f766e]"
+                className="mt-1 h-12 w-full rounded-xl border border-[#ead7c5] bg-white px-4 text-sm text-[#3a2112] outline-none focus:border-[#7a3f13]"
               />
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <label className="text-sm font-semibold text-[#2d4f46]">
+              <label className="text-sm font-semibold text-[#5b3a23]">
                 Start Date
                 <div className="relative mt-1">
-                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6f8b82]" />
+                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a735f]" />
                   <input
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="h-12 w-full rounded-xl border border-[#d5e7df] bg-white pl-10 pr-3 text-sm text-[#1a352d] outline-none focus:border-[#0f766e]"
+                    className="h-12 w-full rounded-xl border border-[#ead7c5] bg-white pl-10 pr-3 text-sm text-[#3a2112] outline-none focus:border-[#7a3f13]"
                   />
                 </div>
               </label>
-              <label className="text-sm font-semibold text-[#2d4f46]">
+              <label className="text-sm font-semibold text-[#5b3a23]">
                 End Date
                 <div className="relative mt-1">
-                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6f8b82]" />
+                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a735f]" />
                   <input
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="h-12 w-full rounded-xl border border-[#d5e7df] bg-white pl-10 pr-3 text-sm text-[#1a352d] outline-none focus:border-[#0f766e]"
+                    className="h-12 w-full rounded-xl border border-[#ead7c5] bg-white pl-10 pr-3 text-sm text-[#3a2112] outline-none focus:border-[#7a3f13]"
                   />
                 </div>
               </label>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <label className="text-sm font-semibold text-[#2d4f46]">
+              <label className="text-sm font-semibold text-[#5b3a23]">
                 Event Type
                 <select
                   value={eventType}
                   onChange={(e) => setEventType(e.target.value)}
-                  className="mt-1 h-12 w-full rounded-xl border border-[#d5e7df] bg-white px-3 text-sm text-[#1a352d] outline-none focus:border-[#0f766e]"
+                  className="mt-1 h-12 w-full rounded-xl border border-[#ead7c5] bg-white px-3 text-sm text-[#3a2112] outline-none focus:border-[#7a3f13]"
                 >
                   {EVENT_TYPES.map((type) => (
                     <option key={type} value={type}>
@@ -442,36 +443,35 @@ useEffect(() => {
                   ))}
                 </select>
               </label>
-              <label className="text-sm font-semibold text-[#2d4f46]">
+              <label className="text-sm font-semibold text-[#5b3a23]">
                 Event Location
                 <div className="relative mt-1">
-                  <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6f8b82]" />
+                  <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a735f]" />
                   <input
                     value={eventLocation}
                     onChange={(e) => setEventLocation(e.target.value)}
                     placeholder="Add location or virtual link"
-                    className="h-12 w-full rounded-xl border border-[#d5e7df] bg-white pl-10 pr-3 text-sm text-[#1a352d] outline-none focus:border-[#0f766e]"
+                    className="h-12 w-full rounded-xl border border-[#ead7c5] bg-white pl-10 pr-3 text-sm text-[#3a2112] outline-none focus:border-[#7a3f13]"
                   />
                 </div>
               </label>
             </div>
 
-            <label className="text-sm font-semibold text-[#2d4f46]">
+            <label className="text-sm font-semibold text-[#5b3a23]">
               Description
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Add event description (optional)"
-                className="mt-1 min-h-24 w-full rounded-xl border border-[#d5e7df] bg-white px-4 py-3 text-sm text-[#1a352d] outline-none focus:border-[#0f766e]"
+                className="mt-1 min-h-24 w-full rounded-xl border border-[#ead7c5] bg-white px-4 py-3 text-sm text-[#3a2112] outline-none focus:border-[#7a3f13]"
               />
             </label>
           </div>
         </section>
 
-        <section className="rounded-3xl border border-[#d9e8e2] bg-white p-6 shadow-[0_10px_30px_rgba(16,39,32,0.06)]">
-          <div className="relative overflow-hidden rounded-2xl border border-[#d6e8df] bg-[linear-gradient(140deg,#f7fcfa_0%,#eef8f4_55%,#f3f8ff_100%)] p-5">
-            <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-[#0f766e]/10 blur-2xl" />
-            <div className="pointer-events-none absolute -bottom-14 left-8 h-36 w-36 rounded-full bg-[#2563eb]/10 blur-2xl" />
+        <section className="rounded-3xl border border-[#eadccf] bg-white p-6 shadow-[0_10px_30px_rgba(73,39,20,0.06)]">
+          <div className="relative overflow-hidden rounded-2xl border border-[#ead7c5] bg-[linear-gradient(140deg,#f7fcfa_0%,#f6eadb_55%,#fff4e8_100%)] p-5">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[#ead7c5]" />
             <SectionHeader
               icon={<BadgeCheck className="h-5 w-5" />}
               title="Brand Experience Kit"
@@ -479,20 +479,20 @@ useEffect(() => {
               trailing={<Toggle checked={brandingEnabled} onChange={setBrandingEnabled} />}
             />
             <div className="mt-4 flex flex-wrap gap-2">
-              <span className="rounded-full border border-[#cde6dc] bg-white/80 px-3 py-1 text-xs font-semibold text-[#2d4f46]">
+              <span className="rounded-full border border-[#ead7c5] bg-white/80 px-3 py-1 text-xs font-semibold text-[#5b3a23]">
                 Personalized cover
               </span>
-              <span className="rounded-full border border-[#cde6dc] bg-white/80 px-3 py-1 text-xs font-semibold text-[#2d4f46]">
+              <span className="rounded-full border border-[#ead7c5] bg-white/80 px-3 py-1 text-xs font-semibold text-[#5b3a23]">
                 Brand color accents
               </span>
-              <span className="rounded-full border border-[#cde6dc] bg-white/80 px-3 py-1 text-xs font-semibold text-[#2d4f46]">
+              <span className="rounded-full border border-[#ead7c5] bg-white/80 px-3 py-1 text-xs font-semibold text-[#5b3a23]">
                 Consistent delivery style
               </span>
             </div>
           </div>
         </section>
 
-        <section className="rounded-3xl border border-[#d9e8e2] bg-white p-6 shadow-[0_10px_30px_rgba(16,39,32,0.06)]">
+        <section className="rounded-3xl border border-[#eadccf] bg-white p-6 shadow-[0_10px_30px_rgba(73,39,20,0.06)]">
           <SectionHeader
             icon={<BadgeCheck className="h-5 w-5" />}
             title="Favorites Settings"
@@ -508,7 +508,7 @@ useEffect(() => {
               disabled={!favoritesEnabled}
             />
             {favoritesEnabled && favoritesLimitSelected ? (
-              <label className="text-sm font-semibold text-[#2d4f46]">
+              <label className="text-sm font-semibold text-[#5b3a23]">
                 Max Selected Photos
                 <input
                   type="number"
@@ -518,32 +518,31 @@ useEffect(() => {
                     const next = Number.parseInt(e.target.value, 10);
                     setFavoritesMaxSelected(Number.isFinite(next) ? Math.max(1, next) : 1);
                   }}
-                  className="mt-1 h-12 w-full rounded-xl border border-[#d5e7df] bg-white px-4 text-sm text-[#1a352d] outline-none focus:border-[#0f766e]"
+                  className="mt-1 h-12 w-full rounded-xl border border-[#ead7c5] bg-white px-4 text-sm text-[#3a2112] outline-none focus:border-[#7a3f13]"
                 />
               </label>
             ) : null}
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-[30px] border border-[#d5e6df] bg-white shadow-[0_18px_44px_rgba(16,39,32,0.09)]">
+        <section className="overflow-hidden rounded-[30px] border border-[#ead7c5] bg-white shadow-[0_18px_44px_rgba(73,39,20,0.09)]">
           <div className="relative">
-            <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-[#0f766e]/12 blur-2xl" />
-            <div className="pointer-events-none absolute -left-16 bottom-0 h-36 w-36 rounded-full bg-[#2563eb]/10 blur-2xl" />
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[#ead7c5]" />
             <button
               type="button"
               onClick={() => setAdvancedOpen((current) => !current)}
               className="relative flex w-full items-center justify-between gap-4 px-6 py-6 text-left md:px-7"
             >
               <div>
-                <p className="inline-flex items-center rounded-full border border-[#cde3d9] bg-[#f4fbf8] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#335a4f]">
+                <p className="inline-flex items-center rounded-full border border-[#ead7c5] bg-[#fff7ee] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#6d4426]">
                   Event Intelligence
                 </p>
                 <p className="mt-3 text-xl font-semibold text-[#163129]">Advanced Control Board</p>
-                <p className="mt-1 text-sm text-[#5f7c73]">
+                <p className="mt-1 text-sm text-[#7a6a55]">
                   Fine-tune permissions, access, delivery behavior, and communication from one panel.
                 </p>
               </div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe2d8] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#34574d]">
+              <span className="inline-flex items-center gap-2 rounded-full border border-[#ead7c5] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#6d4426]">
                 {advancedOpen ? "Collapse" : "Expand"}
                 {advancedOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </span>
@@ -551,57 +550,57 @@ useEffect(() => {
           </div>
 
           {advancedOpen ? (
-            <div className="border-t border-[#e2eee8] bg-[linear-gradient(160deg,#fbfdfc_0%,#f3faf7_56%,#f4f8ff_100%)] px-6 pb-6 pt-5 md:px-7">
+            <div className="border-t border-[#f0e4d7] bg-[linear-gradient(160deg,#fffdf8_0%,#fff7ee_56%,#fff4e8_100%)] px-6 pb-6 pt-5 md:px-7">
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                <article className="rounded-2xl border border-[#d7e7e0] bg-white p-5 shadow-[0_8px_22px_rgba(16,39,32,0.06)]">
+                <article className="rounded-2xl border border-[#ead7c5] bg-white p-5 shadow-[0_8px_22px_rgba(73,39,20,0.06)]">
                   <div className="mb-4 flex items-center gap-3">
-                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#edf8f3] text-[#0f766e]">
+                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#f4e5d3] text-[#7a3f13]">
                       <ShieldCheck className="h-5 w-5" />
                     </span>
                     <div>
-                      <p className="text-base font-semibold text-[#173029]">Security Envelope</p>
-                      <p className="text-xs text-[#6a877e]">Control event entry and protected access.</p>
+                      <p className="text-base font-semibold text-[#2a170d]">Security Envelope</p>
+                      <p className="text-xs text-[#8a735f]">Control event entry and protected access.</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                    <label className="text-sm font-semibold text-[#2d4f46]">
+                    <label className="text-sm font-semibold text-[#5b3a23]">
                       Expiry Date
                       <input
                         type="date"
                         value={expiryDate}
                         onChange={(e) => setExpiryDate(e.target.value)}
-                        className="mt-1 h-11 w-full rounded-xl border border-[#d7e6df] bg-[#f9fcfa] px-3 text-sm text-[#1a352d] outline-none focus:border-[#0f766e]"
+                        className="mt-1 h-11 w-full rounded-xl border border-[#ead7c5] bg-[#fffdf8] px-3 text-sm text-[#3a2112] outline-none focus:border-[#7a3f13]"
                       />
                     </label>
-                    <label className="text-sm font-semibold text-[#2d4f46]">
+                    <label className="text-sm font-semibold text-[#5b3a23]">
                       Full Access PIN
                       <input
                         value={fullAccessPin}
                         onChange={(e) => setFullAccessPin(e.target.value)}
                         placeholder="For admins"
-                        className="mt-1 h-11 w-full rounded-xl border border-[#d7e6df] bg-[#f9fcfa] px-3 text-sm text-[#1a352d] outline-none focus:border-[#0f766e]"
+                        className="mt-1 h-11 w-full rounded-xl border border-[#ead7c5] bg-[#fffdf8] px-3 text-sm text-[#3a2112] outline-none focus:border-[#7a3f13]"
                       />
                     </label>
-                    <label className="text-sm font-semibold text-[#2d4f46]">
+                    <label className="text-sm font-semibold text-[#5b3a23]">
                       Guest PIN
                       <input
                         value={guestPin}
                         onChange={(e) => setGuestPin(e.target.value)}
                         placeholder="For guests"
-                        className="mt-1 h-11 w-full rounded-xl border border-[#d7e6df] bg-[#f9fcfa] px-3 text-sm text-[#1a352d] outline-none focus:border-[#0f766e]"
+                        className="mt-1 h-11 w-full rounded-xl border border-[#ead7c5] bg-[#fffdf8] px-3 text-sm text-[#3a2112] outline-none focus:border-[#7a3f13]"
                       />
                     </label>
                   </div>
                 </article>
 
-                <article className="rounded-2xl border border-[#d7e7e0] bg-white p-5 shadow-[0_8px_22px_rgba(16,39,32,0.06)]">
+                <article className="rounded-2xl border border-[#ead7c5] bg-white p-5 shadow-[0_8px_22px_rgba(73,39,20,0.06)]">
                   <div className="mb-4 flex items-center gap-3">
-                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#edf6ff] text-[#2563eb]">
+                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#f3e4d2] text-[#b9783b]">
                       <LockKeyhole className="h-5 w-5" />
                     </span>
                     <div>
-                      <p className="text-base font-semibold text-[#173029]">Download Rules</p>
-                      <p className="text-xs text-[#6a877e]">Set how clients can collect delivered files.</p>
+                      <p className="text-base font-semibold text-[#2a170d]">Download Rules</p>
+                      <p className="text-xs text-[#8a735f]">Set how clients can collect delivered files.</p>
                     </div>
                   </div>
                   <div className="space-y-3">
@@ -620,14 +619,14 @@ useEffect(() => {
                   </div>
                 </article>
 
-                <article className="rounded-2xl border border-[#d7e7e0] bg-white p-5 shadow-[0_8px_22px_rgba(16,39,32,0.06)]">
+                <article className="rounded-2xl border border-[#ead7c5] bg-white p-5 shadow-[0_8px_22px_rgba(73,39,20,0.06)]">
                   <div className="mb-4 flex items-center gap-3">
-                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#eef7f3] text-[#0f766e]">
+                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#f4e5d3] text-[#7a3f13]">
                       <Megaphone className="h-5 w-5" />
                     </span>
                     <div>
-                      <p className="text-base font-semibold text-[#173029]">Broadcast Center</p>
-                      <p className="text-xs text-[#6a877e]">Choose where event updates are sent.</p>
+                      <p className="text-base font-semibold text-[#2a170d]">Broadcast Center</p>
+                      <p className="text-xs text-[#8a735f]">Choose where event updates are sent.</p>
                     </div>
                   </div>
                   <div className="space-y-3">
@@ -646,14 +645,14 @@ useEffect(() => {
                   </div>
                 </article>
 
-                <article className="rounded-2xl border border-[#d7e7e0] bg-white p-5 shadow-[0_8px_22px_rgba(16,39,32,0.06)]">
+                <article className="rounded-2xl border border-[#ead7c5] bg-white p-5 shadow-[0_8px_22px_rgba(73,39,20,0.06)]">
                   <div className="mb-4 flex items-center gap-3">
-                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#edf6ff] text-[#2563eb]">
+                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#f3e4d2] text-[#b9783b]">
                       <QrCode className="h-5 w-5" />
                     </span>
                     <div>
-                      <p className="text-base font-semibold text-[#173029]">QR Gateway</p>
-                      <p className="text-xs text-[#6a877e]">Fine-tune access behavior for One QR links.</p>
+                      <p className="text-base font-semibold text-[#2a170d]">QR Gateway</p>
+                      <p className="text-xs text-[#8a735f]">Fine-tune access behavior for One QR links.</p>
                     </div>
                   </div>
                   <div className="space-y-3">
@@ -670,17 +669,17 @@ useEffect(() => {
                       onChange={setOneQrRequirePin}
                       disabled={!oneQrEnabled}
                     />
-                    <div className="rounded-xl border border-[#e2eee8] bg-[#fbfdfc] px-4 py-3">
+                    <div className="rounded-xl border border-[#f0e4d7] bg-[#fffdf8] px-4 py-3">
                       <p className="text-sm font-semibold text-[#1f3f36]">Access Level</p>
-                      <p className="mt-1 text-xs text-[#6f8b82]">Choose visitor permission when opening from QR.</p>
+                      <p className="mt-1 text-xs text-[#8a735f]">Choose visitor permission when opening from QR.</p>
                       <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <button
                           type="button"
                           onClick={() => setOneQrAccessLevel("full")}
                           disabled={!oneQrEnabled}
                           className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${oneQrAccessLevel === "full"
-                              ? "border-[#0f766e] bg-[#eaf8f2] text-[#0f766e]"
-                              : "border-[#d6e8df] bg-white text-[#36574d]"
+                              ? "border-[#7a3f13] bg-[#f4e5d3] text-[#7a3f13]"
+                              : "border-[#ead7c5] bg-white text-[#6d4426]"
                             } ${!oneQrEnabled ? "cursor-not-allowed opacity-60" : ""}`}
                         >
                           Full Access
@@ -690,8 +689,8 @@ useEffect(() => {
                           onClick={() => setOneQrAccessLevel("guest")}
                           disabled={!oneQrEnabled}
                           className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${oneQrAccessLevel === "guest"
-                              ? "border-[#0f766e] bg-[#eaf8f2] text-[#0f766e]"
-                              : "border-[#d6e8df] bg-white text-[#36574d]"
+                              ? "border-[#7a3f13] bg-[#f4e5d3] text-[#7a3f13]"
+                              : "border-[#ead7c5] bg-white text-[#6d4426]"
                             } ${!oneQrEnabled ? "cursor-not-allowed opacity-60" : ""}`}
                         >
                           Guest Access
@@ -701,14 +700,14 @@ useEffect(() => {
                   </div>
                 </article>
 
-                <article className="rounded-2xl border border-[#d7e7e0] bg-white p-5 shadow-[0_8px_22px_rgba(16,39,32,0.06)] xl:col-span-2">
+                <article className="rounded-2xl border border-[#ead7c5] bg-white p-5 shadow-[0_8px_22px_rgba(73,39,20,0.06)] xl:col-span-2">
                   <div className="mb-4 flex items-center gap-3">
-                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#eef7f3] text-[#0f766e]">
+                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#f4e5d3] text-[#7a3f13]">
                       <Smartphone className="h-5 w-5" />
                     </span>
                     <div>
-                      <p className="text-base font-semibold text-[#173029]">Experience Lab</p>
-                      <p className="text-xs text-[#6a877e]">Control app-like delivery and identity safeguards.</p>
+                      <p className="text-base font-semibold text-[#2a170d]">Experience Lab</p>
+                      <p className="text-xs text-[#8a735f]">Control app-like delivery and identity safeguards.</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -741,14 +740,14 @@ useEffect(() => {
           <button
             type="button"
             onClick={() => router.push("/dashboard/drive")}
-            className="rounded-xl border border-[#d5e7df] bg-white px-5 py-2.5 text-sm font-semibold text-[#2d5046] transition hover:border-[#0f766e] hover:text-[#0f766e]"
+            className="rounded-xl border border-[#ead7c5] bg-white px-5 py-2.5 text-sm font-semibold text-[#5b3a23] transition hover:border-[#7a3f13] hover:text-[#7a3f13]"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={!canSubmit}
-            className="rounded-xl bg-[#0f766e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#115e59] disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-xl bg-[#7a3f13] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#5b2b0c] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? (isEditMode ? "Saving..." : "Creating...") : isEditMode ? "Save Changes" : "Create Event"}
           </button>
@@ -763,8 +762,8 @@ export default function CreateEventsPage() {
     <Suspense
       fallback={
         <div className="mx-auto w-full max-w-6xl space-y-6">
-          <section className="rounded-[28px] border border-[#d7e8e1] bg-white p-6 shadow-[0_20px_55px_rgba(16,39,32,0.08)] md:p-8">
-            <p className="text-sm font-medium text-[#5f7c73]">Loading create event tools...</p>
+          <section className="rounded-[28px] border border-[#eadccf] bg-white p-6 shadow-[0_20px_55px_rgba(73,39,20,0.08)] md:p-8">
+            <p className="text-sm font-medium text-[#7a6a55]">Loading create event tools...</p>
           </section>
         </div>
       }

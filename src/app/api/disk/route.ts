@@ -14,6 +14,8 @@ import {
 import { normalizeGalleryMeta } from "@/lib/gallery-config";
 import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { withApiHandler } from "@/lib/withApiHandler";
+import { withRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 const DOWNLOAD_FETCH_TIMEOUT_MS = 12000;
@@ -72,67 +74,69 @@ async function resolveGalleryBySlug(slug: string) {
   });
 }
 
-export async function POST(req: NextRequest) {
-  const blocked = rejectCrossOriginWrite(req);
-  if (blocked) {
-    return blocked;
-  }
+export const POST = withApiHandler(
+  withRateLimit(async (req: NextRequest) => {
+    const blocked = rejectCrossOriginWrite(req);
+    if (blocked) {
+      return blocked;
+    }
 
-  const body = (await req.json().catch(() => null)) as { slug?: unknown; pin?: unknown; action?: unknown } | null;
-  const action = String(body?.action ?? "").trim();
-  if (action !== "unlock") {
-    return NextResponse.json({ ok: false, error: "Invalid action." }, { status: 400 });
-  }
+    const body = (await req.json().catch(() => null)) as { slug?: unknown; pin?: unknown; action?: unknown } | null;
+    const action = String(body?.action ?? "").trim();
+    if (action !== "unlock") {
+      return NextResponse.json({ ok: false, error: "Invalid action." }, { status: 400 });
+    }
 
-  const slug = normalizeSingleLine(body?.slug, 120);
-  const pin = normalizeSingleLine(body?.pin, 64);
-  if (!slug || !pin) {
-    return NextResponse.json({ ok: false, error: "slug and pin are required." }, { status: 400 });
-  }
+    const slug = normalizeSingleLine(body?.slug, 120);
+    const pin = normalizeSingleLine(body?.pin, 64);
+    if (!slug || !pin) {
+      return NextResponse.json({ ok: false, error: "slug and pin are required." }, { status: 400 });
+    }
 
-  const gallery = await resolveGalleryBySlug(slug);
-  if (!gallery) {
-    return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
-  }
+    const gallery = await resolveGalleryBySlug(slug);
+    if (!gallery) {
+      return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+    }
 
-  const publicAccess = getGalleryPublicAccess({ settings: gallery.settings, meta: gallery.meta });
-  if (!publicAccess.canAccess) {
-    return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
-  }
+    const publicAccess = getGalleryPublicAccess({ settings: gallery.settings, meta: gallery.meta });
+    if (!publicAccess.canAccess) {
+      return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+    }
 
-  const requiredPin = getRequiredGalleryPin(gallery.settings);
-  if (!requiredPin) {
-    return NextResponse.json({ ok: true });
-  }
+    const requiredPin = getRequiredGalleryPin(gallery.settings);
+    if (!requiredPin) {
+      return NextResponse.json({ ok: true });
+    }
 
-  const ip = getClientIp(req) ?? "unknown";
-  const unlockLimit = await checkIpThrottle({
-    key: `gallery:unlock:${gallery.id}:${ip}`,
-    limit: 12,
-    windowMs: 15 * 60 * 1000,
-  });
-  if (!unlockLimit.ok) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Too many attempts. Try again later.",
-        retryAfterSeconds: unlockLimit.retryAfterSeconds,
-      },
-      { status: 429 }
-    );
-  }
+    const ip = getClientIp(req) ?? "unknown";
+    const unlockLimit = await checkIpThrottle({
+      key: `gallery:unlock:${gallery.id}:${ip}`,
+      limit: 12,
+      windowMs: 15 * 60 * 1000,
+    });
+    if (!unlockLimit.ok) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Too many attempts. Try again later.",
+          retryAfterSeconds: unlockLimit.retryAfterSeconds,
+        },
+        { status: 429 }
+      );
+    }
 
-  if (!(await verifyGalleryPin(gallery.settings, pin))) {
-    return NextResponse.json({ ok: false, error: "Invalid PIN." }, { status: 401 });
-  }
+    if (!(await verifyGalleryPin(gallery.settings, pin))) {
+      return NextResponse.json({ ok: false, error: "Invalid PIN." }, { status: 401 });
+    }
 
-  const response = NextResponse.json({ ok: true });
-  const cookieSet = setGalleryAccessCookie(response, gallery.id);
-  if (!cookieSet) {
-    return NextResponse.json({ ok: false, error: "Session secret is missing." }, { status: 500 });
-  }
-  return response;
-}
+    const response = NextResponse.json({ ok: true });
+    const cookieSet = setGalleryAccessCookie(response, gallery.id);
+    if (!cookieSet) {
+      return NextResponse.json({ ok: false, error: "Session secret is missing." }, { status: 500 });
+    }
+    return response;
+  }, { keyPrefix: "gallery:unlock", limit: 12, windowMs: 15 * 60 * 1000 })
+);
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -233,7 +237,8 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-      const response = await fetch(sourceUrl, { signal: AbortSignal.timeout(DOWNLOAD_FETCH_TIMEOUT_MS) });
+      const { default: fetchWithRetry } = await import("@/lib/fetchWithRetry");
+      const response = await fetchWithRetry(sourceUrl, { signal: AbortSignal.timeout(DOWNLOAD_FETCH_TIMEOUT_MS) }, { dedupeKey: `disk:download:${photo.id}` });
       if (!response.ok) continue;
       const contentType = response.headers.get("content-type") ?? "application/octet-stream";
       if (!isAllowedImageContentType(contentType)) continue;

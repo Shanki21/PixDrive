@@ -14,11 +14,6 @@ export default function PricingSection({ eyebrow, title, description, theme = "s
 
   return (
     <section className={`relative overflow-hidden py-28 ${isDrive ? "bg-[#eaf4f8]" : "bg-[#f6f1ea]"}`}>
-      <div
-        className={`absolute -left-28 top-0 h-72 w-72 rounded-full blur-3xl ${
-          isDrive ? "bg-[#71b4d4]/20" : "bg-[#5b7b8a]/15"
-        }`}
-      />
       <div className="mx-auto max-w-6xl px-6 md:px-10">
         <motion.div
           initial={{ opacity: 0, y: 34 }}
@@ -73,7 +68,7 @@ export default function PricingSection({ eyebrow, title, description, theme = "s
               animate={{ y: [0, -3, 0] }}
               transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
               className={`rounded-full px-4 py-2 text-xs uppercase tracking-[0.3em] text-white/85 ${
-                isDrive ? "bg-[#1f6f9d]" : "bg-[#101114]"
+                isDrive ? "bg-[#1f6f9d]" : "bg-[#2a170d]"
               }`}
             >
               35% off
@@ -90,7 +85,7 @@ export default function PricingSection({ eyebrow, title, description, theme = "s
               whileHover={{ scale: 1.03, y: -2 }}
               whileTap={{ scale: 0.98 }}
               className={`rounded-full px-8 py-3 text-sm font-semibold text-white ${
-                isDrive ? "bg-[#1f6f9d]" : "bg-[#101114]"
+                isDrive ? "bg-[#1f6f9d]" : "bg-[#2a170d]"
               }`}
             >
               Try for free

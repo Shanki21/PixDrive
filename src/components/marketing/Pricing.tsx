@@ -128,10 +128,7 @@ export default function Pricing() {
   const yearlyDefault: BillingCycle = "yearly";
 
   return (
-    <section id="pricing" className="relative overflow-hidden border-y border-[#E5E5E5] bg-[#f7faf8] py-24">
-      <div className="pointer-events-none absolute -left-16 top-0 h-64 w-64 rounded-full bg-[#9bd6c3]/30 blur-3xl" />
-      <div className="pointer-events-none absolute -right-24 bottom-0 h-72 w-72 rounded-full bg-[#9cc9ff]/25 blur-3xl" />
-
+    <section id="pricing" className="relative overflow-hidden border-y border-[#ead7c5] bg-[#fffaf4] py-24">
       <Container className="relative">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
@@ -140,16 +137,16 @@ export default function Pricing() {
           transition={{ duration: 0.45 }}
           className="text-center"
         >
-          <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[#0f766e]">Pricing</p>
-          <h2 className="mt-3 text-[38px] font-semibold leading-tight tracking-[-0.02em] text-[#111111]">
+          <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[#7a3f13]">Pricing</p>
+          <h2 className="font-display mt-3 text-[38px] font-semibold leading-tight text-[#2a170d]">
             Built To Convert From Starter To Studio
           </h2>
-          <p className="mx-auto mt-4 max-w-[780px] text-[16px] text-[#5e6e68]">
+          <p className="mx-auto mt-4 max-w-[780px] text-[16px] text-[#7a6a55]">
             Yearly is selected by default to highlight long-term savings. Studio is positioned as the most logical
             choice for serious creators.
           </p>
-          <div className="mt-6 inline-flex items-center gap-3 rounded-full border border-[#cfe3db] bg-white px-5 py-2 text-sm font-medium text-[#1d4e42]">
-            <span className={yearlyDefault === "yearly" ? "font-semibold text-[#0f766e]" : ""}>Yearly (Default)</span>
+          <div className="mt-6 inline-flex items-center gap-3 rounded-full border border-[#ead7c5] bg-white px-5 py-2 text-sm font-medium text-[#5b3a23]">
+            <span className={yearlyDefault === "yearly" ? "font-semibold text-[#7a3f13]" : ""}>Yearly (Default)</span>
             <span className="h-1 w-1 rounded-full bg-[#9bb7ad]" />
             <span>2 months free on yearly plans</span>
           </div>
@@ -165,12 +162,12 @@ export default function Pricing() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, amount: 0.2 }}
                 transition={{ duration: 0.4 }}
-                className={`relative rounded-3xl border bg-white p-6 shadow-[0_18px_42px_rgba(16,39,32,0.08)] ${
-                  featured ? "border-[#0f766e] ring-2 ring-[#0f766e]/20" : "border-[#d9e7e1]"
+                className={`relative rounded-3xl border bg-white p-6 shadow-[0_18px_42px_rgba(73,39,20,0.08)] ${
+                  featured ? "border-[#7a3f13] ring-2 ring-[#7a3f13]/20" : "border-[#eadccf]"
                 }`}
               >
                 {plan.highlight ? (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#0f766e] px-4 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-white">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#7a3f13] px-4 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-white">
                     {plan.highlight}
                   </div>
                 ) : null}
@@ -178,10 +175,10 @@ export default function Pricing() {
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#6a867d]">{plan.name}</p>
                 <p className="mt-2 text-sm text-[#647970]">{plan.audience}</p>
 
-                <div className="mt-5 rounded-2xl border border-[#e3ede9] bg-[#f8fbfa] p-4">
-                  <p className="text-[32px] font-semibold leading-none text-[#101c19]">₹{plan.monthlyPrice}/month</p>
+                <div className="mt-5 rounded-2xl border border-[#e3ede9] bg-[#fffaf4] p-4">
+                  <p className="text-[32px] font-semibold leading-none text-[#2a170d]">₹{plan.monthlyPrice}/month</p>
                   <p className="mt-2 text-sm text-[#45675d]">
-                    or ₹{plan.yearlyPrice}/year <span className="font-semibold text-[#0f766e]">(Save ₹{plan.yearlySave})</span>
+                    or ₹{plan.yearlyPrice}/year <span className="font-semibold text-[#7a3f13]">(Save ₹{plan.yearlySave})</span>
                   </p>
                 </div>
 
@@ -205,7 +202,7 @@ export default function Pricing() {
                 </div>
 
                 {plan.id === "starter" ? (
-                  <p className="mt-5 rounded-xl border border-[#d8e9e2] bg-[#eef8f4] px-3 py-2 text-sm font-semibold text-[#0f766e]">
+                  <p className="mt-5 rounded-xl border border-[#eadccf] bg-[#f6eadb] px-3 py-2 text-sm font-semibold text-[#7a3f13]">
                     Upgrade to get your own professional website.
                   </p>
                 ) : null}
@@ -230,28 +227,28 @@ export default function Pricing() {
           transition={{ duration: 0.45 }}
           className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2"
         >
-          <article className="rounded-3xl border border-[#d9e7e1] bg-white p-6 shadow-[0_14px_34px_rgba(16,39,32,0.07)]">
+          <article className="rounded-3xl border border-[#eadccf] bg-white p-6 shadow-[0_14px_34px_rgba(73,39,20,0.07)]">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#66857c]">Add-ons</p>
             <h3 className="mt-2 text-[26px] font-semibold text-[#111111]">Grow Without Changing Plans</h3>
             <div className="mt-4 space-y-2">
               {addOns.map((item) => (
                 <div
                   key={item.label}
-                  className="flex items-center justify-between rounded-xl border border-[#e2ece8] bg-[#f9fcfb] px-4 py-3"
+                  className="flex items-center justify-between rounded-xl border border-[#f0e4d7] bg-[#fffdf8] px-4 py-3"
                 >
-                  <span className="text-sm font-medium text-[#1f3d35]">{item.label}</span>
-                  <span className="text-sm font-semibold text-[#0f766e]">₹{item.price}</span>
+                  <span className="text-sm font-medium text-[#3a2112]">{item.label}</span>
+                  <span className="text-sm font-semibold text-[#7a3f13]">₹{item.price}</span>
                 </div>
               ))}
             </div>
           </article>
 
-          <article id="referral" className="rounded-3xl border border-[#d9e7e1] bg-white p-6 shadow-[0_14px_34px_rgba(16,39,32,0.07)]">
+          <article id="referral" className="rounded-3xl border border-[#eadccf] bg-white p-6 shadow-[0_14px_34px_rgba(73,39,20,0.07)]">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#66857c]">Referral Model</p>
             <h3 className="mt-2 text-[26px] font-semibold text-[#111111]">Invite Friends, Earn Free Days</h3>
             <p className="mt-2 text-sm text-[#5e746c]">Reward is unlocked only after successful payment.</p>
-            <div className="mt-4 overflow-hidden rounded-2xl border border-[#e2ece8]">
-              <div className="grid grid-cols-3 bg-[#f3faf7] px-4 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-[#56736a]">
+            <div className="mt-4 overflow-hidden rounded-2xl border border-[#f0e4d7]">
+              <div className="grid grid-cols-3 bg-[#fff7ee] px-4 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-[#56736a]">
                 <span>Plan</span>
                 <span>Friend Benefit</span>
                 <span>Your Reward</span>
@@ -264,7 +261,7 @@ export default function Pricing() {
                 </div>
               ))}
             </div>
-            <p className="mt-4 text-sm font-medium text-[#0f766e]">
+            <p className="mt-4 text-sm font-medium text-[#7a3f13]">
               Invite friends and get free subscription days. Your friend gets up to 20% OFF.
             </p>
           </article>
@@ -273,7 +270,6 @@ export default function Pricing() {
     </section>
   );
 }
-
 
 
 

@@ -17,7 +17,7 @@ html {
 
 body {
   margin: 0;
-  font-family: "Plus Jakarta Sans", "Avenir Next", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: "Avenir Next", "Segoe UI", system-ui, -apple-system, sans-serif;
   line-height: 1.5;
   background: var(--pix-bg);
   color: var(--pix-text-primary);
@@ -51,28 +51,51 @@ select {
 }
 
 :root {
-  --surface: #ffffff;
-  --ink: #16161a;
-  --muted: #5a5d66;
-  --accent: #d97757;
-  --accent-strong: #b5553a;
-  --deep: #101114;
-  --soft: #f4efe7;
-  --pix-bg: #fafaf8;
-  --pix-text-primary: #111111;
-  --pix-text-secondary: #666666;
-  --pix-border: #e5e5e5;
-  --pix-accent: #0f766e;
-  --pix-accent-strong: #115e59;
+  --surface: #fffaf4;
+  --ink: #2a170d;
+  --muted: #7a6a55;
+  --accent: #9b5a24;
+  --accent-strong: #5b2b0c;
+  --deep: #2a170d;
+  --soft: #f6eadb;
+  --pix-bg: #f7efe6;
+  --pix-text-primary: #2a170d;
+  --pix-text-secondary: #7a6a55;
+  --pix-border: #ead7c5;
+  --pix-accent: #7a3f13;
+  --pix-accent-strong: #5b2b0c;
+  --pix-surface: #fffaf4;
+  --pix-surface-strong: #ffffff;
+  --pix-amber: #c78a4a;
+  --pix-shadow: 0 18px 44px rgba(73, 39, 20, 0.09);
 }
 
 .font-display {
-  font-family: "Plus Jakarta Sans", "Avenir Next", "Segoe UI", system-ui, -apple-system, sans-serif;
-  letter-spacing: -0.02em;
+  font-family: Georgia, "Times New Roman", serif;
+  letter-spacing: 0;
 }
 
 .font-body {
-  font-family: "Plus Jakarta Sans", "Avenir Next", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: "Avenir Next", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+h1,
+.pix-display {
+  font-family: Georgia, "Times New Roman", serif;
+  letter-spacing: 0 !important;
+}
+
+h2,
+h3,
+p,
+span,
+button,
+a,
+label,
+input,
+textarea,
+select {
+  letter-spacing: 0;
 }
 
 .pixora-container {
@@ -101,22 +124,23 @@ select {
   font-size: 48px;
   line-height: 1.05;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: var(--pix-text-primary);
 }
 
 .pix-card {
   border: 1px solid var(--pix-border);
-  border-radius: 20px;
-  background: #ffffff;
+  border-radius: 22px;
+  background: var(--pix-surface);
+  box-shadow: var(--pix-shadow);
 }
 
 .pix-input {
   height: 48px;
   width: 100%;
-  border-radius: 9999px;
+  border-radius: 14px;
   border: 1px solid var(--pix-border);
-  background: #ffffff;
+  background: #fffaf4;
   padding-inline: 20px;
   font-size: 14px;
   color: var(--pix-text-primary);
@@ -126,14 +150,14 @@ select {
 
 .pix-input:focus {
   border-color: var(--pix-accent);
-  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.15);
+  box-shadow: 0 0 0 4px rgba(122, 63, 19, 0.12);
 }
 
 .pix-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 9999px;
+  border-radius: 14px;
   height: 44px;
   padding-inline: 24px;
   font-size: 14px;
@@ -160,6 +184,24 @@ select {
 .pix-btn-secondary:hover {
   border-color: var(--pix-accent);
   transform: translateY(-1px);
+}
+
+.pixora-shell {
+  background:
+    linear-gradient(180deg, rgba(255, 250, 244, 0.94), rgba(247, 239, 230, 0.98)),
+    repeating-linear-gradient(90deg, rgba(154, 93, 37, 0.035) 0 1px, transparent 1px 64px);
+}
+
+.pixora-panel {
+  border: 1px solid var(--pix-border);
+  background: linear-gradient(145deg, rgba(255, 253, 248, 0.94), rgba(255, 250, 244, 0.82));
+  box-shadow: var(--pix-shadow);
+}
+
+.tracking-\[-0\.02em\],
+.tracking-\[-0\.03em\],
+.tracking-\[-0\.04em\] {
+  letter-spacing: 0 !important;
 }
 
 @keyframes pixora-float {

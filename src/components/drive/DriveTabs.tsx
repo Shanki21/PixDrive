@@ -23,7 +23,7 @@ export default function DriveTabs({
           className={`flex items-center gap-1.5 pb-3 text-sm font-semibold transition sm:text-[15px]
           ${
             active === "galleries"
-              ? "border-b-2 border-[#0e7ac4] text-[#102033]"
+              ? "border-b-2 border-[#7a3f13] text-[#102033]"
               : "border-b-2 border-transparent text-[#6b8aa7] hover:text-[#102033]"
           }`}
         >
@@ -37,7 +37,7 @@ export default function DriveTabs({
             className={`flex items-center gap-1.5 pb-3 text-sm font-semibold transition sm:text-[15px]
             ${
               active === "trash"
-                ? "border-b-2 border-[#0e7ac4] text-[#102033]"
+                ? "border-b-2 border-[#7a3f13] text-[#102033]"
                 : "border-b-2 border-transparent text-[#6b8aa7] hover:text-[#102033]"
             }`}
           >

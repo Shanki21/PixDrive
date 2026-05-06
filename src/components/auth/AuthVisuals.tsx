@@ -25,7 +25,7 @@ const tutorialImages = [
 export default function AuthVisuals({ mode, tutorialStep = 0 }: AuthVisualsProps) {
   if (mode === "contactCard") {
     return (
-      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,#d6efe8,#cfe2ff,#f1f5f3)] p-10">
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[linear-gradient(145deg,#fffaf4,#f6eadb,#fffdf8)] p-10">
         <div className="absolute inset-0 bg-white/60" />
         <div className="relative w-full max-w-md overflow-hidden rounded-[28px] border border-[#E5E5E5] bg-white/90 p-10 shadow-2xl">
           <div className="absolute inset-x-0 top-0 h-40 overflow-hidden">
@@ -62,11 +62,11 @@ export default function AuthVisuals({ mode, tutorialStep = 0 }: AuthVisualsProps
   if (mode === "tutorial") {
     const stepTitle = ["Client galleries", "Projects", "Shop"][tutorialStep] ?? "Client galleries";
     return (
-      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,#d8eee8,#dce9fb,#ecf2ef)] p-10">
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[linear-gradient(145deg,#fffaf4,#f6eadb,#fffdf8)] p-10">
           <div className="absolute inset-0 bg-white/72" />
           <div className="relative w-full max-w-4xl overflow-hidden rounded-2xl border border-[#E5E5E5] bg-[#f8f9f7] shadow-xl">
             <div className="grid grid-cols-[220px_1fr]">
-              <aside className="bg-[#0f766e] p-6 text-white">
+              <aside className="bg-[#7a3f13] p-6 text-white">
                 <p className="text-4xl font-black">Pixora</p>
                 <div className="mt-8 space-y-4 text-base text-white/85">
                   <p>Galleries</p>
@@ -98,8 +98,8 @@ export default function AuthVisuals({ mode, tutorialStep = 0 }: AuthVisualsProps
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,#cee8ff,#bbe5d8,#edf3ef)] p-14">
-      <div className="absolute inset-0 bg-[#0f766e]/20" />
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[linear-gradient(145deg,#fffaf4,#f6eadb,#fffdf8)] p-14">
+      <div className="absolute inset-0 bg-[#7a3f13]/20" />
       <div className="absolute top-10 z-10 text-center text-[#111111]">
         <div className="inline-flex flex-col gap-1 rounded-full border border-[#d8e3e0] bg-white/90 px-6 py-3 text-xl font-semibold tracking-tight shadow-lg backdrop-blur-md md:text-2xl">
           <span>Website and photo gallery for smart</span>

@@ -14,8 +14,7 @@ export default function AuthShell({ children, right, bottom }: AuthShellProps) {
   return (
     <div className="font-body min-h-screen bg-[#FAFAF8]">
       <div className="grid min-h-screen lg:grid-cols-2">
-        <section className="relative flex min-h-screen flex-col bg-[#FAFAF8]">
-          <div className="pointer-events-none absolute left-[-140px] top-[120px] h-[320px] w-[320px] rounded-full bg-[#9bd6c3]/25 blur-3xl" />
+        <section className="relative flex min-h-screen flex-col bg-[#fffaf4]">
           <motion.div
             initial={{ opacity: 0, y: -12 }}
             animate={{ opacity: 1, y: 0 }}

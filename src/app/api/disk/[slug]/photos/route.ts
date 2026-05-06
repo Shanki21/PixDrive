@@ -3,6 +3,7 @@ import { getRequiredGalleryPin, hasGalleryAccessFromRequest } from "@/lib/galler
 import { normalizePublicUrl } from "@/lib/url-security";
 import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import fetchWithRetry from "@/lib/fetchWithRetry";
 
 const MAX_PAGE_SIZE = 120;
 const MAX_SINGLE_DOWNLOAD_BYTES = 25 * 1024 * 1024;
@@ -83,7 +84,7 @@ export async function GET(
         return NextResponse.json({ error: "Photo source is unavailable." }, { status: 415 });
       }
 
-      const upstream = await fetch(sourceUrl, { signal: AbortSignal.timeout(12000) });
+      const upstream = await fetchWithRetry(sourceUrl, { signal: AbortSignal.timeout(12000) }, { dedupeKey: `upstream:photo:${photo.id}`, maxAttempts: 3 });
       if (!upstream.ok) {
         return NextResponse.json({ error: "Unable to fetch source image." }, { status: 502 });
       }

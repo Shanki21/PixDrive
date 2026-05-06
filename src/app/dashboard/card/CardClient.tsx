@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import fetchWithRetry from "@/lib/fetchWithRetry";
 import { DashboardProfile, loadProfile, saveProfile } from "@/lib/profile-storage";
 
 type ActiveModal = "card" | "email" | "social" | null;
@@ -43,7 +44,7 @@ export default function CardClient() {
     let active = true;
     const loadServerProfile = async () => {
       try {
-        const res = await fetch("/api/auth/profile", { cache: "no-store" });
+        const res = await fetchWithRetry("/api/auth/profile", { cache: "no-store" }, { dedupeKey: `client:profile:server` });
         if (!res.ok) return;
         const data = await res.json();
         if (!active || !data?.ok) return;
