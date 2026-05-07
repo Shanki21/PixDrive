@@ -111,6 +111,19 @@ export function getSessionEmailFromCookieStore(cookieStore: {
   return session?.email ?? null;
 }
 
+export function getClientIp(req: NextRequest) {
+  const forwarded = req.headers.get("x-forwarded-for");
+
+  if (forwarded) {
+    return forwarded.split(",")[0]?.trim();
+  }
+
+  return (
+    req.headers.get("x-real-ip") ??
+    "unknown"
+  );
+}
+
 export function setSessionCookie(response: NextResponse, email: string) {
   const token = createSessionForEmail(email);
   if (!token) {

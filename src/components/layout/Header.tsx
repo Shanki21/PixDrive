@@ -77,7 +77,7 @@ export default function Topbar() {
   return (
     <header className="sticky top-0 z-30 border-b border-[#d7e7e0] bg-[#f7faf8]/95 px-4 py-4 backdrop-blur md:px-8 md:py-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <label className="relative block min-w-[220px] flex-1 md:max-w-[560px]">
+        <label className="relative block min-w-55 flex-1 md:max-w-140">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5f7a71]" />
           <input
             className="h-11 w-full rounded-xl border border-[#d1e6dd] bg-white pl-9 pr-3 text-sm text-[#1d3831] placeholder:text-[#79948b] focus:border-[#0f766e] focus:outline-none"
