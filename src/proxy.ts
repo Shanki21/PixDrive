@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import fetchWithRetry from "@/lib/fetchWithRetry";
 
 export async function proxy(req: NextRequest) {
   if (req.nextUrl.pathname === "/dashboard" || req.nextUrl.pathname === "/dashboard/drive") {
     try {
-      const res = await fetch(new URL("/api/galleries", req.url), {
+      const res = await fetchWithRetry(new URL("/api/galleries", req.url).toString(), {
         cache: "no-store",
         headers: {
           cookie: req.headers.get("cookie") ?? "",
         },
-      });
+      }, { dedupeKey: `proxy:galleries` });
 
       if (!res.ok) {
         return NextResponse.next();

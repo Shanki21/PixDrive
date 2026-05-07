@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
+import fetchWithRetry from "@/lib/fetchWithRetry";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import AuthShell from "@/components/auth/AuthShell";
@@ -41,31 +42,12 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      const checkRes = await fetch("/api/auth/check-user", {
+      const dedupe = `request-otp:${email.trim().toLowerCase()}`;
+      const otpRes = await fetchWithRetry("/api/auth/request-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
-      });
-
-      const checkData = await parseJsonSafe(checkRes);
-      const canSkipCheckUser =
-        (!checkRes.ok && checkRes.status === 404) || (!checkRes.ok && checkRes.status === 503);
-
-      if (checkRes.ok && checkData?.exists === false) {
-        setError("Email address not found");
-        return;
-      }
-
-      if (!checkRes.ok && !canSkipCheckUser) {
-        setError(checkData?.message ?? "Unable to validate your email right now");
-        return;
-      }
-
-      const otpRes = await fetch("/api/auth/request-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
+      }, { dedupeKey: dedupe, idempotencyKey: `${dedupe}:${Date.now()}` });
 
       const otpData = await parseJsonSafe(otpRes);
       if (!otpRes.ok || !otpData?.ok) {
@@ -85,11 +67,12 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      const verifyRes = await fetch("/api/auth/verify-otp", {
+      const dedupe = `verify-otp:${email.trim().toLowerCase()}:${otp}`;
+      const verifyRes = await fetchWithRetry("/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, code: otp }),
-      });
+      }, { dedupeKey: dedupe, idempotencyKey: `${dedupe}` });
       const verifyData = await parseJsonSafe(verifyRes);
       if (!verifyRes.ok || !verifyData?.ok) {
         setError(verifyData?.message ?? "Invalid or expired OTP");
@@ -115,12 +98,12 @@ export default function LoginPage() {
         step === "email" ? (
           <p>
             Don&apos;t have an account yet?{" "}
-            <Link href="/signup" className="font-semibold text-[#0f766e] hover:text-[#115e59]">
+            <Link href="/signup" className="font-semibold text-[#7a3f13] hover:text-[#5b2b0c]">
               Sign up
             </Link>
           </p>
         ) : (
-          <button className="font-semibold text-[#0f766e] hover:text-[#115e59]" onClick={() => setStep("email")}>
+          <button className="font-semibold text-[#7a3f13] hover:text-[#5b2b0c]" onClick={() => setStep("email")}>
             Back
           </button>
         )
@@ -153,7 +136,7 @@ export default function LoginPage() {
             className="pix-btn pix-btn-primary w-full"
             disabled={loading}
           >
-            {loading ? "Checking..." : "Next"}
+            {loading ? "Sending..." : "Next"}
           </motion.button>
         </motion.form>
       ) : (

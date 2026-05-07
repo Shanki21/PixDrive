@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import fetchWithRetry from "@/lib/fetchWithRetry";
 import { ArrowUpDown, Info, MessageCircleMore, MoreVertical, PencilLine, Search, Trash2 } from "lucide-react";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 import { buildClientGalleryUrl } from "@/lib/client-gallery-url";
@@ -20,7 +21,6 @@ type ReviewRecord = {
   published: boolean;
 };
 
-const REVIEWS_STORAGE_KEY = "wf_gallery_reviews";
 const CATEGORY_OPTIONS = [
   "Weddings",
   "Portraits",
@@ -32,23 +32,6 @@ const CATEGORY_OPTIONS = [
   "Outdoor",
 ];
 
-function readReviews(): ReviewRecord[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(REVIEWS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as ReviewRecord[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeReviews(next: ReviewRecord[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(REVIEWS_STORAGE_KEY, JSON.stringify(next));
-}
-
 function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
@@ -56,8 +39,9 @@ function formatDate(value: string) {
 }
 
 export default function ReviewsPage() {
-  const [reviews, setReviews] = useState<ReviewRecord[]>(() => readReviews());
+  const [reviews, setReviews] = useState<ReviewRecord[]>([]);
   const [galleries, setGalleries] = useState<MinimalGallery[]>([]);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
   const [editing, setEditing] = useState<ReviewRecord | null>(null);
   const [editingImageUrl, setEditingImageUrl] = useState<string | null>(null);
@@ -70,19 +54,33 @@ export default function ReviewsPage() {
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === REVIEWS_STORAGE_KEY) {
-        setReviews(readReviews());
+    let active = true;
+    const load = async () => {
+      try {
+        const res = await fetchWithRetry("/api/galleries/reviews", { cache: "no-store" }, { dedupeKey: `client:reviews:load` });
+        if (!res.ok) throw new Error("Unable to load reviews.");
+        const data = await res.json();
+        if (!active) return;
+        setReviews(Array.isArray(data.reviews) ? data.reviews : []);
+        setPageError(null);
+      } catch {
+        if (active) {
+          setReviews([]);
+          setPageError("Unable to load reviews right now.");
+        }
       }
     };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+
+    void load();
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch("/api/galleries");
+        const res = await fetchWithRetry("/api/galleries", {}, { dedupeKey: `client:galleries:list` });
         const contentType = res.headers.get("content-type") ?? "";
         if (!res.ok || !contentType.includes("application/json")) return;
         const rows = (await res.json()) as MinimalGallery[];
@@ -123,39 +121,94 @@ export default function ReviewsPage() {
     setActiveTab("main");
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editing) return;
-    const next = reviews.map((review) =>
-      review.id === editing.id
-        ? {
-            ...review,
-            reviewerName: nameDraft.trim() || review.reviewerName,
-            socialLink: socialDraft.trim() || undefined,
-            text: textDraft.trim() || review.text,
-            categories: categoriesDraft,
-          }
-        : review
-    );
-    setReviews(next);
-    writeReviews(next);
-    setEditing(null);
-    setEditingImageUrl(null);
-    setActiveTab("main");
+    setPageError(null);
+
+      try {
+        const dedupe = `review:patch:${editing.galleryId}:${editing.id}`;
+        const res = await fetchWithRetry(
+          `/api/galleries/${encodeURIComponent(editing.galleryId)}/reviews/${encodeURIComponent(editing.id)}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              reviewerName: nameDraft.trim(),
+              socialLink: socialDraft.trim(),
+              text: textDraft.trim(),
+              categories: categoriesDraft,
+            }),
+          }, { dedupeKey: dedupe, idempotencyKey: dedupe }
+        );
+
+        if (!res.ok) {
+          throw new Error("Unable to save review changes.");
+        }
+
+        const data = await res.json();
+        setReviews((prev) => prev.map((review) => (review.id === editing.id ? data.review : review)));
+        setEditing(null);
+        setEditingImageUrl(null);
+        setActiveTab("main");
+      } catch {
+        setPageError("Unable to save review changes right now.");
+      }
   };
 
   const togglePublished = (id: string) => {
-    const next = reviews.map((review) =>
-      review.id === id ? { ...review, published: !review.published } : review
-    );
-    setReviews(next);
-    writeReviews(next);
-    setEditing((prev) => (prev && prev.id === id ? { ...prev, published: !prev.published } : prev));
+    const target = reviews.find((r) => r.id === id);
+    if (!target) return;
+    const newValue = !target.published;
+
+    void (async () => {
+      try {
+        setPageError(null);
+        const dedupe = `review:togglePublished:${target.galleryId}:${id}:${String(newValue)}`;
+        const res = await fetchWithRetry(
+          `/api/galleries/${encodeURIComponent(target.galleryId)}/reviews/${encodeURIComponent(id)}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ published: newValue }),
+          }, { dedupeKey: dedupe, idempotencyKey: dedupe }
+        );
+        if (!res.ok) {
+          throw new Error("Unable to update review visibility.");
+        }
+
+        const data = await res.json();
+        setReviews((prev) => prev.map((review) => (review.id === id ? data.review : review)));
+        setEditing((prev) => (prev && prev.id === id ? data.review : prev));
+      } catch {
+        setPageError("Unable to update review visibility right now.");
+      }
+    })();
   };
 
   const deleteReview = (id: string) => {
-    const next = reviews.filter((review) => review.id !== id);
-    setReviews(next);
-    writeReviews(next);
+    const target = reviews.find((r) => r.id === id);
+    if (!target) return;
+
+    void (async () => {
+      try {
+        setPageError(null);
+        const dedupe = `review:delete:${target.galleryId}:${id}`;
+        const res = await fetchWithRetry(
+          `/api/galleries/${encodeURIComponent(target.galleryId)}/reviews/${encodeURIComponent(id)}`,
+          {
+            method: "DELETE",
+          }, { dedupeKey: dedupe, idempotencyKey: dedupe }
+        );
+        if (!res.ok) {
+          throw new Error("Unable to delete review.");
+        }
+
+        setReviews((prev) => prev.filter((review) => review.id !== id));
+        setEditing((prev) => (prev?.id === id ? null : prev));
+      } catch {
+        setPageError("Unable to delete review right now.");
+      }
+    })();
   };
 
   const filteredCategories = CATEGORY_OPTIONS.filter((category) =>
@@ -176,7 +229,10 @@ export default function ReviewsPage() {
   const infoLocation =
     editing?.clientLocation ||
     (editing && typeof window !== "undefined"
-      ? buildClientGalleryUrl(editing.galleryId, window.location.origin)
+      ? buildClientGalleryUrl(
+          editing.galleryId,
+          galleryMap.get(editing.galleryId)?.customDomain ?? window.location.origin
+        )
       : "-");
   const infoUserAgent = editing?.userAgent ?? "-";
   const infoIp = editing?.clientIp ?? "Unavailable";
@@ -185,14 +241,14 @@ export default function ReviewsPage() {
     <div className="px-8 py-8">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-[#15161a]">Reviews</h1>
+          <h1 className="text-2xl font-semibold text-[#2a170d]">Reviews</h1>
           <p className="mt-1 text-sm text-[#8a7f73]">Review management</p>
         </div>
         <div className="text-xs text-[#8a7f73]">{reviewCount} reviews</div>
       </div>
 
-      <div className="mt-4 flex items-center gap-2 text-sm font-semibold text-[#15161a]">
-        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#15161a] shadow-sm">
+      <div className="mt-4 flex items-center gap-2 text-sm font-semibold text-[#2a170d]">
+        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#2a170d] shadow-sm">
           <MessageCircleMore className="h-4 w-4" />
         </span>
         Reviews
@@ -202,6 +258,12 @@ export default function ReviewsPage() {
         At the moment, reviews are only displayed in the dashboard. In the future, it will be possible to
         publish reviews on a separate page.
       </div>
+
+      {pageError ? (
+        <div className="mt-4 rounded-2xl border border-[#f4c7cf] bg-[#fff4f6] px-4 py-3 text-sm font-medium text-[#b42318]">
+          {pageError}
+        </div>
+      ) : null}
 
       <div className="mt-6 overflow-visible rounded-2xl border border-[#efe6dc] bg-white">
         <div className="grid grid-cols-[24px_2.2fr_3fr_1fr_1fr_40px] items-start gap-3 border-b border-[#efe6dc] px-6 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-[#8a7f73]">
@@ -222,7 +284,7 @@ export default function ReviewsPage() {
             return (
               <div
                 key={review.id}
-                className="grid grid-cols-[24px_2.2fr_3fr_1fr_1fr_40px] items-start gap-3 border-b border-[#f2ece4] px-6 py-4 text-sm text-[#15161a] last:border-b-0"
+                className="grid grid-cols-[24px_2.2fr_3fr_1fr_1fr_40px] items-start gap-3 border-b border-[#f2ece4] px-6 py-4 text-sm text-[#2a170d] last:border-b-0"
               >
                 <span className="mt-5 text-[#c4b6a7]">
                   <ArrowUpDown className="h-4 w-4" />
@@ -237,7 +299,7 @@ export default function ReviewsPage() {
                   <div>
                     <button
                       type="button"
-                      className="text-left font-semibold text-[#15161a] hover:underline"
+                      className="text-left font-semibold text-[#2a170d] hover:underline"
                       onClick={() => openEdit(review, imageUrl)}
                     >
                       {review.reviewerName}
@@ -245,13 +307,13 @@ export default function ReviewsPage() {
                     <p className="text-xs text-[#8a7f73]">{review.galleryName}</p>
                   </div>
                 </div>
-                <p className=" w-80 text-sm text-[#4a433d] whitespace-pre-wrap wrap-break-word">{review.text}</p>
+                <p className="w-80 whitespace-pre-wrap wrap-break-word text-sm text-[#4a433d]">{review.text}</p>
                 <span className="text-sm text-[#4a433d]">{formatDate(review.createdAt)}</span>
                 <button
                   type="button"
                   onClick={() => togglePublished(review.id)}
                   className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${
-                    review.published ? "bg-[#101114]" : "bg-[#d9cfc4]"
+                    review.published ? "bg-[#2a170d]" : "bg-[#d9cfc4]"
                   }`}
                   aria-label="Toggle publish"
                 >
@@ -316,25 +378,25 @@ export default function ReviewsPage() {
             >
               x
             </button>
-            <h2 className="text-2xl font-semibold text-[#15161a]">Edit a review</h2>
+            <h2 className="text-2xl font-semibold text-[#2a170d]">Edit a review</h2>
             <div className="mt-4 flex items-center gap-6 border-b border-[#efe6dc] text-sm font-semibold text-[#7a6a55]">
               <button
                 type="button"
-                className={`pb-3 ${activeTab === "main" ? "border-b-2 border-[#15161a] text-[#15161a]" : "text-[#7a6a55]"}`}
+                className={`pb-3 ${activeTab === "main" ? "border-b-2 border-[#2a170d] text-[#2a170d]" : "text-[#7a6a55]"}`}
                 onClick={() => setActiveTab("main")}
               >
                 Main
               </button>
               <button
                 type="button"
-                className={`pb-3 ${activeTab === "categories" ? "border-b-2 border-[#15161a] text-[#15161a]" : "text-[#7a6a55]"}`}
+                className={`pb-3 ${activeTab === "categories" ? "border-b-2 border-[#2a170d] text-[#2a170d]" : "text-[#7a6a55]"}`}
                 onClick={() => setActiveTab("categories")}
               >
                 Categories
               </button>
               <button
                 type="button"
-                className={`pb-3 ${activeTab === "info" ? "border-b-2 border-[#15161a] text-[#15161a]" : "text-[#7a6a55]"}`}
+                className={`pb-3 ${activeTab === "info" ? "border-b-2 border-[#2a170d] text-[#2a170d]" : "text-[#7a6a55]"}`}
                 onClick={() => setActiveTab("info")}
               >
                 Info
@@ -400,14 +462,14 @@ export default function ReviewsPage() {
                 <div className="rounded-2xl border border-[#f3ece3] bg-white p-5">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-semibold text-[#15161a]">Publish on site</p>
+                      <p className="text-sm font-semibold text-[#2a170d]">Publish on site</p>
                       <p className="text-xs text-[#8a7f73]">If disabled, the review will not be published on the site.</p>
                     </div>
                     <button
                       type="button"
                       onClick={() => togglePublished(editing.id)}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${
-                        editing.published ? "bg-[#101114]" : "bg-[#d9cfc4]"
+                        editing.published ? "bg-[#2a170d]" : "bg-[#d9cfc4]"
                       }`}
                       aria-label="Toggle publish"
                     >
@@ -430,8 +492,8 @@ export default function ReviewsPage() {
                       <Info className="h-4 w-4" />
                     </span>
                     <div>
-                      <p className="text-sm font-semibold text-[#15161a]">Instructions for working with categories</p>
-                      <button type="button" className="mt-1 text-sm font-semibold text-[#15161a] underline">
+                      <p className="text-sm font-semibold text-[#2a170d]">Instructions for working with categories</p>
+                      <button type="button" className="mt-1 text-sm font-semibold text-[#2a170d] underline">
                         View
                       </button>
                     </div>
@@ -439,7 +501,7 @@ export default function ReviewsPage() {
                 </div>
 
                 <div className="rounded-2xl border border-[#f3ece3] bg-white p-5">
-                  <p className="text-lg font-semibold text-[#15161a]">Categories</p>
+                  <p className="text-lg font-semibold text-[#2a170d]">Categories</p>
                   <div className="mt-4 flex items-center gap-3 rounded-xl border border-[#e3d8cc] bg-white px-4 py-3">
                     <Search className="h-4 w-4 text-[#8a7f73]" />
                     <input
@@ -457,7 +519,7 @@ export default function ReviewsPage() {
                       <button
                         key={category}
                         type="button"
-                        className="rounded-full border border-[#15161a] bg-[#15161a] px-3 py-1 text-xs font-semibold text-white"
+                        className="rounded-full border border-[#2a170d] bg-[#2a170d] px-3 py-1 text-xs font-semibold text-white"
                         onClick={() => toggleCategory(category)}
                       >
                         {category}
@@ -474,7 +536,7 @@ export default function ReviewsPage() {
                           type="button"
                           className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm ${
                             selected
-                              ? "border-[#15161a] bg-[#15161a] text-white"
+                              ? "border-[#2a170d] bg-[#2a170d] text-white"
                               : "border-[#e3d8cc] bg-white text-[#4a433d]"
                           } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
                           onClick={() => {
@@ -490,7 +552,7 @@ export default function ReviewsPage() {
                   </div>
                   <button
                     type="button"
-                    className="mt-4 w-full rounded-xl border border-[#e3d8cc] bg-white px-4 py-3 text-left text-sm font-semibold text-[#15161a]"
+                    className="mt-4 w-full rounded-xl border border-[#e3d8cc] bg-white px-4 py-3 text-left text-sm font-semibold text-[#2a170d]"
                   >
                     Edit categories
                   </button>
@@ -503,19 +565,19 @@ export default function ReviewsPage() {
                 <div className="rounded-2xl border border-[#f3ece3] bg-white p-6">
                   <div className="grid gap-4 text-sm text-[#4a433d]">
                     <div className="grid grid-cols-[140px_1fr] gap-4">
-                      <span className="font-semibold text-[#15161a]">Created</span>
+                      <span className="font-semibold text-[#2a170d]">Created</span>
                       <span className="text-[#6b645c]">{createdLabel}</span>
                     </div>
                     <div className="grid grid-cols-[140px_1fr] gap-4">
-                      <span className="font-semibold text-[#15161a]">Location</span>
+                      <span className="font-semibold text-[#2a170d]">Location</span>
                       <span className="text-[#6b645c] break-all">{infoLocation}</span>
                     </div>
                     <div className="grid grid-cols-[140px_1fr] gap-4">
-                      <span className="font-semibold text-[#15161a]">Client IP address</span>
+                      <span className="font-semibold text-[#2a170d]">Client IP address</span>
                       <span className="text-[#6b645c]">{infoIp}</span>
                     </div>
                     <div className="grid grid-cols-[140px_1fr] gap-4">
-                      <span className="font-semibold text-[#15161a]">User-Agent</span>
+                      <span className="font-semibold text-[#2a170d]">User-Agent</span>
                       <span className="text-[#6b645c] break-all">{infoUserAgent}</span>
                     </div>
                   </div>
@@ -536,7 +598,7 @@ export default function ReviewsPage() {
               </button>
               <button
                 type="button"
-                className="rounded-xl bg-[#101114] px-6 py-2.5 text-sm font-semibold text-white"
+                className="rounded-xl bg-[#2a170d] px-6 py-2.5 text-sm font-semibold text-white"
                 onClick={saveEdit}
               >
                 Save

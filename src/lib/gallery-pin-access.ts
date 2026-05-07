@@ -1,3 +1,4 @@
+import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import type { NextRequest, NextResponse } from "next/server";
 import { normalizeEventSettings } from "./gallery-config";
@@ -41,6 +42,42 @@ function safeEquals(a: string, b: string) {
   return crypto.timingSafeEqual(left, right);
 }
 
+function normalizePinValue(value: unknown) {
+  if (value == null) return null;
+  const next = String(value).trim();
+  return next.length > 0 ? next : null;
+}
+
+function isBcryptHash(value: string) {
+  return /^\$2[aby]\$\d{2}\$/.test(value);
+}
+
+function getPreferredPinValues(settings: unknown) {
+  const normalized = normalizeEventSettings(settings);
+  if (!normalized) return [];
+
+  const fullHash = normalizePinValue(normalized.fullAccessPinHash);
+  const fullPlain = normalizePinValue(normalized.fullAccessPin);
+  const guestHash = normalizePinValue(normalized.guestPinHash);
+  const guestPlain = normalizePinValue(normalized.guestPin);
+
+  const fullCandidates = [fullHash, fullPlain].filter((value): value is string => Boolean(value));
+  const guestCandidates = [guestHash, guestPlain].filter((value): value is string => Boolean(value));
+  const hasAnyPin = fullCandidates.length > 0 || guestCandidates.length > 0;
+  if (!hasAnyPin && !normalized.oneQrRequirePin) {
+    return [];
+  }
+
+  if (normalized.oneQrRequirePin) {
+    if (normalized.oneQrAccessLevel === "full") {
+      return [...fullCandidates, ...guestCandidates];
+    }
+    return [...guestCandidates, ...fullCandidates];
+  }
+
+  return [...guestCandidates, ...fullCandidates];
+}
+
 function buildToken(payload: GalleryAccessPayload) {
   const secret = getAppSecret();
   if (!secret) return null;
@@ -67,36 +104,40 @@ function parseToken(token: string) {
   }
 }
 
+async function verifyPinValue(pin: string, expected: string) {
+  if (isBcryptHash(expected)) {
+    return bcrypt.compare(pin, expected);
+  }
+  return safeEquals(pin, expected);
+}
+
 export function getGalleryAccessCookieName(galleryId: string) {
   const safeId = galleryId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || "gallery";
   return `wf_ga_${safeId}`;
 }
 
 export function getRequiredGalleryPin(settings: unknown) {
-  const normalized = normalizeEventSettings(settings);
-  if (!normalized) return null;
-
-  const fullPin = normalized.fullAccessPin?.trim() || null;
-  const guestPin = normalized.guestPin?.trim() || null;
-  const hasAnyPin = Boolean(fullPin || guestPin);
-  if (!hasAnyPin && !normalized.oneQrRequirePin) {
-    return null;
-  }
-
-  if (normalized.oneQrRequirePin) {
-    if (normalized.oneQrAccessLevel === "full") {
-      return fullPin || guestPin || null;
-    }
-    return guestPin || fullPin || null;
-  }
-
-  return guestPin || fullPin || null;
+  const candidates = getPreferredPinValues(settings);
+  return candidates[0] ?? null;
 }
 
-export function verifyGalleryPin(settings: unknown, pin: string) {
-  const required = getRequiredGalleryPin(settings);
-  if (!required) return true;
-  return pin.trim() === required;
+export async function hashGalleryPin(pin: string) {
+  return bcrypt.hash(pin.trim(), 10);
+}
+
+export async function verifyGalleryPin(settings: unknown, pin: string) {
+  const normalizedPin = pin.trim();
+  if (!normalizedPin) return false;
+
+  const candidates = getPreferredPinValues(settings);
+  if (candidates.length === 0) return true;
+
+  for (const candidate of candidates) {
+    if (await verifyPinValue(normalizedPin, candidate)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function setGalleryAccessCookie(response: NextResponse, galleryId: string) {

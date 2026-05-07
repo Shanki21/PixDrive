@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
+import fetchWithRetry from "@/lib/fetchWithRetry";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import AuthShell from "@/components/auth/AuthShell";
@@ -46,7 +47,7 @@ export default function SignupPage() {
 
   const logout = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      await fetchWithRetry("/api/auth/logout", { method: "POST" }, { dedupeKey: `client:logout` });
     } catch {
       // Ignore logout API failures and continue with redirect.
     } finally {
@@ -66,11 +67,12 @@ export default function SignupPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/auth/request-otp", {
+      const dedupe = `request-otp:${email.trim().toLowerCase()}`;
+      const res = await fetchWithRetry("/api/auth/request-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
-      });
+      }, { dedupeKey: dedupe, idempotencyKey: `${dedupe}:${Date.now()}` });
       const data = await res.json();
       if (!res.ok || !data.ok) {
         setError(data.message ?? "Please enter a valid email address");
@@ -87,11 +89,12 @@ export default function SignupPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/auth/verify-otp", {
+      const dedupe = `verify-otp:${email.trim().toLowerCase()}:${otp}`;
+      const res = await fetchWithRetry("/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, code: otp }),
-      });
+      }, { dedupeKey: dedupe, idempotencyKey: dedupe });
       const data = await res.json();
       if (!res.ok || !data.ok) {
         setError(data.message ?? "Invalid or expired OTP");
@@ -108,7 +111,7 @@ export default function SignupPage() {
       return (
         <p>
           Already have an account?{" "}
-          <Link href="/login" className="font-semibold text-[#0f766e] hover:text-[#115e59]">
+          <Link href="/login" className="font-semibold text-[#7a3f13] hover:text-[#5b2b0c]">
             Log in
           </Link>
         </p>
@@ -119,7 +122,7 @@ export default function SignupPage() {
     }
     return (
       <button
-        className="font-semibold text-[#0f766e] hover:text-[#115e59]"
+        className="font-semibold text-[#7a3f13] hover:text-[#5b2b0c]"
         onClick={() => {
           if (step === "otp") setStep("email");
           if (step === "language") setStep("otp");
@@ -276,7 +279,7 @@ export default function SignupPage() {
       {step === "tutorial" ? (
         <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="pix-card flex h-full flex-col p-8 md:p-10">
           <div className="mb-8 flex items-center justify-between">
-            <button className="text-sm font-semibold text-[#0f766e] hover:text-[#115e59]" onClick={() => router.push("/dashboard")}>
+            <button className="text-sm font-semibold text-[#7a3f13] hover:text-[#5b2b0c]" onClick={() => router.push("/dashboard")}>
               Skip
             </button>
             <p className="text-sm text-[#666666]">{tutorialStep + 1} of 3</p>
@@ -293,7 +296,7 @@ export default function SignupPage() {
             })}
           </div>
           <div className="mt-auto flex items-center justify-between pb-2 pt-8">
-            <button className="text-sm font-semibold text-[#0f766e] hover:text-[#115e59]" onClick={() => setTutorialStep((s) => (s > 0 ? s - 1 : s))}>
+            <button className="text-sm font-semibold text-[#7a3f13] hover:text-[#5b2b0c]" onClick={() => setTutorialStep((s) => (s > 0 ? s - 1 : s))}>
               Back
             </button>
             <motion.button

@@ -11,6 +11,7 @@ model User {
   id String @id @default(cuid())
   email String @unique
   galleries Gallery[]
+  profile UserProfile?
 }
 
 model Gallery {
@@ -18,11 +19,14 @@ model Gallery {
   name String
   slug String @unique
   userId String
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   photos Photo[]
   coverPhotoId String? @unique
-  coverPhoto Photo? @relation("GalleryCoverPhoto", fields: [coverPhotoId], references: [id])
+  coverPhoto Photo? @relation("GalleryCoverPhoto", fields: [coverPhotoId], references: [id], onDelete: SetNull)
   clientActions ClientPhotoAction[]
+  visits GalleryVisit[]
+  reviews Review[]
+  clientProfiles ClientProfile[]
   settings Json?
   meta Json?
   createdAt DateTime @default(now())
@@ -33,7 +37,7 @@ model Photo {
   name String
   url String
   galleryId String
-  gallery Gallery @relation(fields: [galleryId], references: [id])
+  gallery Gallery @relation(fields: [galleryId], references: [id], onDelete: Cascade)
   favoriteCount Int @default(0)
   downloadCount Int @default(0)
   coverFor Gallery? @relation("GalleryCoverPhoto")
@@ -50,9 +54,107 @@ model ClientPhotoAction {
   action String
   createdAt DateTime @default(now())
 
-  gallery Gallery @relation(fields: [galleryId], references: [id])
-  photo Photo @relation(fields: [photoId], references: [id])
+  gallery Gallery @relation(fields: [galleryId], references: [id], onDelete: Cascade)
+  photo Photo @relation(fields: [photoId], references: [id], onDelete: Cascade)
 
   @@unique([photoId, clientKey, action])
   @@index([galleryId])
+}
+
+model Otp {
+  id String @id @default(cuid())
+  email String @unique
+  // store only a hashed OTP
+  codeHash String
+  expiresAt DateTime
+  // counters for simple rate limiting
+  requestCount Int @default(0)
+  failedAttempts Int @default(0)
+  lastRequestedAt DateTime?
+  lastFailedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+model Session {
+  id String @id @default(cuid())
+  token String @unique
+  userId String?
+  email String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model UserProfile {
+  id String @id @default(cuid())
+  userId String @unique
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name String? 
+  occupation String?
+  phone String?
+  avatarUrl String?
+  socialAccounts Json?
+
+  updatedAt DateTime @updatedAt
+}
+
+model GalleryVisit {
+  id String @id @default(cuid())
+  galleryId String
+  gallery Gallery @relation(fields: [galleryId], references: [id], onDelete: Cascade)
+
+  clientKey String
+  clientIp String?
+  clientLocation String?
+  userAgent String?
+  visitedAt DateTime @default(now())
+
+  @@index([galleryId])
+  @@index([galleryId, visitedAt])
+  @@index([clientKey])
+}
+
+model Review {
+  id String @id @default(cuid())
+  galleryId String
+  gallery Gallery @relation(fields: [galleryId], references: [id], onDelete: Cascade)
+
+  reviewerName String
+  reviewerEmail String?
+  text String
+  socialLink String?
+  categories String[] @default([])
+  published Boolean @default(false)
+
+  clientIp String?
+  clientLocation String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([galleryId])
+  @@index([published])
+}
+
+model ClientProfile {
+  id String @id @default(cuid())
+  galleryId String
+  gallery Gallery @relation(fields: [galleryId], references: [id], onDelete: Cascade)
+
+  clientKey String
+  name String?
+  email String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([galleryId, clientKey])
+  @@index([galleryId])
+  @@index([email])
 }

@@ -1,7 +1,13 @@
 import { destroyCloudinaryAssetByUrl } from "@/lib/cloudinary";
+import { normalizeSingleLine } from "@/lib/input-security";
 import prisma from "@/lib/prisma";
-import { getSessionEmailFromRequest } from "@/lib/session";
+import { rejectCrossOriginWrite } from "@/lib/request-security";
+import { getSessionEmailFromRequestAsync } from "@/lib/session";
 import { NextRequest, NextResponse } from "next/server";
+import { withApiHandler } from "@/lib/withApiHandler";
+import { withRateLimit } from "@/lib/rate-limit";
+
+const MAX_PHOTO_NAME_LENGTH = 180;
 
 async function getAuthorizedPhoto(id: string, email: string) {
   const user = await prisma.user.findUnique({
@@ -19,57 +25,74 @@ async function getAuthorizedPhoto(id: string, email: string) {
   return { photo, userId: user.id };
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const email = getSessionEmailFromRequest(req);
-  if (!email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const PATCH = withApiHandler(
+  withRateLimit(async (req: NextRequest, ...rest: unknown[]) => {
+    const { params } = rest[0] as { params: Promise<{ id: string }> };
+    const { id } = await params;
+    const blocked = rejectCrossOriginWrite(req);
+    if (blocked) {
+      return blocked;
+    }
+    const email = await getSessionEmailFromRequestAsync(req);
+    if (!email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const result = await getAuthorizedPhoto(id, email);
-  if (!result) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+    const result = await getAuthorizedPhoto(id, email);
+    if (!result) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
 
-  const body = await req.json();
-  const nextName = String(body?.name ?? "").trim();
-  if (!nextName) {
-    return NextResponse.json({ error: "Photo name is required" }, { status: 400 });
-  }
+    const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!body) {
+      return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    }
+    const nextName = normalizeSingleLine(body?.name, MAX_PHOTO_NAME_LENGTH);
+    if (!nextName) {
+      return NextResponse.json({ error: "Photo name is required" }, { status: 400 });
+    }
 
-  const updated = await prisma.photo.update({
-    where: { id },
-    data: { name: nextName },
-  });
+    const updated = await prisma.photo.update({
+      where: { id },
+      data: { name: nextName },
+    });
 
-  return NextResponse.json(updated);
-}
+    return NextResponse.json(updated);
+  }, { keyPrefix: "photo:update", limit: 30, windowMs: 60 * 60 * 1000 })
+);
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const email = getSessionEmailFromRequest(req);
-  if (!email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const DELETE = withApiHandler(
+  withRateLimit(async (req: NextRequest, ...rest: unknown[]) => {
+    const { params } = rest[0] as { params: Promise<{ id: string }> };
+    const { id } = await params;
+    const blocked = rejectCrossOriginWrite(req);
+    if (blocked) {
+      return blocked;
+    }
+    const email = await getSessionEmailFromRequestAsync(req);
+    if (!email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const result = await getAuthorizedPhoto(id, email);
-  if (!result) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+    const result = await getAuthorizedPhoto(id, email);
+    if (!result) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
 
-  await prisma.$transaction([
-    prisma.gallery.updateMany({
-      where: { id: result.photo.galleryId, userId: result.userId, coverPhotoId: id },
-      data: { coverPhotoId: null },
-    }),
-    prisma.photo.delete({ where: { id } }),
-  ]);
+    await prisma.$transaction([
+      prisma.gallery.updateMany({
+        where: { id: result.photo.galleryId, userId: result.userId, coverPhotoId: id },
+        data: { coverPhotoId: null },
+      }),
+      prisma.photo.delete({ where: { id } }),
+    ]);
 
-  try {
-    await destroyCloudinaryAssetByUrl(result.photo.url);
-  } catch {
-    // Ignore media cleanup failures to keep delete action resilient.
-  }
+    try {
+      await destroyCloudinaryAssetByUrl(result.photo.url);
+    } catch {
+      // Ignore media cleanup failures to keep delete action resilient.
+    }
 
-  return NextResponse.json({ ok: true });
-}
+    return NextResponse.json({ ok: true });
+  }, { keyPrefix: "photo:delete", limit: 10, windowMs: 60 * 60 * 1000 })
+);

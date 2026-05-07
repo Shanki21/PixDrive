@@ -10,9 +10,7 @@ import { TRUST_LOGOS, fadeUp } from "./content";
 export default function Hero() {
   return (
     <>
-      <section className="relative">
-        <div className="pointer-events-none absolute left-[-120px] top-[40px] h-[360px] w-[360px] rounded-full bg-[#9bd6c3]/35 blur-3xl" />
-        <div className="pointer-events-none absolute right-[-140px] top-[140px] h-[340px] w-[340px] rounded-full bg-[#9cc9ff]/30 blur-3xl" />
+      <section className="relative bg-[#fffaf4]">
         <Container className="relative grid grid-cols-1 gap-12 pb-24 pt-16 md:grid-cols-12 md:gap-6 md:pt-24">
           <motion.div
             className="order-2 md:order-none md:col-span-6"
@@ -21,9 +19,9 @@ export default function Hero() {
             variants={fadeUp}
             transition={{ duration: 0.6, ease: "easeOut" }}
           >
-            <p className="mb-4 text-[14px] font-medium uppercase tracking-[0.12em] text-[#0f766e]">Pixora Platform</p>
+            <p className="mb-4 text-[14px] font-medium uppercase tracking-[0.12em] text-[#7a3f13]">Pixora Platform</p>
             <motion.h1
-              className="text-[48px] font-bold leading-[1.05] tracking-[-0.03em] text-[#111111]"
+              className="font-display text-[48px] font-bold leading-[1.05] text-[#2a170d]"
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.1 }}
@@ -32,7 +30,7 @@ export default function Hero() {
                 Your Photos.
               </motion.span>
               <br />
-              <span className="bg-gradient-to-r from-[#0f766e] to-[#2563eb] bg-clip-text text-transparent">Delivered Beautifully.</span>
+              <span className="bg-gradient-to-r from-[#7a3f13] to-[#b9783b] bg-clip-text text-transparent">Delivered Beautifully.</span>
             </motion.h1>
             <motion.p
               className="mt-6 max-w-[520px] text-[16px] leading-relaxed text-[#666666]"
@@ -60,22 +58,20 @@ export default function Hero() {
             transition={{ duration: 0.7, delay: 0.15 }}
           >
             <motion.div
-              className="absolute -left-4 -top-4 rounded-full border border-[#d2e9e2] bg-white px-4 py-2 text-[14px] font-medium text-[#0f766e] shadow-sm"
+              className="absolute -left-4 -top-4 rounded-full border border-[#ead7c5] bg-white px-4 py-2 text-[14px] font-medium text-[#7a3f13] shadow-sm"
               animate={{ y: [0, -8, 0] }}
               transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
             >
               Live Proofing
             </motion.div>
             <motion.div
-              className="absolute -right-4 top-12 rounded-full border border-[#d2e9e2] bg-white px-4 py-2 text-[14px] font-medium text-[#0f766e] shadow-sm"
+              className="absolute -right-4 top-12 rounded-full border border-[#ead7c5] bg-white px-4 py-2 text-[14px] font-medium text-[#7a3f13] shadow-sm"
               animate={{ y: [0, -10, 0] }}
               transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
             >
               4K Delivery
             </motion.div>
             <div className="relative mx-auto w-full max-w-[520px] md:max-w-none">
-              <div className="pointer-events-none absolute inset-0 -z-10 scale-105 rounded-[32px] bg-gradient-to-br from-[#0f766e]/12 via-transparent to-[#2563eb]/10 blur-2xl" />
-
               <div className="relative min-h-[340px] sm:min-h-[380px] md:min-h-[420px]">
                 <motion.div
                   className="absolute left-0 top-6 z-10 w-[58%] overflow-hidden rounded-2xl bg-white shadow-[0_20px_50px_rgba(0,0,0,0.14)] ring-1 ring-black/[0.07]"
@@ -114,7 +110,7 @@ export default function Hero() {
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
                   </div>
                   <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between rounded-lg bg-white/92 px-3 py-2 text-[11px] text-[#444] shadow-sm backdrop-blur-sm md:bottom-4 md:left-4 md:right-4 md:px-4 md:text-xs">
-                    <span className="font-medium text-[#0f766e]">Selections</span>
+                    <span className="font-medium text-[#7a3f13]">Selections</span>
                     <span className="text-[#888]">Awaiting approval</span>
                   </div>
                 </motion.div>

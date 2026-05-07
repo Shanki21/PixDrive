@@ -1,5 +1,6 @@
 import { normalizeQrSize } from "@/lib/qr";
 import { NextRequest, NextResponse } from "next/server";
+import fetchWithRetry from "@/lib/fetchWithRetry";
 
 export const runtime = "nodejs";
 
@@ -15,10 +16,10 @@ function buildProviderUrls(data: string, size: number) {
 }
 
 async function fetchQrImage(url: string) {
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     method: "GET",
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
+  }, { dedupeKey: `qr:${url}` });
   if (!response.ok) {
     return null;
   }

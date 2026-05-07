@@ -102,4 +102,16 @@ run("qr helper: builds encoded internal url", () => {
   assert.ok(url.includes("my%20gallery"));
 });
 
+import { parseEmail, parseOtpCode } from "../src/modules/user/schema";
+
+run("user schema: parseEmail normalizes and validates", () => {
+  assert.equal(parseEmail("TEST@Example.COM"), "test@example.com");
+  assert.equal(parseEmail("not-an-email"), null);
+});
+
+run("user schema: parseOtpCode extracts 6-digit codes", () => {
+  assert.equal(parseOtpCode(" 123456 "), "123456");
+  assert.equal(parseOtpCode("abc123"), null);
+});
+
 console.log("All unit checks passed.");

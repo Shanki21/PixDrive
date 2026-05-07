@@ -57,7 +57,7 @@ export default function OtpCodeInput({ value, onChange }: OtpCodeInputProps) {
             const focusIndex = Math.min(pasted.length, chars.length - 1);
             refs.current[focusIndex]?.focus();
           }}
-          className="h-14 w-11 rounded-full border border-[#E5E5E5] bg-white text-center text-xl font-semibold text-[#111111] outline-none transition focus:border-[#0f766e] focus:shadow-[0_0_0_4px_rgba(15,118,110,0.15)]"
+          className="h-14 w-11 rounded-full border border-[#E5E5E5] bg-white text-center text-xl font-semibold text-[#111111] outline-none transition focus:border-[#7a3f13] focus:shadow-[0_0_0_4px_rgba(122,63,19,0.15)]"
         />
       ))}
     </div>

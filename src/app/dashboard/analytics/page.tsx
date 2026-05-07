@@ -2,10 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, BarChart3, CalendarClock, Download, Eye, TrendingUp } from "lucide-react";
+import fetchWithRetry from "@/lib/fetchWithRetry";
 import { MinimalGallery } from "@/types/DriveTableTypes";
-
-const VISITS_STORAGE_KEY = "wf_gallery_visits";
-const CLIENT_DOWNLOADS_PREFIX = "wf_client_downloads:";
 
 type GalleryWithSlug = MinimalGallery & {
   slug?: string | null;
@@ -26,27 +24,6 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function readVisitsMap() {
-  if (typeof window === "undefined") return {} as Record<string, number>;
-  try {
-    const raw = window.localStorage.getItem(VISITS_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
-  } catch {
-    return {} as Record<string, number>;
-  }
-}
-
-function readDownloadCount(galleryId: string) {
-  if (typeof window === "undefined") return 0;
-  try {
-    const raw = window.localStorage.getItem(`${CLIENT_DOWNLOADS_PREFIX}${galleryId}`);
-    const parsed = raw ? (JSON.parse(raw) as string[]) : [];
-    return Array.isArray(parsed) ? parsed.length : 0;
-  } catch {
-    return 0;
-  }
-}
-
 export default function AnalyticsPage() {
   const [galleries, setGalleries] = useState<GalleryWithSlug[]>([]);
   const [visitMap, setVisitMap] = useState<Record<string, number>>({});
@@ -58,7 +35,7 @@ export default function AnalyticsPage() {
 
     const load = async () => {
       try {
-        const response = await fetch("/api/galleries");
+        const response = await fetchWithRetry("/api/galleries", {}, { dedupeKey: `client:galleries:list:analytics` });
         const contentType = response.headers.get("content-type") ?? "";
         if (!response.ok || !contentType.includes("application/json")) {
           if (active) setGalleries([]);
@@ -82,10 +59,11 @@ export default function AnalyticsPage() {
   }, []);
 
   useEffect(() => {
-    const visits = readVisitsMap();
+    const visits: Record<string, number> = {};
     const downloads: Record<string, number> = {};
     galleries.forEach((gallery) => {
-      downloads[gallery.id] = readDownloadCount(gallery.id);
+      visits[gallery.id] = gallery.visitors ?? 0;
+      downloads[gallery.id] = gallery.downloads ?? 0;
     });
     setVisitMap(visits);
     setDownloadMap(downloads);
@@ -134,64 +112,64 @@ export default function AnalyticsPage() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
-      <section className="rounded-[28px] border border-[#d8e8e2] bg-white p-6 shadow-[0_20px_55px_rgba(16,39,32,0.08)] md:p-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#0f766e]">Analytics</p>
-        <h1 className="mt-3 text-3xl font-bold tracking-[-0.03em] text-[#101c19] sm:text-4xl">Gallery Activity Insights</h1>
-        <p className="mt-3 max-w-2xl text-sm text-[#57726a] sm:text-base">
+      <section className="rounded-[28px] border border-[#eadccf] bg-white p-6 shadow-[0_20px_55px_rgba(73,39,20,0.08)] md:p-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7a3f13]">Analytics</p>
+        <h1 className="font-display mt-3 text-3xl font-bold text-[#2a170d] sm:text-4xl">Gallery Activity Insights</h1>
+        <p className="mt-3 max-w-2xl text-sm text-[#7a6a55] sm:text-base">
           Review event performance by visits, downloads, and engagement conversion to decide which galleries need
           promotion or delivery follow-up.
         </p>
       </section>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <article className="rounded-2xl border border-[#d9e8e2] bg-white p-5 shadow-[0_10px_30px_rgba(16,39,32,0.06)]">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#edf8f3] text-[#0f766e]">
+        <article className="rounded-2xl border border-[#eadccf] bg-white p-5 shadow-[0_10px_30px_rgba(73,39,20,0.06)]">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#f4e5d3] text-[#7a3f13]">
             <Eye className="h-5 w-5" />
           </span>
-          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-[#68857c]">Total Visits</p>
-          <p className="mt-1 text-3xl font-bold text-[#102320]">{totals.totalViews}</p>
-          <p className="mt-2 text-xs text-[#6f8a82]">Across all event galleries</p>
+          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-[#8a735f]">Total Visits</p>
+          <p className="mt-1 text-3xl font-bold text-[#2a170d]">{totals.totalViews}</p>
+          <p className="mt-2 text-xs text-[#8a735f]">Across all event galleries</p>
         </article>
-        <article className="rounded-2xl border border-[#d9e8e2] bg-white p-5 shadow-[0_10px_30px_rgba(16,39,32,0.06)]">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef5ff] text-[#2563eb]">
+        <article className="rounded-2xl border border-[#eadccf] bg-white p-5 shadow-[0_10px_30px_rgba(73,39,20,0.06)]">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#f3e4d2] text-[#b9783b]">
             <Download className="h-5 w-5" />
           </span>
-          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-[#68857c]">Total Downloads</p>
-          <p className="mt-1 text-3xl font-bold text-[#102320]">{totals.totalDownloads}</p>
-          <p className="mt-2 text-xs text-[#6f8a82]">Client download actions</p>
+          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-[#8a735f]">Total Downloads</p>
+          <p className="mt-1 text-3xl font-bold text-[#2a170d]">{totals.totalDownloads}</p>
+          <p className="mt-2 text-xs text-[#8a735f]">Client download actions</p>
         </article>
-        <article className="rounded-2xl border border-[#d9e8e2] bg-white p-5 shadow-[0_10px_30px_rgba(16,39,32,0.06)]">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#f1f5ff] text-[#4f46e5]">
+        <article className="rounded-2xl border border-[#eadccf] bg-white p-5 shadow-[0_10px_30px_rgba(73,39,20,0.06)]">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#f4e8d6] text-[#9b5a24]">
             <BarChart3 className="h-5 w-5" />
           </span>
-          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-[#68857c]">Avg Conversion</p>
-          <p className="mt-1 text-3xl font-bold text-[#102320]">{totals.avgConversion}%</p>
-          <p className="mt-2 text-xs text-[#6f8a82]">Downloads per visit</p>
+          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-[#8a735f]">Avg Conversion</p>
+          <p className="mt-1 text-3xl font-bold text-[#2a170d]">{totals.avgConversion}%</p>
+          <p className="mt-2 text-xs text-[#8a735f]">Downloads per visit</p>
         </article>
-        <article className="rounded-2xl border border-[#d9e8e2] bg-white p-5 shadow-[0_10px_30px_rgba(16,39,32,0.06)]">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#ecf9f2] text-[#059669]">
+        <article className="rounded-2xl border border-[#eadccf] bg-white p-5 shadow-[0_10px_30px_rgba(73,39,20,0.06)]">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#f6eadb] text-[#9f682e]">
             <TrendingUp className="h-5 w-5" />
           </span>
-          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-[#68857c]">Avg Photos/Event</p>
-          <p className="mt-1 text-3xl font-bold text-[#102320]">{totals.avgPhotosPerEvent}</p>
-          <p className="mt-2 text-xs text-[#6f8a82]">{galleries.length} events tracked</p>
+          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-[#8a735f]">Avg Photos/Event</p>
+          <p className="mt-1 text-3xl font-bold text-[#2a170d]">{totals.avgPhotosPerEvent}</p>
+          <p className="mt-2 text-xs text-[#8a735f]">{galleries.length} events tracked</p>
         </article>
       </section>
 
       <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_1fr]">
-        <article className="rounded-3xl border border-[#d9e8e2] bg-white p-6 shadow-[0_10px_30px_rgba(16,39,32,0.06)]">
+        <article className="rounded-3xl border border-[#eadccf] bg-white p-6 shadow-[0_10px_30px_rgba(73,39,20,0.06)]">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-[#112420]">Top Performing Events</h2>
-            <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#0f766e]">
+            <h2 className="text-lg font-semibold text-[#2a170d]">Top Performing Events</h2>
+            <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#7a3f13]">
               <ArrowUpRight className="h-3.5 w-3.5" />
               Live ranking
             </span>
           </div>
 
           {loading ? (
-            <div className="h-60 animate-pulse rounded-2xl border border-[#e4efe9] bg-[#f7fbf9]" />
+            <div className="h-60 animate-pulse rounded-bg-linear-to-rr-[#f0e4d7] bg-[#fffaf4]" />
           ) : topPerformance.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[#d2e4db] bg-[#f9fcfa] p-8 text-center text-sm text-[#648178]">
+            <div className="rounded-2xl border border-dashed border-[#d2e4db] bg-[#fffdf8] p-8 text-center text-sm text-[#7a6a55]">
               No event data yet. Start by creating and sharing your first gallery.
             </div>
           ) : (
@@ -199,26 +177,27 @@ export default function AnalyticsPage() {
               {topPerformance.map((row) => {
                 const width = clamp(Math.round((row.views / maxViews) * 100), 6, 100);
                 return (
-                  <div key={row.id} className="rounded-2xl border border-[#e2eee8] bg-[#f8fbf9] p-4">
+                  <div key={row.id} className="rounded-2xl border border-[#f0e4d7] bg-[#fffaf4] p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-[#17322c]">{row.name}</p>
-                      <span className="text-xs text-[#68857c]">{formatDate(row.createdAt)}</span>
+                      <p className="text-sm font-semibold text-[#3a2112]">{row.name}</p>
+                      <span className="text-xs text-[#8a735f]">{formatDate(row.createdAt)}</span>
                     </div>
-                    <div className="mt-2 h-2 rounded-full bg-[#e2efe9]">
+                    <div className="mt-2 h-2 rounded-full bg-[#f2e4d6]">
                       <div
+                        className="h-full rounded-full bg-linear-to-r from-[#7a3f13] to-[#b9783b]"
                         className="h-full rounded-full bg-linear-to-r from-[#0f766e] to-[#2563eb]"
                         style={{ width: `${width}%` }}
                       />
                     </div>
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-[#5d7a72]">
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-[#7a6a55]">
                       <p>
-                        <span className="font-semibold text-[#1f3d35]">{row.views}</span> visits
+                        <span className="font-semibold text-[#3a2112]">{row.views}</span> visits
                       </p>
                       <p>
-                        <span className="font-semibold text-[#1f3d35]">{row.downloads}</span> downloads
+                        <span className="font-semibold text-[#3a2112]">{row.downloads}</span> downloads
                       </p>
                       <p>
-                        <span className="font-semibold text-[#1f3d35]">{row.conversion}%</span> conversion
+                        <span className="font-semibold text-[#3a2112]">{row.conversion}%</span> conversion
                       </p>
                     </div>
                   </div>
@@ -228,26 +207,26 @@ export default function AnalyticsPage() {
           )}
         </article>
 
-        <article className="rounded-3xl border border-[#d9e8e2] bg-white p-6 shadow-[0_10px_30px_rgba(16,39,32,0.06)]">
+        <article className="rounded-3xl border border-[#eadccf] bg-white p-6 shadow-[0_10px_30px_rgba(73,39,20,0.06)]">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-[#112420]">Activity Snapshot</h2>
-            <span className="inline-flex items-center gap-1 text-xs text-[#607d74]">
+            <h2 className="text-lg font-semibold text-[#2a170d]">Activity Snapshot</h2>
+            <span className="inline-flex items-center gap-1 text-xs text-[#7a6a55]">
               <CalendarClock className="h-3.5 w-3.5" />
               Latest update
             </span>
           </div>
 
           {loading ? (
-            <div className="h-60 animate-pulse rounded-2xl border border-[#e4efe9] bg-[#f7fbf9]" />
+            <div className="h-60 animate-pulse rounded-2xl border border-[#f0e4d7] bg-[#fffaf4]" />
           ) : analyticsRows.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[#d2e4db] bg-[#f9fcfa] p-8 text-center text-sm text-[#648178]">
+            <div className="rounded-2xl border border-dashed border-[#d2e4db] bg-[#fffdf8] p-8 text-center text-sm text-[#7a6a55]">
               Activity appears here after galleries receive client traffic.
             </div>
           ) : (
             <div className="space-y-3">
               {analyticsRows.slice(0, 6).map((row) => (
-                <div key={row.id} className="rounded-2xl border border-[#e3eee8] bg-[#f7fbf9] p-3">
-                  <p className="text-sm font-semibold text-[#17322c]">{row.name}</p>
+                <div key={row.id} className="rounded-2xl border border-[#f0e4d7] bg-[#fffaf4] p-3">
+                  <p className="text-sm font-semibold text-[#3a2112]">{row.name}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-[#5f7b72]">
                     <span>{row.photos} photos</span>
                     <span>{row.views} visits</span>
@@ -263,4 +242,3 @@ export default function AnalyticsPage() {
     </div>
   );
 }
-

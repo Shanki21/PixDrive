@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import fetchWithRetry from "@/lib/fetchWithRetry";
 import { useRouter } from "next/navigation";
 import DriveHeader from "@/components/drive/DriveHeader";
 import DriveTable from "@/components/drive/DriveTable";
@@ -9,8 +10,6 @@ import TrashWarning from "@/components/drive/TrashWarning";
 import type { GalleryEventSettings } from "@/lib/gallery-config";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 
-const VISITS_STORAGE_KEY = "wf_gallery_visits";
-const CLIENT_DOWNLOADS_PREFIX = "wf_client_downloads:";
 const GALLERIES_CACHE_KEY = "wf_drive_galleries_cache_v1";
 const GALLERIES_CACHE_TTL = 60 * 1000;
 
@@ -43,7 +42,7 @@ export default function DrivePage() {
 
   useEffect(() => {
     const load = async () => {
-      const res = await fetch("/api/galleries");
+      const res = await fetchWithRetry("/api/galleries", { cache: "no-store" }, { dedupeKey: `client:galleries:list` });
       const contentType = res.headers.get("content-type") ?? "";
       if (!res.ok || !contentType.includes("application/json")) {
         return;
@@ -54,37 +53,11 @@ export default function DrivePage() {
         return;
       }
 
-      const visitsMapRaw = localStorage.getItem(VISITS_STORAGE_KEY);
-      let visitsMap: Record<string, number> = {};
-      if (visitsMapRaw) {
-        try {
-          visitsMap = JSON.parse(visitsMapRaw) as Record<string, number>;
-        } catch {
-          visitsMap = {};
-        }
-      }
-
-      const rowsWithVisits = rows.map((row) => {
-        let downloadsCount = row.downloads ?? 0;
-        try {
-          const rawDownloads = localStorage.getItem(`${CLIENT_DOWNLOADS_PREFIX}${row.id}`);
-          const parsedDownloads = rawDownloads ? (JSON.parse(rawDownloads) as string[]) : [];
-          downloadsCount = Array.isArray(parsedDownloads) ? parsedDownloads.length : downloadsCount;
-        } catch {
-          downloadsCount = row.downloads ?? 0;
-        }
-        return {
-          ...row,
-          visitors: visitsMap[row.id] ?? row.visitors ?? 0,
-          downloads: downloadsCount,
-        };
-      });
-
-      setGalleries(rowsWithVisits);
+      setGalleries(rows);
       try {
         window.sessionStorage.setItem(
           GALLERIES_CACHE_KEY,
-          JSON.stringify({ ts: Date.now(), data: rowsWithVisits })
+          JSON.stringify({ ts: Date.now(), data: rows })
         );
       } catch {
         // Ignore cache write failures.
@@ -92,7 +65,7 @@ export default function DrivePage() {
     };
 
     load().finally(() => setLoading(false));
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     const prefetch = () => {
@@ -146,16 +119,16 @@ export default function DrivePage() {
 
       <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <article className="rounded-2xl border border-[#d3e8df] bg-white p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-[#5f7f74]">Active Events</p>
-          <p className="mt-2 text-2xl font-semibold text-[#142924]">{galleries.length}</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-[#7a6a55]">Active Events</p>
+          <p className="mt-2 text-2xl font-semibold text-[#2a170d]">{galleries.length}</p>
         </article>
         <article className="rounded-2xl border border-[#d3e8df] bg-white p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-[#5f7f74]">Files Managed</p>
-          <p className="mt-2 text-2xl font-semibold text-[#142924]">{totalFiles}</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-[#7a6a55]">Files Managed</p>
+          <p className="mt-2 text-2xl font-semibold text-[#2a170d]">{totalFiles}</p>
         </article>
         <article className="rounded-2xl border border-[#d3e8df] bg-white p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-[#5f7f74]">Pinned Priority</p>
-          <p className="mt-2 text-2xl font-semibold text-[#142924]">{pinnedCount}</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-[#7a6a55]">Pinned Priority</p>
+          <p className="mt-2 text-2xl font-semibold text-[#2a170d]">{pinnedCount}</p>
         </article>
       </div>
 
@@ -170,11 +143,11 @@ export default function DrivePage() {
           onSettings={(gallery) => {
             router.push(`/dashboard/create-events?edit=${encodeURIComponent(gallery.id)}`);
           }}
-          onPreview={(gallery) => {
-            router.push(`/dashboard/drive/${gallery.id}`);
-          }}
           onOpenQr={(gallery) => {
             router.push(`/dashboard/qr-code?event=${encodeURIComponent(gallery.id)}`);
+          }}
+          onOpen={(gallery) => {
+            router.push(`/dashboard/drive/${encodeURIComponent(gallery.id)}`);
           }}
           onPinToggle={(gallery) => {
             setGalleries((prev) => {
@@ -190,11 +163,12 @@ export default function DrivePage() {
             const nextPublished = !(gallery.published ?? true);
             const payload: GalleryEventSettings = { published: nextPublished };
             try {
-              const res = await fetch(`/api/galleries/${encodeURIComponent(gallery.id)}`, {
+              const dedupe = `galleries:patch:settings:${gallery.id}`;
+              const res = await fetchWithRetry(`/api/galleries/${encodeURIComponent(gallery.id)}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ settings: payload }),
-              });
+              }, { dedupeKey: dedupe, idempotencyKey: `${dedupe}:${Date.now()}` });
               if (!res.ok) return;
               setGalleries((prev) =>
                 prev.map((item) => (item.id === gallery.id ? { ...item, published: nextPublished } : item))
@@ -207,11 +181,12 @@ export default function DrivePage() {
             const nextPhotoSelling = !(gallery.photoSellingEnabled ?? false);
             const payload: GalleryEventSettings = { photoSellingEnabled: nextPhotoSelling };
             try {
-              const res = await fetch(`/api/galleries/${encodeURIComponent(gallery.id)}`, {
+              const dedupe = `galleries:patch:photoSelling:${gallery.id}`;
+              const res = await fetchWithRetry(`/api/galleries/${encodeURIComponent(gallery.id)}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ settings: payload }),
-              });
+              }, { dedupeKey: dedupe, idempotencyKey: `${dedupe}:${Date.now()}` });
               if (!res.ok) return;
               setGalleries((prev) =>
                 prev.map((item) =>
@@ -235,9 +210,10 @@ export default function DrivePage() {
           }}
           onDelete={async (gallery) => {
             try {
-              const res = await fetch(`/api/galleries/${encodeURIComponent(gallery.id)}`, {
+              const dedupe = `galleries:delete:${gallery.id}`;
+              const res = await fetchWithRetry(`/api/galleries/${encodeURIComponent(gallery.id)}`, {
                 method: "DELETE",
-              });
+              }, { dedupeKey: dedupe, idempotencyKey: dedupe });
               if (!res.ok) return;
 
               const deleted: MinimalGallery = {
@@ -247,6 +223,11 @@ export default function DrivePage() {
 
               setGalleries((prev) => prev.filter((g) => g.id !== gallery.id));
               setTrash((prev) => [deleted, ...prev]);
+              try {
+                window.sessionStorage.removeItem(GALLERIES_CACHE_KEY);
+              } catch {
+                // Ignore cache cleanup failures.
+              }
             } catch {
               // Ignore delete failures to keep dashboard responsive.
             }
@@ -266,15 +247,15 @@ export default function DrivePage() {
               return next;
             });
           }}
-          />
-        )}
+        />
+      )}
 
       {tab === "trash" && (
         <div className="mt-6 space-y-4">
           <button
             type="button"
             onClick={() => setTab("galleries")}
-            className="rounded-xl border border-[#d2e7de] bg-white px-4 py-2 text-sm font-semibold text-[#25493f] transition hover:border-[#0f766e] hover:text-[#0f766e]"
+            className="rounded-xl border border-[#ead7c5] bg-white px-4 py-2 text-sm font-semibold text-[#5b3a23] transition hover:border-[#7a3f13] hover:text-[#7a3f13]"
           >
             Back to My Events
           </button>

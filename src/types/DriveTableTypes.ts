@@ -13,6 +13,8 @@ export type MinimalGallery = {
   filesCount?: number;
   totalSize?: string | null;
   expiresAt?: string | null;
+  customDomain?: string | null;
+  customDomainVerified?: boolean;
 
   visitors?: number;
   downloads?: number;

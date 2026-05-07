@@ -74,5 +74,19 @@ export function saveEventSettings(galleryId: string, settings: EventSettings) {
     livenessDetectionEnabled: settings.livenessDetectionEnabled ?? prev.livenessDetectionEnabled ?? false,
   };
   writeAll(all);
+
+  // Attempt to persist settings to server for authenticated users (non-blocking)
+  (async () => {
+    try {
+      const { default: fetchWithRetry } = await import("@/lib/fetchWithRetry");
+      await fetchWithRetry(`/api/galleries/${encodeURIComponent(galleryId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings: all[galleryId] }),
+      }, { dedupeKey: `client:saveSettings:${galleryId}` });
+    } catch {
+      // ignore failures; localStorage remains a fallback for offline or unauthenticated users
+    }
+  })();
 }
 

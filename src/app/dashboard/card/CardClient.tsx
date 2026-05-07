@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import fetchWithRetry from "@/lib/fetchWithRetry";
 import { DashboardProfile, loadProfile, saveProfile } from "@/lib/profile-storage";
 
 type ActiveModal = "card" | "email" | "social" | null;
@@ -37,6 +38,37 @@ function getPublicLink(profile: DashboardProfile) {
 export default function CardClient() {
   const [profile, setProfile] = useState<DashboardProfile>(() => loadProfile());
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
+
+  // Try to load server-backed profile for authenticated users and merge with local defaults.
+  useEffect(() => {
+    let active = true;
+    const loadServerProfile = async () => {
+      try {
+        const res = await fetchWithRetry("/api/auth/profile", { cache: "no-store" }, { dedupeKey: `client:profile:server` });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!active || !data?.ok) return;
+        const server = data.profile ?? null;
+        if (!server) return;
+        setProfile((prev) => ({
+          ...prev,
+          name: server.name ?? prev.name,
+          occupation: server.occupation ?? prev.occupation,
+          phone: server.phone ?? prev.phone,
+          // map avatarUrl -> avatarDataUrl for compatibility
+          avatarDataUrl: server.avatarUrl ?? prev.avatarDataUrl,
+          socialAccounts: server.socialAccounts ?? prev.socialAccounts,
+        }));
+      } catch {
+        // ignore server profile failures
+      }
+    };
+
+    void loadServerProfile();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const [draftName, setDraftName] = useState(profile.name);
   const [draftOccupation, setDraftOccupation] = useState(profile.occupation);

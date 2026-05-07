@@ -40,11 +40,6 @@ export default function CloudDriveSection({
 
   return (
     <section className={`relative overflow-hidden py-28 text-white ${isDrive ? "bg-[#0c1a24]" : "bg-[#15151a]"}`}>
-      <div
-        className={`absolute -right-32 -top-28 h-72 w-72 rounded-full blur-3xl ${
-          isDrive ? "bg-[#54a6d1]/18" : "bg-[#d97757]/20"
-        }`}
-      />
       <div className="mx-auto max-w-7xl px-6 md:px-10">
         <div className="grid gap-10 md:grid-cols-[1.1fr_0.9fr] md:items-center">
           <motion.div

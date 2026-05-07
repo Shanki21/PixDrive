@@ -1,5 +1,10 @@
 import JSZip from "jszip";
 import { getGalleryPublicAccess } from "@/lib/gallery-public-access";
+import { checkIpThrottle } from "@/lib/ip-throttle";
+import { normalizeClientKey, normalizeSingleLine } from "@/lib/input-security";
+import { getClientIp } from "@/lib/request-ip";
+import { rejectCrossOriginWrite } from "@/lib/request-security";
+import { normalizePublicUrl } from "@/lib/url-security";
 import {
   hasGalleryAccessFromRequest,
   setGalleryAccessCookie,
@@ -9,8 +14,20 @@ import {
 import { normalizeGalleryMeta } from "@/lib/gallery-config";
 import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { withApiHandler } from "@/lib/withApiHandler";
+import { withRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
+const DOWNLOAD_FETCH_TIMEOUT_MS = 12000;
+const MAX_SOURCE_FILE_BYTES = 30 * 1024 * 1024;
+const MAX_BULK_DOWNLOAD_FILES = 400;
+const MAX_BULK_DOWNLOAD_BYTES = 500 * 1024 * 1024;
+const ALLOWED_IMAGE_CONTENT_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+];
 
 function sanitizeFileName(value: string) {
   const cleaned = value.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim();
@@ -35,6 +52,11 @@ function uniqueFileName(base: string, used: Set<string>) {
   return next;
 }
 
+function isAllowedImageContentType(contentType: string) {
+  const lower = contentType.toLowerCase();
+  return ALLOWED_IMAGE_CONTENT_TYPES.some((allowed) => lower.includes(allowed));
+}
+
 async function resolveGalleryBySlug(slug: string) {
   return prisma.gallery.findFirst({
     where: { OR: [{ slug }, { id: slug }] },
@@ -52,45 +74,69 @@ async function resolveGalleryBySlug(slug: string) {
   });
 }
 
-export async function POST(req: NextRequest) {
-  const body = (await req.json().catch(() => null)) as { slug?: unknown; pin?: unknown; action?: unknown } | null;
-  const action = String(body?.action ?? "").trim();
-  if (action !== "unlock") {
-    return NextResponse.json({ ok: false, error: "Invalid action." }, { status: 400 });
-  }
+export const POST = withApiHandler(
+  withRateLimit(async (req: NextRequest) => {
+    const blocked = rejectCrossOriginWrite(req);
+    if (blocked) {
+      return blocked;
+    }
 
-  const slug = String(body?.slug ?? "").trim();
-  const pin = String(body?.pin ?? "").trim();
-  if (!slug || !pin) {
-    return NextResponse.json({ ok: false, error: "slug and pin are required." }, { status: 400 });
-  }
+    const body = (await req.json().catch(() => null)) as { slug?: unknown; pin?: unknown; action?: unknown } | null;
+    const action = String(body?.action ?? "").trim();
+    if (action !== "unlock") {
+      return NextResponse.json({ ok: false, error: "Invalid action." }, { status: 400 });
+    }
 
-  const gallery = await resolveGalleryBySlug(slug);
-  if (!gallery) {
-    return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
-  }
+    const slug = normalizeSingleLine(body?.slug, 120);
+    const pin = normalizeSingleLine(body?.pin, 64);
+    if (!slug || !pin) {
+      return NextResponse.json({ ok: false, error: "slug and pin are required." }, { status: 400 });
+    }
 
-  const publicAccess = getGalleryPublicAccess({ settings: gallery.settings, meta: gallery.meta });
-  if (!publicAccess.canAccess) {
-    return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
-  }
+    const gallery = await resolveGalleryBySlug(slug);
+    if (!gallery) {
+      return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+    }
 
-  const requiredPin = getRequiredGalleryPin(gallery.settings);
-  if (!requiredPin) {
-    return NextResponse.json({ ok: true });
-  }
+    const publicAccess = getGalleryPublicAccess({ settings: gallery.settings, meta: gallery.meta });
+    if (!publicAccess.canAccess) {
+      return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+    }
 
-  if (!verifyGalleryPin(gallery.settings, pin)) {
-    return NextResponse.json({ ok: false, error: "Invalid PIN." }, { status: 401 });
-  }
+    const requiredPin = getRequiredGalleryPin(gallery.settings);
+    if (!requiredPin) {
+      return NextResponse.json({ ok: true });
+    }
 
-  const response = NextResponse.json({ ok: true });
-  const cookieSet = setGalleryAccessCookie(response, gallery.id);
-  if (!cookieSet) {
-    return NextResponse.json({ ok: false, error: "Session secret is missing." }, { status: 500 });
-  }
-  return response;
-}
+    const ip = getClientIp(req) ?? "unknown";
+    const unlockLimit = await checkIpThrottle({
+      key: `gallery:unlock:${gallery.id}:${ip}`,
+      limit: 12,
+      windowMs: 15 * 60 * 1000,
+    });
+    if (!unlockLimit.ok) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Too many attempts. Try again later.",
+          retryAfterSeconds: unlockLimit.retryAfterSeconds,
+        },
+        { status: 429 }
+      );
+    }
+
+    if (!(await verifyGalleryPin(gallery.settings, pin))) {
+      return NextResponse.json({ ok: false, error: "Invalid PIN." }, { status: 401 });
+    }
+
+    const response = NextResponse.json({ ok: true });
+    const cookieSet = setGalleryAccessCookie(response, gallery.id);
+    if (!cookieSet) {
+      return NextResponse.json({ ok: false, error: "Session secret is missing." }, { status: 500 });
+    }
+    return response;
+  }, { keyPrefix: "gallery:unlock", limit: 12, windowMs: 15 * 60 * 1000 })
+);
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -101,7 +147,7 @@ export async function GET(req: NextRequest) {
 
   const slug = String(searchParams.get("slug") ?? "").trim();
   const scope = String(searchParams.get("scope") ?? "all").trim();
-  const clientKey = String(searchParams.get("clientKey") ?? "").trim();
+  const clientKey = normalizeClientKey(searchParams.get("clientKey"));
   if (!slug) {
     return NextResponse.json({ error: "slug is required." }, { status: 400 });
   }
@@ -122,6 +168,22 @@ export async function GET(req: NextRequest) {
   const requiredPin = getRequiredGalleryPin(gallery.settings);
   if (requiredPin && !hasGalleryAccessFromRequest(req, gallery.id)) {
     return NextResponse.json({ error: "PIN required." }, { status: 401 });
+  }
+
+  const ip = getClientIp(req) ?? "unknown";
+  const bulkDownloadLimit = await checkIpThrottle({
+    key: `gallery:bulk-download:${gallery.id}:${ip}`,
+    limit: 20,
+    windowMs: 15 * 60 * 1000,
+  });
+  if (!bulkDownloadLimit.ok) {
+    return NextResponse.json(
+      {
+        error: "Too many download requests. Try again later.",
+        retryAfterSeconds: bulkDownloadLimit.retryAfterSeconds,
+      },
+      { status: 429 }
+    );
   }
 
   const allPhotos = gallery.photos;
@@ -155,36 +217,81 @@ export async function GET(req: NextRequest) {
   if (targetPhotos.length === 0) {
     return NextResponse.json({ error: "No photos to download." }, { status: 404 });
   }
+  if (targetPhotos.length > MAX_BULK_DOWNLOAD_FILES) {
+    return NextResponse.json(
+      { error: `Too many photos requested at once. Maximum ${MAX_BULK_DOWNLOAD_FILES} files per ZIP.` },
+      { status: 413 }
+    );
+  }
 
   const zip = new JSZip();
   const usedNames = new Set<string>();
+  let totalBytes = 0;
+  let addedCount = 0;
 
-  await Promise.all(
-    targetPhotos.map(async (photo, index) => {
-      try {
-        const response = await fetch(photo.url, { signal: AbortSignal.timeout(12000) });
-        if (!response.ok) return;
-        const blob = await response.blob();
-        const safe = sanitizeFileName(photo.name || `photo-${index + 1}`);
-        const ext =
-          safe.includes(".")
-            ? ""
-            : blob.type === "image/png"
-              ? ".png"
-              : blob.type === "image/webp"
-                ? ".webp"
-                : blob.type === "image/jpeg"
-                  ? ".jpg"
-                  : "";
-        const fileName = uniqueFileName(`${safe}${ext}`, usedNames);
-        zip.file(fileName, blob);
-      } catch {
-        // Skip unreachable files and continue packing.
+  for (let index = 0; index < targetPhotos.length; index += 1) {
+    const photo = targetPhotos[index];
+    const sourceUrl = normalizePublicUrl(photo.url);
+    if (!sourceUrl) {
+      continue;
+    }
+
+    try {
+      const { default: fetchWithRetry } = await import("@/lib/fetchWithRetry");
+      const response = await fetchWithRetry(sourceUrl, { signal: AbortSignal.timeout(DOWNLOAD_FETCH_TIMEOUT_MS) }, { dedupeKey: `disk:download:${photo.id}` });
+      if (!response.ok) continue;
+      const contentType = response.headers.get("content-type") ?? "application/octet-stream";
+      if (!isAllowedImageContentType(contentType)) continue;
+
+      const headerLength = Number(response.headers.get("content-length") ?? 0);
+      if (Number.isFinite(headerLength) && headerLength > MAX_SOURCE_FILE_BYTES) {
+        continue;
       }
-    })
-  );
+      if (
+        Number.isFinite(headerLength) &&
+        headerLength > 0 &&
+        totalBytes + headerLength > MAX_BULK_DOWNLOAD_BYTES
+      ) {
+        return NextResponse.json({ error: "Requested ZIP is too large." }, { status: 413 });
+      }
 
-  const content = await zip.generateAsync({ type: "nodebuffer" });
+      const data = await response.arrayBuffer();
+      if (data.byteLength > MAX_SOURCE_FILE_BYTES) {
+        continue;
+      }
+      if (totalBytes + data.byteLength > MAX_BULK_DOWNLOAD_BYTES) {
+        return NextResponse.json({ error: "Requested ZIP is too large." }, { status: 413 });
+      }
+
+      const safe = sanitizeFileName(photo.name || `photo-${index + 1}`);
+      const ext =
+        safe.includes(".")
+          ? ""
+          : contentType.includes("image/png")
+            ? ".png"
+            : contentType.includes("image/webp")
+              ? ".webp"
+              : contentType.includes("image/jpeg")
+                ? ".jpg"
+                : "";
+      const fileName = uniqueFileName(`${safe}${ext}`, usedNames);
+      zip.file(fileName, new Uint8Array(data));
+      totalBytes += data.byteLength;
+      addedCount += 1;
+    } catch {
+      // Skip unreachable files and continue packing.
+    }
+  }
+
+  if (addedCount === 0) {
+    return NextResponse.json({ error: "No downloadable photos were available." }, { status: 502 });
+  }
+
+  const content = await zip.generateAsync({
+    type: "nodebuffer",
+    compression: "DEFLATE",
+    compressionOptions: { level: 6 },
+  });
   const body = new Uint8Array(content);
   const baseName = sanitizeFileName(gallery.name || "gallery");
   const scopeLabel = scope === "favorites" ? "favorites" : "all";

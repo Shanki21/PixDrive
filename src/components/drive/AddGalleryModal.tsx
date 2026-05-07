@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import fetchWithRetry from "@/lib/fetchWithRetry";
 import { getClientGalleryBasePathForDisplay } from "@/lib/client-gallery-url";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 
@@ -162,11 +163,11 @@ export default function AddGalleryModal({
 
         try {
             if (isEditMode && initialGallery) {
-                const res = await fetch(`/api/galleries/${initialGallery.id}`, {
+                const res = await fetchWithRetry(`/api/galleries/${initialGallery.id}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ name: trimmedName }),
-                });
+                }, { dedupeKey: `galleries:update:${initialGallery.id}`, idempotencyKey: `galleries:update:${initialGallery.id}:${Date.now()}` });
 
                 if (!res.ok) {
                     alert("Unable to update event settings. Please try again.");
@@ -183,11 +184,11 @@ export default function AddGalleryModal({
                 return;
             }
 
-            const res = await fetch("/api/galleries", {
+            const res = await fetchWithRetry("/api/galleries", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
-            });
+            }, { dedupeKey: `galleries:create:${trimmedName}`, idempotencyKey: `galleries:create:${Date.now()}` });
 
             if (!res.ok) {
                 alert("Unable to create event. Please try again.");
