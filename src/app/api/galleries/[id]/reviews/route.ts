@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -29,6 +30,8 @@ export async function POST(req: NextRequest, ...rest: unknown[]) {
   return NextResponse.json({ ok: true, created }, { status: 201 });
 }
 =======
+=======
+>>>>>>> 3aa9795b5bf6b884953b41b184ad5c89d42d52fc
 import { getGalleryPublicAccess } from "@/lib/gallery-public-access";
 import { getRequiredGalleryPin, hasGalleryAccessFromRequest } from "@/lib/gallery-pin-access";
 import {
@@ -193,4 +196,7 @@ export const POST = withApiHandler(
     }
   }, { keyPrefix: "gallery:review", limit: 10, windowMs: 60 * 60 * 1000 })
 );
+<<<<<<< HEAD
+>>>>>>> 3aa9795b5bf6b884953b41b184ad5c89d42d52fc
+=======
 >>>>>>> 3aa9795b5bf6b884953b41b184ad5c89d42d52fc

@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -29,6 +30,8 @@ export async function DELETE(req: NextRequest, ...rest: unknown[]) {
   return NextResponse.json({ ok: true, deleted: true, galleryId: id, reviewId });
 }
 =======
+=======
+>>>>>>> 3aa9795b5bf6b884953b41b184ad5c89d42d52fc
 import prisma from "@/lib/prisma";
 import { getSessionEmailFromRequestAsync } from "@/lib/session";
 import {
@@ -224,4 +227,7 @@ export const DELETE = withApiHandler(
     }
   }, { keyPrefix: "review:delete", limit: 30, windowMs: 60 * 60 * 1000 })
 );
+<<<<<<< HEAD
+>>>>>>> 3aa9795b5bf6b884953b41b184ad5c89d42d52fc
+=======
 >>>>>>> 3aa9795b5bf6b884953b41b184ad5c89d42d52fc

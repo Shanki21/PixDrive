@@ -185,7 +185,10 @@ export default function AnalyticsPage() {
                     <div className="mt-2 h-2 rounded-full bg-[#f2e4d6]">
                       <div
                         className="h-full rounded-full bg-linear-to-r from-[#7a3f13] to-[#b9783b]"
+<<<<<<< HEAD
                         className="h-full rounded-full bg-linear-to-r from-[#0f766e] to-[#2563eb]"
+=======
+>>>>>>> 3aa9795b5bf6b884953b41b184ad5c89d42d52fc
                         style={{ width: `${width}%` }}
                       />
                     </div>
