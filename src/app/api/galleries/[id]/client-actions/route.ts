@@ -256,6 +256,10 @@ export const POST = withApiHandler(
     // 🔥 BATCH OPTIMIZATION STARTS HERE
 
     const photoIds = [...new Set(actions.map(a => a.photoId))];
+    const favoriteLimit =
+      meta?.favoritesLimitSelected && actions.some((item) => item.action === "favorite")
+        ? Math.max(1, meta.favoritesMaxSelected ?? 1)
+        : null;
 
     const [validPhotos, existingActions] = await Promise.all([
       prisma.photo.findMany({
@@ -275,6 +279,35 @@ export const POST = withApiHandler(
     ]);
 
     const validPhotoSet = new Set(validPhotos.map(p => p.id));
+    if (favoriteLimit !== null) {
+      const favoriteActions = actions.filter((item) => item.action === "favorite");
+      const clientKeys = [...new Set(favoriteActions.map((item) => item.clientKey))];
+      if (clientKeys.length > 0) {
+        const existingFavorites = await prisma.clientPhotoAction.findMany({
+          where: { galleryId: id, action: "favorite", clientKey: { in: clientKeys } },
+          select: { clientKey: true, photoId: true },
+        });
+        const nextByClient = new Map<string, Set<string>>();
+        existingFavorites.forEach((item) => {
+          const current = nextByClient.get(item.clientKey) ?? new Set<string>();
+          current.add(item.photoId);
+          nextByClient.set(item.clientKey, current);
+        });
+        favoriteActions.forEach((item) => {
+          if (!validPhotoSet.has(item.photoId)) return;
+          const current = nextByClient.get(item.clientKey) ?? new Set<string>();
+          if (item.liked === false) current.delete(item.photoId);
+          else current.add(item.photoId);
+          nextByClient.set(item.clientKey, current);
+        });
+        if (Array.from(nextByClient.values()).some((set) => set.size > favoriteLimit)) {
+          return NextResponse.json(
+            { error: `Selection limit exceeded. Maximum ${favoriteLimit} photos can be selected.` },
+            { status: 409 }
+          );
+        }
+      }
+    }
 
     const existingSet = new Set(
       existingActions.map(

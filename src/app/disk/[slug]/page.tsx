@@ -1,6 +1,6 @@
 import { getClientGalleryHostLabel } from "@/lib/client-gallery-url";
 import { getGalleryPublicAccess } from "@/lib/gallery-public-access";
-import { getRequiredGalleryPin, hasGalleryAccessFromCookieStore } from "@/lib/gallery-pin-access";
+import { getGalleryAccessModeFromCookieStore, getRequiredGalleryPin, hasGalleryAccessFromCookieStore } from "@/lib/gallery-pin-access";
 import { normalizeGalleryMeta } from "@/lib/gallery-config";
 import { getPrismaUnavailableMessage, isPrismaUnavailableError } from "@/lib/prisma-errors";
 import prisma from "@/lib/prisma";
@@ -10,6 +10,7 @@ import DiskGalleryClient from "./DiskGalleryClient";
 
 type DiskGalleryPageProps = {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ clientKey?: string }>;
 };
 
 function decodePhotoName(raw: string) {
@@ -24,7 +25,7 @@ function formatHeaderDate(value: Date) {
   return new Intl.DateTimeFormat("en-CA").format(value);
 }
 
-export default async function DiskGalleryPage({ params }: DiskGalleryPageProps) {
+export default async function DiskGalleryPage({ params, searchParams }: DiskGalleryPageProps) {
   try {
     const requestHeaders = await headers();
     const cookieStore = await cookies();
@@ -34,11 +35,14 @@ export default async function DiskGalleryPage({ params }: DiskGalleryPageProps) 
     const fallbackOrigin = host ? `${protocol}://${host}` : undefined;
 
     const { slug } = await params;
+    const query = (await searchParams) ?? {};
+    const clientKey = String(query.clientKey ?? "").trim();
     const initialTake = 60;
 
     const gallery = await prisma.gallery.findFirst({
       where: {
         OR: [{ slug }, { id: slug }],
+        deletedAt: null,
       },
       select: {
         id: true,
@@ -92,9 +96,27 @@ export default async function DiskGalleryPage({ params }: DiskGalleryPageProps) 
       );
     }
 
+    const accessMode = requiredPin ? getGalleryAccessModeFromCookieStore(cookieStore, gallery.id) ?? "guest" : "full";
+    const faceMatchedIds =
+      accessMode === "guest" && clientKey
+        ? new Set(
+            (
+              await prisma.faceMatch.findMany({
+                where: { galleryId: gallery.id, clientKey },
+                select: { photoId: true },
+                take: 1000,
+              })
+            ).map((match) => match.photoId)
+          )
+        : null;
+    const photoWhere = {
+      galleryId: gallery.id,
+      ...(faceMatchedIds ? { id: { in: Array.from(faceMatchedIds) } } : {}),
+    };
+
     const [initialPhotos, totalPhotos, coverPhoto] = await Promise.all([
       prisma.photo.findMany({
-        where: { galleryId: gallery.id },
+        where: photoWhere,
         orderBy: { id: "asc" },
         take: initialTake,
         select: {
@@ -103,7 +125,7 @@ export default async function DiskGalleryPage({ params }: DiskGalleryPageProps) 
           url: true,
         },
       }),
-      prisma.photo.count({ where: { galleryId: gallery.id } }),
+      prisma.photo.count({ where: photoWhere }),
       gallery.coverPhotoId
         ? prisma.photo.findUnique({
             where: { id: gallery.coverPhotoId },

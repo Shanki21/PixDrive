@@ -1,5 +1,6 @@
 export type MinimalGallery = {
   id: string;
+  userId?: string | null;
   name: string;
   slug?: string | null;
   coverUrl?: string | null;

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ComponentType } from "react";
-import { CalendarDays, Home, PlusSquare, QrCode, Sparkles } from "lucide-react";
+import { BarChart3, CalendarDays, Home, PlusSquare, QrCode, Sparkles } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 type NavBadge = {
@@ -40,6 +40,11 @@ export default function Sidebar() {
       label: "One QR",
       icon: QrCode,
       badge: { label: "NEW", tone: "new" },
+    },
+    {
+      href: "/dashboard/analytics",
+      label: "Analytics",
+      icon: BarChart3,
     },
   ];
 

@@ -5,6 +5,7 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import fetchWithRetry from "@/lib/fetchWithRetry";
 import AddGalleryModal from "@/components/drive/AddGalleryModal";
+import { confirmPixoraAction, showPixoraAlert, showPixoraToast } from "@/lib/pixora-alerts";
 import type { GalleryMetaConfig } from "@/lib/gallery-config";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 import {
@@ -805,13 +806,26 @@ export default function DriveDetailPage() {
   };
 
   const deletePhoto = async (photoId: string) => {
-    const confirmed = window.confirm("Delete this photo?");
+    const confirmed = await confirmPixoraAction({
+      title: "Delete this photo?",
+      text: "This removes the photo from this gallery.",
+      confirmText: "Delete photo",
+      cancelText: "Keep photo",
+      icon: "warning",
+    });
     if (!confirmed) return;
 
     try {
       const dedupe = `drive:photo:delete:${photoId}`;
       const res = await fetchWithRetry(`/api/photos/${photoId}`, { method: "DELETE" }, { dedupeKey: dedupe, idempotencyKey: dedupe });
-      if (!res.ok) return;
+      if (!res.ok) {
+        void showPixoraAlert({
+          title: "Unable to delete photo",
+          text: "Please try again in a moment.",
+          icon: "error",
+        });
+        return;
+      }
 
       setPhotos((prev) => prev.filter((item) => item.id !== photoId));
       setFavoriteIds((prev) => {
@@ -831,8 +845,13 @@ export default function DriveDetailPage() {
       if (coverPhotoId === photoId) {
         setCoverPhotoId(null);
       }
+      void showPixoraToast({ title: "Photo deleted" });
     } catch {
-      // Ignore delete failures.
+      void showPixoraAlert({
+        title: "Unable to delete photo",
+        text: "Please check your connection and try again.",
+        icon: "error",
+      });
     }
   };
 

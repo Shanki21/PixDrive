@@ -324,20 +324,24 @@ export default function DriveTable({
                 }
               }}
             >
-              <div
-                className="relative h-64 border-b border-[#f0e4d7]"
-                style={
-                  cover
-                    ? {
-                        backgroundImage: `linear-gradient(160deg,rgba(122,63,19,0.2),rgba(185,120,59,0.15)), url(${cover})`,
-                        backgroundSize: "cover",
-                        backgroundPosition: "center",
-                      }
-                    : {
-                        background: "linear-gradient(140deg, rgba(122,63,19,0.14), rgba(185,120,59,0.18))",
-                      }
-                }
-              >
+              <div className="relative h-64 overflow-hidden border-b border-[#f0e4d7] bg-[#f6eadb]">
+                {cover ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={cover} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-25 blur-xl" />
+                    <div className="absolute inset-0 bg-[linear-gradient(160deg,rgba(122,63,19,0.16),rgba(255,250,244,0.18))]" />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={cover}
+                      alt={gallery.name}
+                      className="relative z-0 h-full w-full object-contain"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </>
+                ) : (
+                  <div className="absolute inset-0 bg-[linear-gradient(140deg,rgba(122,63,19,0.14),rgba(185,120,59,0.18))]" />
+                )}
                 <div className="absolute left-4 top-4 flex items-center gap-2">
                   <span
                     className={`rounded-full px-3 py-1 text-xs font-semibold ${

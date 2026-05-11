@@ -9,7 +9,10 @@ const GALLERY_ACCESS_MAX_AGE_SECONDS = 60 * 60 * 24;
 type GalleryAccessPayload = {
   galleryId: string;
   exp: number;
+  mode?: GalleryAccessMode;
 };
+
+export type GalleryAccessMode = "full" | "guest";
 
 function toBase64Url(value: string | Buffer) {
   return Buffer.from(value)
@@ -78,6 +81,27 @@ function getPreferredPinValues(settings: unknown) {
   return [...guestCandidates, ...fullCandidates];
 }
 
+function getPinEntries(settings: unknown): Array<{ mode: GalleryAccessMode; value: string }> {
+  const normalized = normalizeEventSettings(settings);
+  if (!normalized) return [];
+
+  const fullHash = normalizePinValue(normalized.fullAccessPinHash);
+  const fullPlain = normalizePinValue(normalized.fullAccessPin);
+  const guestHash = normalizePinValue(normalized.guestPinHash);
+  const guestPlain = normalizePinValue(normalized.guestPin);
+  const fullEntries = [fullHash, fullPlain]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => ({ mode: "full" as const, value }));
+  const guestEntries = [guestHash, guestPlain]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => ({ mode: "guest" as const, value }));
+
+  if (normalized.oneQrRequirePin && normalized.oneQrAccessLevel === "full") {
+    return [...fullEntries, ...guestEntries];
+  }
+  return [...guestEntries, ...fullEntries];
+}
+
 function buildToken(payload: GalleryAccessPayload) {
   const secret = getAppSecret();
   if (!secret) return null;
@@ -86,7 +110,7 @@ function buildToken(payload: GalleryAccessPayload) {
   return `${encoded}.${signature}`;
 }
 
-function parseToken(token: string) {
+function parseToken(token: string): GalleryAccessPayload | null {
   const secret = getAppSecret();
   if (!secret) return null;
   const [encodedPayload, signature] = token.split(".");
@@ -140,9 +164,25 @@ export async function verifyGalleryPin(settings: unknown, pin: string) {
   return false;
 }
 
-export function setGalleryAccessCookie(response: NextResponse, galleryId: string) {
+export async function verifyGalleryPinAccessMode(settings: unknown, pin: string): Promise<GalleryAccessMode | null> {
+  const normalizedPin = pin.trim();
+  if (!normalizedPin) return null;
+
+  const entries = getPinEntries(settings);
+  if (entries.length === 0) return "full";
+
+  for (const entry of entries) {
+    if (await verifyPinValue(normalizedPin, entry.value)) {
+      return entry.mode;
+    }
+  }
+  return null;
+}
+
+export function setGalleryAccessCookie(response: NextResponse, galleryId: string, mode: GalleryAccessMode = "full") {
   const token = buildToken({
     galleryId,
+    mode,
     exp: Date.now() + GALLERY_ACCESS_MAX_AGE_SECONDS * 1000,
   });
   if (!token) return false;
@@ -165,9 +205,20 @@ export function hasGalleryAccessCookieValue(galleryId: string, token: string) {
   return parsed.galleryId === galleryId;
 }
 
+export function getGalleryAccessCookieMode(galleryId: string, token: string): GalleryAccessMode | null {
+  const parsed = parseToken(token);
+  if (!parsed || parsed.galleryId !== galleryId) return null;
+  return parsed.mode === "guest" ? "guest" : "full";
+}
+
 export function hasGalleryAccessFromRequest(req: NextRequest, galleryId: string) {
   const token = req.cookies.get(getGalleryAccessCookieName(galleryId))?.value ?? "";
   return hasGalleryAccessCookieValue(galleryId, token);
+}
+
+export function getGalleryAccessModeFromRequest(req: NextRequest, galleryId: string): GalleryAccessMode | null {
+  const token = req.cookies.get(getGalleryAccessCookieName(galleryId))?.value ?? "";
+  return getGalleryAccessCookieMode(galleryId, token);
 }
 
 export function hasGalleryAccessFromCookieStore(
@@ -176,4 +227,12 @@ export function hasGalleryAccessFromCookieStore(
 ) {
   const token = cookieStore.get(getGalleryAccessCookieName(galleryId))?.value ?? "";
   return hasGalleryAccessCookieValue(galleryId, token);
+}
+
+export function getGalleryAccessModeFromCookieStore(
+  cookieStore: { get: (name: string) => { value?: string } | undefined },
+  galleryId: string
+): GalleryAccessMode | null {
+  const token = cookieStore.get(getGalleryAccessCookieName(galleryId))?.value ?? "";
+  return getGalleryAccessCookieMode(galleryId, token);
 }

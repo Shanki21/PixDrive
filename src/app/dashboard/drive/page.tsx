@@ -36,6 +36,11 @@ export default function DrivePage() {
       });
 
       setGalleries(rows);
+      const trashRes = await fetchWithRetry("/api/galleries?trash=1", { cache: "no-store" }, { dedupeKey: "client:galleries:trash" });
+      if (trashRes.ok) {
+        const trashRows = (await trashRes.json()) as MinimalGallery[];
+        setTrash(Array.isArray(trashRows) ? trashRows : []);
+      }
     };
 
     load().finally(() => setLoading(false));
@@ -186,10 +191,11 @@ export default function DrivePage() {
                 method: "DELETE",
               }, { dedupeKey: dedupe, idempotencyKey: dedupe });
               if (!res.ok) return;
+              const payload = (await res.json().catch(() => ({}))) as { deletedAt?: string };
 
               const deleted: MinimalGallery = {
                 ...gallery,
-                deletedAt: new Date().toISOString(),
+                deletedAt: payload.deletedAt ?? new Date().toISOString(),
               };
 
               setGalleries((prev) => prev.filter((g) => g.id !== gallery.id));
@@ -233,12 +239,24 @@ export default function DrivePage() {
           <TrashWarning />
           <TrashTable
             galleries={trash}
-            onRestore={(gallery) => {
+            onRestore={async (gallery) => {
+              const dedupe = `galleries:restore:${gallery.id}`;
+              const res = await fetchWithRetry(`/api/galleries/${encodeURIComponent(gallery.id)}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ deletedAt: null }),
+              }, { dedupeKey: dedupe, idempotencyKey: dedupe });
+              if (!res.ok) return;
               setTrash((prev) => prev.filter((g) => g.id !== gallery.id));
               setGalleries((prev) => insertAfterPinned(prev, { ...gallery, deletedAt: null }));
               setTab("galleries");
             }}
-            onPermanentDelete={(gallery) => {
+            onPermanentDelete={async (gallery) => {
+              const dedupe = `galleries:delete:permanent:${gallery.id}`;
+              const res = await fetchWithRetry(`/api/galleries/${encodeURIComponent(gallery.id)}?permanent=1`, {
+                method: "DELETE",
+              }, { dedupeKey: dedupe, idempotencyKey: dedupe });
+              if (!res.ok) return;
               setTrash((prev) => prev.filter((g) => g.id !== gallery.id));
             }}
           />
