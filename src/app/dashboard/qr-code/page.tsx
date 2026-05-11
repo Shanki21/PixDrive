@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import fetchWithRetry from "@/lib/fetchWithRetry";
+import { loadGalleriesList, readCachedGalleries } from "@/lib/client-galleries-cache";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Copy, Download, ExternalLink, QrCode, RefreshCw } from "lucide-react";
@@ -27,7 +28,9 @@ function formatDate(value?: string | null) {
 export default function QrCodePage() {
   const searchParams = useSearchParams();
   const requestedEventId = (searchParams.get("event") ?? "").trim();
-  const [galleries, setGalleries] = useState<GalleryWithSlug[]>([]);
+  const [galleries, setGalleries] = useState<GalleryWithSlug[]>(
+    () => readCachedGalleries<GalleryWithSlug>() ?? []
+  );
   const [selectedId, setSelectedId] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -42,16 +45,12 @@ export default function QrCodePage() {
         if (isRefresh && active) {
           setRefreshing(true);
         }
-        const response = await fetchWithRetry("/api/galleries", {}, { dedupeKey: `client:galleries:list` });
-        const contentType = response.headers.get("content-type") ?? "";
-        if (!response.ok || !contentType.includes("application/json")) {
-          if (active) setGalleries([]);
-          return;
-        }
-
-        const payload = (await response.json()) as GalleryWithSlug[] | { error?: string };
+        const payload = await loadGalleriesList<GalleryWithSlug>({
+          dedupeKey: isRefresh ? `client:galleries:list:refresh` : `client:galleries:list`,
+          forceRefresh: isRefresh,
+        });
         if (!active) return;
-        const rows = Array.isArray(payload) ? payload : [];
+        const rows = payload;
         setGalleries(rows);
         if (rows[0]) {
           const firstShareReady = rows.find(

@@ -23,7 +23,7 @@ export default async function DashboardLayout({
       <Sidebar />
       <MobileNav />
 
-      <div className="flex min-h-screen min-w-0 flex-col pb-19.5 md:ml-72 md:pb-0">
+      <div className="flex min-h-screen min-w-0 flex-col pb-19.5 md:ml-20 md:pb-0">
         <Header />
 
         <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-5 md:px-8 md:py-7">

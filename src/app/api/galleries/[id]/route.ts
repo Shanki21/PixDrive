@@ -17,14 +17,14 @@ import { withRateLimit } from "@/lib/rate-limit";
 
 const MAX_GALLERY_NAME_LENGTH = 160;
 
-export async function GET(
+export const GET = withApiHandler(async (
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   const { id } = await params;
   const email = await getSessionEmailFromRequestAsync(req);
   if (!email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Session expired. Please log in again." }, { status: 401 });
   }
 
   const user = await prisma.user.findUnique({
@@ -86,11 +86,13 @@ export async function GET(
     favoritesListsCount: parsedMeta?.favoritesListsCount ?? 0,
     selectionCompletedCount: parsedMeta?.selectionCompletedCount ?? 0,
     favoritesMaxSelected: parsedMeta?.favoritesMaxSelected ?? null,
+    coverPositionX: parsedMeta?.coverPositionX ?? 50,
+    coverPositionY: parsedMeta?.coverPositionY ?? 50,
     folders: parsedMeta?.folders ?? [],
     folderPhotosMap: parsedMeta?.folderPhotosMap ?? {},
     folderOrder: parsedMeta?.folderOrder ?? [],
   });
-}
+});
 
 export const PATCH = withApiHandler(
   withRateLimit(async (req: NextRequest, ...rest: unknown[]) => {

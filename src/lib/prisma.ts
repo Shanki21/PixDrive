@@ -1,5 +1,29 @@
 import { PrismaClient } from "@prisma/client";
 
+function normalizeDatabaseUrl() {
+  const raw = process.env.DATABASE_URL?.trim();
+  if (!raw) return;
+
+  try {
+    const url = new URL(raw);
+    if (!url.hostname.endsWith(".supabase.com")) return;
+
+    if (!url.searchParams.has("sslmode")) {
+      url.searchParams.set("sslmode", "require");
+    }
+
+    if (url.port === "6543" && !url.searchParams.has("pgbouncer")) {
+      url.searchParams.set("pgbouncer", "true");
+    }
+
+    process.env.DATABASE_URL = url.toString();
+  } catch {
+    // Prisma will report malformed URLs during connection.
+  }
+}
+
+normalizeDatabaseUrl();
+
 // Keep a single PrismaClient across hot reloads to avoid exhausting connections.
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 

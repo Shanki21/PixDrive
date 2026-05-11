@@ -31,6 +31,8 @@ export type MinimalGallery = {
   favoritesListsCount?: number;
   selectionCompletedCount?: number;
   favoritesMaxSelected?: number | null;
+  coverPositionX?: number;
+  coverPositionY?: number;
   storageTimeLabel?: string;
   folders?: Array<{
     id: string;

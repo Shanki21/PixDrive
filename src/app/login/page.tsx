@@ -1,9 +1,9 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import fetchWithRetry from "@/lib/fetchWithRetry";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import AuthShell from "@/components/auth/AuthShell";
 import AuthVisuals from "@/components/auth/AuthVisuals";
@@ -29,8 +29,9 @@ async function parseJsonSafe(res: Response): Promise<AuthJson | null> {
   }
 }
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
@@ -83,7 +84,7 @@ export default function LoginPage() {
         ...current,
         email: email.trim().toLowerCase(),
       });
-      router.push("/dashboard");
+      router.push(searchParams.get("next") || "/dashboard");
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -160,5 +161,13 @@ export default function LoginPage() {
         </motion.form>
       )}
     </AuthShell>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginContent />
+    </Suspense>
   );
 }

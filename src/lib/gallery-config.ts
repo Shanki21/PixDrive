@@ -29,6 +29,8 @@ export type GalleryEventSettings = {
   guestPin?: string | null;
   fullAccessPinHash?: string | null;
   guestPinHash?: string | null;
+  fullAccessPinSet?: boolean;
+  guestPinSet?: boolean;
   allowSingleDownload?: boolean;
   allowBulkDownload?: boolean;
   whatsappEnabled?: boolean;
@@ -51,6 +53,8 @@ export type GalleryMetaConfig = {
   favoritesListsCount?: number;
   selectionCompletedCount?: number;
   favoritesMaxSelected?: number | null;
+  coverPositionX?: number;
+  coverPositionY?: number;
   folders?: GalleryFolderMeta[];
   folderPhotosMap?: Record<string, string[]>;
   folderOrder?: string[];
@@ -84,6 +88,10 @@ function asBoolean(value: unknown, fallback: boolean) {
 function asNumber(value: unknown, fallback: number) {
   if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
   return value;
+}
+
+function asPercent(value: unknown, fallback = 50) {
+  return Math.min(100, Math.max(0, asNumber(value, fallback)));
 }
 
 function asStringArray(value: unknown, maxItems = MAX_FOLDER_ORDER_IDS, itemMaxLength = MAX_FOLDER_ID_LENGTH) {
@@ -149,6 +157,8 @@ export function normalizeEventSettings(value: unknown): GalleryEventSettings | n
     guestPin: asNullableString(record.guestPin, MAX_PIN_LENGTH),
     fullAccessPinHash: asNullableString(record.fullAccessPinHash, 200),
     guestPinHash: asNullableString(record.guestPinHash, 200),
+    fullAccessPinSet: asBoolean(record.fullAccessPinSet, false),
+    guestPinSet: asBoolean(record.guestPinSet, false),
     allowSingleDownload: asBoolean(record.allowSingleDownload, true),
     allowBulkDownload: asBoolean(record.allowBulkDownload, false),
     whatsappEnabled: asBoolean(record.whatsappEnabled, false),
@@ -181,6 +191,8 @@ export function normalizeGalleryMeta(value: unknown): GalleryMetaConfig | null {
       record.favoritesMaxSelected == null
         ? null
         : Math.max(0, asNumber(record.favoritesMaxSelected, 0)),
+    coverPositionX: asPercent(record.coverPositionX, 50),
+    coverPositionY: asPercent(record.coverPositionY, 50),
     folders: asFolderMetaArray(record.folders),
     folderPhotosMap: asFolderPhotosMap(record.folderPhotosMap),
     folderOrder: asStringArray(record.folderOrder, MAX_FOLDER_ORDER_IDS, MAX_FOLDER_ID_LENGTH),
@@ -192,15 +204,63 @@ export function mergeEventSettings(
   incoming: unknown
 ): GalleryEventSettings | null {
   const base = normalizeEventSettings(existing) ?? {};
-  const next = normalizeEventSettings(incoming);
-  if (!next) return null;
-  return { ...base, ...next };
+  const record = asRecord(incoming);
+  if (!record) return null;
+
+  const next: GalleryEventSettings = {};
+  if ("startDate" in record) next.startDate = asNullableString(record.startDate, MAX_DATE_LENGTH);
+  if ("endDate" in record) next.endDate = asNullableString(record.endDate, MAX_DATE_LENGTH);
+  if ("eventType" in record) next.eventType = asNullableString(record.eventType, MAX_EVENT_FIELD_LENGTH);
+  if ("eventLocation" in record) next.eventLocation = asNullableString(record.eventLocation, MAX_EVENT_FIELD_LENGTH);
+  if ("description" in record) next.description = asNullableString(record.description, MAX_DESCRIPTION_LENGTH);
+  if ("published" in record) next.published = asBoolean(record.published, base.published ?? true);
+  if ("photoSellingEnabled" in record) {
+    next.photoSellingEnabled = asBoolean(record.photoSellingEnabled, base.photoSellingEnabled ?? false);
+  }
+  if ("reelitAiEnabled" in record) next.reelitAiEnabled = asBoolean(record.reelitAiEnabled, base.reelitAiEnabled ?? false);
+  if ("brandingEnabled" in record) next.brandingEnabled = asBoolean(record.brandingEnabled, base.brandingEnabled ?? false);
+  if ("expiryDate" in record) next.expiryDate = asNullableString(record.expiryDate, MAX_DATE_LENGTH);
+  if ("fullAccessPin" in record) next.fullAccessPin = asNullableString(record.fullAccessPin, MAX_PIN_LENGTH);
+  if ("guestPin" in record) next.guestPin = asNullableString(record.guestPin, MAX_PIN_LENGTH);
+  if ("fullAccessPinHash" in record) next.fullAccessPinHash = asNullableString(record.fullAccessPinHash, 200);
+  if ("guestPinHash" in record) next.guestPinHash = asNullableString(record.guestPinHash, 200);
+  if ("fullAccessPinSet" in record) next.fullAccessPinSet = asBoolean(record.fullAccessPinSet, base.fullAccessPinSet ?? false);
+  if ("guestPinSet" in record) next.guestPinSet = asBoolean(record.guestPinSet, base.guestPinSet ?? false);
+  if ("allowSingleDownload" in record) {
+    next.allowSingleDownload = asBoolean(record.allowSingleDownload, base.allowSingleDownload ?? true);
+  }
+  if ("allowBulkDownload" in record) {
+    next.allowBulkDownload = asBoolean(record.allowBulkDownload, base.allowBulkDownload ?? false);
+  }
+  if ("whatsappEnabled" in record) next.whatsappEnabled = asBoolean(record.whatsappEnabled, base.whatsappEnabled ?? false);
+  if ("emailEnabled" in record) next.emailEnabled = asBoolean(record.emailEnabled, base.emailEnabled ?? false);
+  if ("oneQrEnabled" in record) next.oneQrEnabled = asBoolean(record.oneQrEnabled, base.oneQrEnabled ?? true);
+  if ("oneQrRequirePin" in record) {
+    next.oneQrRequirePin = asBoolean(record.oneQrRequirePin, base.oneQrRequirePin ?? false);
+  }
+  if ("oneQrAccessLevel" in record) {
+    const access = record.oneQrAccessLevel;
+    next.oneQrAccessLevel = access === "full" || access === "guest" ? access : base.oneQrAccessLevel ?? "guest";
+  }
+  if ("galleryAppEnabled" in record) {
+    next.galleryAppEnabled = asBoolean(record.galleryAppEnabled, base.galleryAppEnabled ?? true);
+  }
+  if ("livenessDetectionEnabled" in record) {
+    next.livenessDetectionEnabled = asBoolean(record.livenessDetectionEnabled, base.livenessDetectionEnabled ?? false);
+  }
+
+  const merged = { ...base, ...next };
+  if (!("fullAccessPin" in record)) delete merged.fullAccessPin;
+  if (!("guestPin" in record)) delete merged.guestPin;
+  return merged;
 }
 
 export function maskEventSettingsPins(settings: GalleryEventSettings | null): GalleryEventSettings | null {
   if (!settings) return null;
   return {
     ...settings,
+    fullAccessPinSet: Boolean(settings.fullAccessPin || settings.fullAccessPinHash || settings.fullAccessPinSet),
+    guestPinSet: Boolean(settings.guestPin || settings.guestPinHash || settings.guestPinSet),
     fullAccessPin: null,
     guestPin: null,
     fullAccessPinHash: null,
@@ -210,8 +270,47 @@ export function maskEventSettingsPins(settings: GalleryEventSettings | null): Ga
 
 export function mergeGalleryMeta(existing: unknown, incoming: unknown): GalleryMetaConfig | null {
   const base = normalizeGalleryMeta(existing) ?? {};
-  const next = normalizeGalleryMeta(incoming);
-  if (!next) return null;
+  const record = asRecord(incoming);
+  if (!record) return null;
+
+  const next: GalleryMetaConfig = {};
+  if ("expiresAt" in record) next.expiresAt = asNullableString(record.expiresAt, MAX_DATE_LENGTH);
+  if ("storageTimeLabel" in record) {
+    next.storageTimeLabel = asNullableString(record.storageTimeLabel, MAX_STORAGE_LABEL_LENGTH);
+  }
+  if ("customDomain" in record) {
+    next.customDomain =
+      normalizePublicOrigin(String(record.customDomain ?? ""), {
+        allowHttpLocalhost: process.env.NODE_ENV !== "production",
+      }) ?? null;
+  }
+  if ("customDomainVerified" in record) {
+    next.customDomainVerified =
+      typeof record.customDomainVerified === "boolean" ? record.customDomainVerified : base.customDomainVerified ?? false;
+  }
+  if ("favoritesEnabled" in record) next.favoritesEnabled = asBoolean(record.favoritesEnabled, base.favoritesEnabled ?? true);
+  if ("favoritesLimitSelected" in record) {
+    next.favoritesLimitSelected = asBoolean(record.favoritesLimitSelected, base.favoritesLimitSelected ?? false);
+  }
+  if ("favoritesName" in record) next.favoritesName = asNullableString(record.favoritesName, MAX_FAVORITES_NAME_LENGTH);
+  if ("favoritesListsCount" in record) {
+    next.favoritesListsCount = Math.max(0, asNumber(record.favoritesListsCount, base.favoritesListsCount ?? 0));
+  }
+  if ("selectionCompletedCount" in record) {
+    next.selectionCompletedCount = Math.max(0, asNumber(record.selectionCompletedCount, base.selectionCompletedCount ?? 0));
+  }
+  if ("favoritesMaxSelected" in record) {
+    next.favoritesMaxSelected =
+      record.favoritesMaxSelected == null
+        ? null
+        : Math.max(0, asNumber(record.favoritesMaxSelected, base.favoritesMaxSelected ?? 0));
+  }
+  if ("coverPositionX" in record) next.coverPositionX = asPercent(record.coverPositionX, base.coverPositionX ?? 50);
+  if ("coverPositionY" in record) next.coverPositionY = asPercent(record.coverPositionY, base.coverPositionY ?? 50);
+  if ("folders" in record) next.folders = asFolderMetaArray(record.folders);
+  if ("folderPhotosMap" in record) next.folderPhotosMap = asFolderPhotosMap(record.folderPhotosMap);
+  if ("folderOrder" in record) next.folderOrder = asStringArray(record.folderOrder, MAX_FOLDER_ORDER_IDS, MAX_FOLDER_ID_LENGTH);
+
   // Merge customDomain carefully: if domain changes, clear verification flag.
   const existingDomain = base.customDomain ?? null;
   const incomingDomain = next.customDomain ?? null;

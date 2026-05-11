@@ -1,36 +1,3 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
-import { getSessionEmailFromRequest } from "@/lib/session";
-import { NextRequest, NextResponse } from "next/server";
-
-export const runtime = "nodejs";
-
-function toDisplayName(email: string) {
-  const local = (email.split("@")[0] ?? "").trim();
-  if (!local) return "Creator";
-  const normalized = local
-    .replace(/[._-]+/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase())
-    .trim();
-  return normalized || "Creator";
-}
-
-export async function GET(req: NextRequest) {
-  const email = getSessionEmailFromRequest(req);
-  if (!email) {
-    return NextResponse.json({ ok: false, authenticated: false }, { status: 401 });
-  }
-
-  return NextResponse.json({
-    ok: true,
-    authenticated: true,
-    email,
-    displayName: toDisplayName(email),
-  });
-}
-=======
-=======
->>>>>>> 3aa9795b5bf6b884953b41b184ad5c89d42d52fc
 import prisma from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import {
@@ -180,7 +147,3 @@ export const PATCH = withApiHandler(
     return NextResponse.json({ ok: true, profile });
   }, { keyPrefix: "auth:profile:update", limit: 30, windowMs: 60 * 60 * 1000 })
 );
-<<<<<<< HEAD
->>>>>>> 3aa9795b5bf6b884953b41b184ad5c89d42d52fc
-=======
->>>>>>> 3aa9795b5bf6b884953b41b184ad5c89d42d52fc

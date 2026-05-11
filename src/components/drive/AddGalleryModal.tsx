@@ -58,6 +58,11 @@ function addDurationToDate(baseDate: Date, duration: StorageDuration): Date {
     return date;
 }
 
+function redirectToLogin() {
+    const next = `${window.location.pathname}${window.location.search}`;
+    window.location.href = `/login?next=${encodeURIComponent(next)}`;
+}
+
 export default function AddGalleryModal({
     open,
     onClose,
@@ -189,6 +194,11 @@ export default function AddGalleryModal({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             }, { dedupeKey: `galleries:create:${trimmedName}`, idempotencyKey: `galleries:create:${Date.now()}` });
+
+            if (res.status === 401) {
+                redirectToLogin();
+                return;
+            }
 
             if (!res.ok) {
                 alert("Unable to create event. Please try again.");

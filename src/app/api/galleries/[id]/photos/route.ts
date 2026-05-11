@@ -23,14 +23,14 @@ function normalizeExternalImageUrl(value: string) {
   });
 }
 
-export async function GET(
+export const GET = withApiHandler(async (
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   const { id } = await params;
   const email = await getSessionEmailFromRequestAsync(req);
   if (!email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Session expired. Please log in again." }, { status: 401 });
   }
 
   const user = await prisma.user.findUnique({
@@ -84,7 +84,7 @@ export async function GET(
     items: photos,
     nextCursor,
   });
-}
+});
 
 export const POST = withApiHandler(
   withRateLimit(async (req: NextRequest, ...rest: unknown[]) => {

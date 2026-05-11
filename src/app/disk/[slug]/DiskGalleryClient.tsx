@@ -36,6 +36,7 @@ type DiskGalleryClientProps = {
   ownerName: string;
   expiresAt: string;
   coverUrl: string | null;
+  coverObjectPosition: string;
   initialPhotos: GalleryPhoto[];
   totalPhotos: number;
   initialCursor: string | null;
@@ -189,6 +190,7 @@ export default function DiskGalleryClient({
   ownerName,
   expiresAt,
   coverUrl,
+  coverObjectPosition,
   initialPhotos,
   totalPhotos,
   initialCursor,
@@ -799,7 +801,13 @@ export default function DiskGalleryClient({
         <section className="relative h-[54vh] min-h-96 w-full overflow-hidden">
           {coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={coverUrl} alt={galleryName} className="h-full w-full object-cover" decoding="async" />
+            <img
+              src={coverUrl}
+              alt={galleryName}
+              className="h-full w-full object-cover"
+              style={{ objectPosition: coverObjectPosition }}
+              decoding="async"
+            />
           ) : (
             <div className="h-full w-full bg-slate-900" />
           )}
@@ -849,6 +857,7 @@ export default function DiskGalleryClient({
             src={coverUrl}
             alt={galleryName}
             className="h-full w-full object-cover"
+            style={{ objectPosition: coverObjectPosition }}
             decoding="async"
           />
         ) : (
@@ -1308,4 +1317,3 @@ export default function DiskGalleryClient({
     </div>
   );
 }
-

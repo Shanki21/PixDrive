@@ -30,6 +30,8 @@ model Gallery {
   settings Json?
   meta Json?
   createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model Photo {
@@ -42,6 +44,8 @@ model Photo {
   downloadCount Int @default(0)
   coverFor Gallery? @relation("GalleryCoverPhoto")
   clientActions ClientPhotoAction[]
+
+  @@index([galleryId, id])
 }
 
 model ClientPhotoAction {
@@ -59,6 +63,7 @@ model ClientPhotoAction {
 
   @@unique([photoId, clientKey, action])
   @@index([galleryId])
+  @@index([galleryId, clientKey, action])
 }
 
 model Otp {
@@ -139,6 +144,7 @@ model Review {
   updatedAt DateTime @updatedAt
 
   @@index([galleryId])
+  @@index([galleryId, published, createdAt])
   @@index([published])
 }
 

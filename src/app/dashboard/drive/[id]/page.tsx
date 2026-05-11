@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import fetchWithRetry from "@/lib/fetchWithRetry";
 import AddGalleryModal from "@/components/drive/AddGalleryModal";
@@ -38,6 +39,8 @@ type GalleryDetail = {
   favoritesListsCount?: number;
   selectionCompletedCount?: number;
   favoritesMaxSelected?: number | null;
+  coverPositionX?: number;
+  coverPositionY?: number;
   published?: boolean;
   oneQrEnabled?: boolean;
   folders?: Folder[];
@@ -306,6 +309,8 @@ export default function DriveDetailPage() {
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
   const [folderZipBusy, setFolderZipBusy] = useState<string | null>(null);
   const [coverPhotoId, setCoverPhotoId] = useState<string | null>(null);
+  const [coverCropOpen, setCoverCropOpen] = useState(false);
+  const [coverPosition, setCoverPosition] = useState({ x: 50, y: 50 });
   const [photoSearch, setPhotoSearch] = useState("");
   const [sortMode, setSortMode] = useState<"latest" | "name">("latest");
 
@@ -328,6 +333,8 @@ export default function DriveDetailPage() {
       selectionCompletedCount: gallery.selectionCompletedCount ?? 0,
       favoritesMaxSelected: gallery.favoritesMaxSelected ?? null,
       storageTimeLabel: gallery.storageTimeLabel ?? undefined,
+      coverPositionX: gallery.coverPositionX ?? 50,
+      coverPositionY: gallery.coverPositionY ?? 50,
       expiresAt: gallery.expiresAt ?? undefined,
       slug: gallery.slug ?? undefined,
     } as MinimalGallery & { slug?: string };
@@ -347,6 +354,11 @@ export default function DriveDetailPage() {
         ]);
 
         const galleryType = galleryRes.headers.get("content-type") ?? "";
+        if (galleryRes.status === 401 || photosRes.status === 401) {
+          router.push(`/login?next=${encodeURIComponent(`/dashboard/drive/${galleryId}`)}`);
+          return;
+        }
+
         if (!galleryRes.ok || !galleryType.includes("application/json")) {
           throw new Error(galleryRes.status === 404 ? "Gallery not found" : "Unable to load gallery");
         }
@@ -364,6 +376,7 @@ export default function DriveDetailPage() {
           setGallery(galleryData);
           setPhotos(photoItems);
           setCoverPhotoId((galleryData as GalleryDetail & { coverPhotoId?: string | null }).coverPhotoId ?? null);
+          setCoverPosition({ x: galleryData.coverPositionX ?? 50, y: galleryData.coverPositionY ?? 50 });
         }
       } catch (err) {
         if (active) {
@@ -380,7 +393,7 @@ export default function DriveDetailPage() {
     return () => {
       active = false;
     };
-  }, [galleryId]);
+  }, [galleryId, router]);
 
   useEffect(() => {
     if (!galleryId) return;
@@ -752,6 +765,43 @@ export default function DriveDetailPage() {
     } catch {
       // Ignore cover failures.
     }
+  };
+
+  const coverPhoto = useMemo(
+    () => photos.find((photo) => photo.id === coverPhotoId) ?? null,
+    [coverPhotoId, photos]
+  );
+
+  const openCoverCrop = (photoId: string) => {
+    setPhotoAsCover(photoId);
+    setCoverCropOpen(true);
+  };
+
+  const updateCoverPositionFromClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = Math.round(((event.clientX - rect.left) / rect.width) * 100);
+    const y = Math.round(((event.clientY - rect.top) / rect.height) * 100);
+    setCoverPosition({
+      x: Math.min(100, Math.max(0, x)),
+      y: Math.min(100, Math.max(0, y)),
+    });
+  };
+
+  const saveCoverPosition = async () => {
+    if (!galleryId) return;
+    const metaPayload: GalleryMetaConfig = {
+      coverPositionX: coverPosition.x,
+      coverPositionY: coverPosition.y,
+    };
+    const dedupe = `gallery:cover-position:${galleryId}:${coverPosition.x}:${coverPosition.y}`;
+    const res = await fetchWithRetry(`/api/galleries/${encodeURIComponent(galleryId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meta: metaPayload }),
+    }, { dedupeKey: dedupe, idempotencyKey: dedupe });
+    if (!res.ok) return;
+    setGallery((prev) => (prev ? { ...prev, ...metaPayload } : prev));
+    setCoverCropOpen(false);
   };
 
   const deletePhoto = async (photoId: string) => {
@@ -1362,6 +1412,17 @@ export default function DriveDetailPage() {
                             active: isCover,
                             danger: false,
                           },
+                          ...(isCover
+                            ? [
+                                {
+                                  label: "Adjust cover crop",
+                                  icon: SlidersHorizontal,
+                                  onClick: () => openCoverCrop(photo.id),
+                                  active: false,
+                                  danger: false,
+                                },
+                              ]
+                            : []),
                           {
                             label: "Open in One QR",
                             icon: LinkIcon,
@@ -1543,6 +1604,17 @@ export default function DriveDetailPage() {
                             active: isCover,
                             danger: false,
                           },
+                          ...(isCover
+                            ? [
+                                {
+                                  label: "Adjust cover crop",
+                                  icon: SlidersHorizontal,
+                                  onClick: () => openCoverCrop(photo.id),
+                                  active: false,
+                                  danger: false,
+                                },
+                              ]
+                            : []),
                           {
                             label: "Open in One QR",
                             icon: LinkIcon,
@@ -1618,6 +1690,94 @@ export default function DriveDetailPage() {
         </div>
       )}
 
+      {coverCropOpen && coverPhoto ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4">
+          <div className="w-full max-w-4xl rounded-3xl bg-white p-5 shadow-2xl">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-2xl font-semibold text-[#2a170d]">Adjust cover crop</h3>
+                <p className="mt-1 text-sm text-[#6f5b48]">
+                  Click the preview or use the sliders to choose the part clients should see.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCoverCropOpen(false)}
+                className="h-9 w-9 rounded-full bg-[#f0e6db] text-[#6b645c]"
+                aria-label="Close cover crop"
+              >
+                x
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={updateCoverPositionFromClick}
+              className="relative mt-5 block h-[min(48vh,430px)] w-full overflow-hidden rounded-2xl bg-slate-950 text-left"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={coverPhoto.url}
+                alt={coverPhoto.name}
+                className="h-full w-full object-cover"
+                style={{ objectPosition: `${coverPosition.x}% ${coverPosition.y}%` }}
+              />
+              <span
+                className="pointer-events-none absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-[#7a3f13] shadow-[0_0_0_4px_rgba(0,0,0,0.28)]"
+                style={{ left: `${coverPosition.x}%`, top: `${coverPosition.y}%` }}
+              />
+              <span className="pointer-events-none absolute inset-0 bg-black/10" />
+            </button>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <label className="text-sm font-semibold text-[#5b3a23]">
+                Horizontal focus
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={coverPosition.x}
+                  onChange={(event) =>
+                    setCoverPosition((current) => ({ ...current, x: Number(event.target.value) }))
+                  }
+                  className="mt-2 w-full accent-[#7a3f13]"
+                />
+              </label>
+              <label className="text-sm font-semibold text-[#5b3a23]">
+                Vertical focus
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={coverPosition.y}
+                  onChange={(event) =>
+                    setCoverPosition((current) => ({ ...current, y: Number(event.target.value) }))
+                  }
+                  className="mt-2 w-full accent-[#7a3f13]"
+                />
+              </label>
+            </div>
+
+            <div className="mt-5 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setCoverPosition({ x: 50, y: 50 })}
+                className="rounded-xl border border-[#ead7c5] bg-white px-4 py-2 text-sm font-semibold text-[#5b3a23]"
+              >
+                Reset center
+              </button>
+              <button
+                type="button"
+                onClick={saveCoverPosition}
+                className="rounded-xl bg-[#7a3f13] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#5b2b0c]"
+              >
+                Save cover focus
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {settingsOpen && initialGallery ? (
         <AddGalleryModal
           open={settingsOpen}
@@ -1636,6 +1796,8 @@ export default function DriveDetailPage() {
               favoritesListsCount: updated.favoritesListsCount ?? 0,
               selectionCompletedCount: updated.selectionCompletedCount ?? 0,
               favoritesMaxSelected: updated.favoritesMaxSelected ?? null,
+              coverPositionX: updated.coverPositionX ?? gallery?.coverPositionX ?? 50,
+              coverPositionY: updated.coverPositionY ?? gallery?.coverPositionY ?? 50,
             };
             void fetchWithRetry(`/api/galleries/${encodeURIComponent(updated.id)}`, {
               method: "PATCH",

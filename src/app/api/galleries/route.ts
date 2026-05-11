@@ -90,6 +90,8 @@ function serializeGalleryRow(
     favoritesListsCount: parsedMeta.favoritesListsCount ?? 0,
     selectionCompletedCount: parsedMeta.selectionCompletedCount ?? 0,
     favoritesMaxSelected: parsedMeta.favoritesMaxSelected ?? null,
+    coverPositionX: parsedMeta.coverPositionX ?? 50,
+    coverPositionY: parsedMeta.coverPositionY ?? 50,
     folders: parsedMeta.folders ?? [],
     folderPhotosMap: parsedMeta.folderPhotosMap ?? {},
     folderOrder: parsedMeta.folderOrder ?? [],
@@ -177,7 +179,7 @@ export const POST = withApiHandler(
     try {
       const email = await getSessionEmail(req);
       if (!email) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        return NextResponse.json({ error: "Session expired. Please log in again." }, { status: 401 });
       }
 
       const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;

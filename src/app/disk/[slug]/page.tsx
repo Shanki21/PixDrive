@@ -63,6 +63,7 @@ export default async function DiskGalleryPage({ params }: DiskGalleryPageProps) 
     const requiredPin = getRequiredGalleryPin(gallery.settings);
     const hasPinAccess = !requiredPin || hasGalleryAccessFromCookieStore(cookieStore, gallery.id);
     const meta = normalizeGalleryMeta(gallery.meta);
+    const coverObjectPosition = `${meta?.coverPositionX ?? 50}% ${meta?.coverPositionY ?? 50}%`;
     const expiresAtIso =
       meta?.expiresAt ?? new Date(gallery.createdAt.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -75,6 +76,7 @@ export default async function DiskGalleryPage({ params }: DiskGalleryPageProps) 
           ownerName={gallery.user.email.split("@")[0]}
           expiresAt={expiresAtIso}
           coverUrl={null}
+          coverObjectPosition={coverObjectPosition}
           initialPhotos={[]}
           totalPhotos={0}
           initialCursor={null}
@@ -127,6 +129,7 @@ export default async function DiskGalleryPage({ params }: DiskGalleryPageProps) 
         ownerName={ownerName}
         expiresAt={expiresAtIso}
         coverUrl={fallbackCover?.url ?? null}
+        coverObjectPosition={coverObjectPosition}
         initialPhotos={photos}
         totalPhotos={totalPhotos}
         initialCursor={nextCursor}

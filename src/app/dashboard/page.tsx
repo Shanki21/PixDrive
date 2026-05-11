@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import fetchWithRetry from "@/lib/fetchWithRetry";
+import { loadGalleriesList, readCachedGalleries } from "@/lib/client-galleries-cache";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -53,7 +54,9 @@ function clamp(value: number, min: number, max: number) {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [galleries, setGalleries] = useState<DashboardGallery[]>([]);
+  const [galleries, setGalleries] = useState<DashboardGallery[]>(
+    () => readCachedGalleries<DashboardGallery>() ?? []
+  );
   const [visitMap, setVisitMap] = useState<Record<string, number>>({});
   const [downloadMap, setDownloadMap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -64,17 +67,9 @@ export default function DashboardPage() {
 
     const loadGalleries = async () => {
       try {
-        const response = await fetchWithRetry("/api/galleries", {}, { dedupeKey: `client:galleries:list` });
-        const contentType = response.headers.get("content-type") ?? "";
-
-        if (!response.ok || !contentType.includes("application/json")) {
-          if (active) setGalleries([]);
-          return;
-        }
-
-        const payload = (await response.json()) as DashboardGallery[] | { error?: string };
+        const payload = await loadGalleriesList<DashboardGallery>({ dedupeKey: `client:galleries:list` });
         if (!active) return;
-        setGalleries(Array.isArray(payload) ? payload : []);
+        setGalleries(payload);
       } catch {
         if (active) setGalleries([]);
       } finally {

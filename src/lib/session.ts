@@ -12,6 +12,17 @@ type SessionPayload = {
   exp: number;
 };
 
+type SessionRecord = {
+  email: string;
+  expiresAt: Date | string;
+};
+
+type PrismaSessionModel = {
+  findUnique: (args: { where: { token: string } }) => Promise<SessionRecord | null>;
+  deleteMany: (args: { where: { token: string } }) => Promise<unknown>;
+  create: (args: { data: { token: string; email: string; expiresAt: Date } }) => Promise<unknown>;
+};
+
 function toBase64Url(value: string | Buffer) {
   return Buffer.from(value)
     .toString("base64")
@@ -57,11 +68,7 @@ function digestEquals(a: string, b: string) {
 }
 
 function getPrismaSessionModel() {
-  return (prisma as any).session as {
-    findUnique: (args: any) => Promise<any>;
-    deleteMany: (args: any) => Promise<any>;
-    create: (args: any) => Promise<any>;
-  } | undefined;
+  return (prisma as unknown as { session?: PrismaSessionModel }).session;
 }
 
 function buildSessionToken(payload: SessionPayload) {

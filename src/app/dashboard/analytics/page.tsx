@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, BarChart3, CalendarClock, Download, Eye, TrendingUp } from "lucide-react";
-import fetchWithRetry from "@/lib/fetchWithRetry";
 import { MinimalGallery } from "@/types/DriveTableTypes";
+import { loadGalleriesList, readCachedGalleries } from "@/lib/client-galleries-cache";
 
 type GalleryWithSlug = MinimalGallery & {
   slug?: string | null;
@@ -25,7 +25,9 @@ function clamp(value: number, min: number, max: number) {
 }
 
 export default function AnalyticsPage() {
-  const [galleries, setGalleries] = useState<GalleryWithSlug[]>([]);
+  const [galleries, setGalleries] = useState<GalleryWithSlug[]>(
+    () => readCachedGalleries<GalleryWithSlug>() ?? []
+  );
   const [visitMap, setVisitMap] = useState<Record<string, number>>({});
   const [downloadMap, setDownloadMap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -35,16 +37,9 @@ export default function AnalyticsPage() {
 
     const load = async () => {
       try {
-        const response = await fetchWithRetry("/api/galleries", {}, { dedupeKey: `client:galleries:list:analytics` });
-        const contentType = response.headers.get("content-type") ?? "";
-        if (!response.ok || !contentType.includes("application/json")) {
-          if (active) setGalleries([]);
-          return;
-        }
-
-        const payload = (await response.json()) as GalleryWithSlug[] | { error?: string };
+        const payload = await loadGalleriesList<GalleryWithSlug>({ dedupeKey: `client:galleries:list:analytics` });
         if (!active) return;
-        setGalleries(Array.isArray(payload) ? payload : []);
+        setGalleries(payload);
       } catch {
         if (active) setGalleries([]);
       } finally {
@@ -184,11 +179,7 @@ export default function AnalyticsPage() {
                     </div>
                     <div className="mt-2 h-2 rounded-full bg-[#f2e4d6]">
                       <div
-                        className="h-full rounded-full bg-linear-to-r from-[#7a3f13] to-[#b9783b]"
-<<<<<<< HEAD
                         className="h-full rounded-full bg-linear-to-r from-[#0f766e] to-[#2563eb]"
-=======
->>>>>>> 3aa9795b5bf6b884953b41b184ad5c89d42d52fc
                         style={{ width: `${width}%` }}
                       />
                     </div>

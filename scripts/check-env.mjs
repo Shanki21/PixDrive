@@ -79,6 +79,7 @@ function main() {
   const errors = [];
   const warnings = [];
   validateRequired("DATABASE_URL", errors);
+  validateRequired("DIRECT_URL", errors);
   validateRequired("NEXT_PUBLIC_CLIENT_GALLERY_BASE_URL", errors);
   validateOneOf(["NEXTAUTH_SECRET", "AUTH_SECRET"], errors);
   validateEmailProvider(errors);

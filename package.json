@@ -13,8 +13,10 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:deploy": "prisma migrate deploy",
+    "db:deploy:supabase": "node scripts/prisma-direct.mjs migrate deploy",
     "db:studio": "prisma studio",
     "db:status": "prisma migrate status",
+    "db:status:supabase": "node scripts/prisma-direct.mjs migrate status",
     "pins:backfill": "node scripts/backfill-pin-hashes.mjs",
     "postinstall": "prisma generate"
   },
@@ -56,4 +58,3 @@
     "typescript": "^5.9.3"
   }
 }
-

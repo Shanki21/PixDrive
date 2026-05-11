@@ -9,9 +9,12 @@ import TrashTable from "@/components/drive/TrashTable";
 import TrashWarning from "@/components/drive/TrashWarning";
 import type { GalleryEventSettings } from "@/lib/gallery-config";
 import { MinimalGallery } from "@/types/DriveTableTypes";
-
-const GALLERIES_CACHE_KEY = "wf_drive_galleries_cache_v1";
-const GALLERIES_CACHE_TTL = 60 * 1000;
+import {
+  clearCachedGalleries,
+  loadGalleriesList,
+  readCachedGalleries,
+  writeCachedGalleries,
+} from "@/lib/client-galleries-cache";
 
 function insertAfterPinned(list: MinimalGallery[], item: MinimalGallery) {
   const pinnedCount = list.filter((g) => g.pinned).length;
@@ -20,48 +23,19 @@ function insertAfterPinned(list: MinimalGallery[], item: MinimalGallery) {
 
 export default function DrivePage() {
   const router = useRouter();
-  const [galleries, setGalleries] = useState<MinimalGallery[]>(() => {
-    if (typeof window === "undefined") {
-      return [];
-    }
-
-    try {
-      const raw = window.sessionStorage.getItem(GALLERIES_CACHE_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw) as { ts: number; data: MinimalGallery[] };
-      if (!parsed?.ts || !Array.isArray(parsed.data)) return [];
-      if (Date.now() - parsed.ts > GALLERIES_CACHE_TTL) return [];
-      return parsed.data;
-    } catch {
-      return [];
-    }
-  });
+  const [galleries, setGalleries] = useState<MinimalGallery[]>(() => readCachedGalleries<MinimalGallery>() ?? []);
   const [trash, setTrash] = useState<MinimalGallery[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"galleries" | "trash">("galleries");
 
   useEffect(() => {
     const load = async () => {
-      const res = await fetchWithRetry("/api/galleries", { cache: "no-store" }, { dedupeKey: `client:galleries:list` });
-      const contentType = res.headers.get("content-type") ?? "";
-      if (!res.ok || !contentType.includes("application/json")) {
-        return;
-      }
-
-      const rows = (await res.json()) as MinimalGallery[];
-      if (!Array.isArray(rows)) {
-        return;
-      }
+      const rows = await loadGalleriesList<MinimalGallery>({
+        dedupeKey: `client:galleries:list`,
+        forceRefresh: true,
+      });
 
       setGalleries(rows);
-      try {
-        window.sessionStorage.setItem(
-          GALLERIES_CACHE_KEY,
-          JSON.stringify({ ts: Date.now(), data: rows })
-        );
-      } catch {
-        // Ignore cache write failures.
-      }
     };
 
     load().finally(() => setLoading(false));
@@ -86,10 +60,7 @@ export default function DrivePage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
-      window.sessionStorage.setItem(
-        GALLERIES_CACHE_KEY,
-        JSON.stringify({ ts: Date.now(), data: galleries })
-      );
+      writeCachedGalleries(galleries);
     } catch {
       // Ignore cache write failures.
     }
@@ -224,7 +195,7 @@ export default function DrivePage() {
               setGalleries((prev) => prev.filter((g) => g.id !== gallery.id));
               setTrash((prev) => [deleted, ...prev]);
               try {
-                window.sessionStorage.removeItem(GALLERIES_CACHE_KEY);
+                clearCachedGalleries();
               } catch {
                 // Ignore cache cleanup failures.
               }

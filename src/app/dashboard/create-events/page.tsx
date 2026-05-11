@@ -152,6 +152,8 @@ function CreateEventsPageContent() {
   const [galleryAppEnabled, setGalleryAppEnabled] = useState(true);
   const [livenessDetectionEnabled, setLivenessDetectionEnabled] = useState(false);
   const [published, setPublished] = useState(false);
+  const [hasStoredFullAccessPin, setHasStoredFullAccessPin] = useState(false);
+  const [hasStoredGuestPin, setHasStoredGuestPin] = useState(false);
   const [loadingEditData, setLoadingEditData] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -195,6 +197,8 @@ function CreateEventsPageContent() {
       setExpiryDate(settings?.expiryDate ?? toDateInputValue(galleryMeta?.expiresAt) ?? "");
       setFullAccessPin(settings?.fullAccessPin ?? "");
       setGuestPin(settings?.guestPin ?? "");
+      setHasStoredFullAccessPin(Boolean(settings?.fullAccessPinSet || settings?.fullAccessPinHash));
+      setHasStoredGuestPin(Boolean(settings?.guestPinSet || settings?.guestPinHash));
       setAllowSingleDownload(settings?.allowSingleDownload ?? true);
       setAllowBulkDownload(settings?.allowBulkDownload ?? false);
       setWhatsappEnabled(settings?.whatsappEnabled ?? false);
@@ -205,6 +209,7 @@ function CreateEventsPageContent() {
       setGalleryAppEnabled(settings?.galleryAppEnabled ?? true);
       setLivenessDetectionEnabled(settings?.livenessDetectionEnabled ?? false);
       setPublished(settings?.published ?? false);
+      setAdvancedOpen(true);
     };
     setLoadingEditData(true);
 
@@ -267,6 +272,10 @@ function CreateEventsPageContent() {
 
     try {
       const expiresAtIso = expiryDate ? new Date(`${expiryDate}T00:00:00`).toISOString() : null;
+      const pinPayload: Pick<GalleryEventSettings, "fullAccessPin" | "guestPin"> = {
+        ...(!isEditMode || fullAccessPin.trim() ? { fullAccessPin: fullAccessPin.trim() || null } : {}),
+        ...(!isEditMode || guestPin.trim() ? { guestPin: guestPin.trim() || null } : {}),
+      };
       const settingsPayload: GalleryEventSettings = {
         startDate,
         endDate,
@@ -278,8 +287,7 @@ function CreateEventsPageContent() {
         reelitAiEnabled: false,
         brandingEnabled,
         expiryDate: expiryDate || null,
-        fullAccessPin: fullAccessPin.trim() || null,
-        guestPin: guestPin.trim() || null,
+        ...pinPayload,
         allowSingleDownload,
         allowBulkDownload,
         whatsappEnabled,
@@ -328,6 +336,11 @@ function CreateEventsPageContent() {
         }),
       }, { dedupeKey: `galleries:create:${safeName}`, idempotencyKey: `galleries:create:${Date.now()}` });
       const contentType = response.headers.get("content-type") ?? "";
+      if (response.status === 401) {
+        router.push(`/login?next=${encodeURIComponent("/dashboard/create-events")}`);
+        return;
+      }
+
       if (!response.ok || !contentType.includes("application/json")) {
         throw new Error("Unable to create event.");
       }
@@ -577,18 +590,24 @@ function CreateEventsPageContent() {
                       <input
                         value={fullAccessPin}
                         onChange={(e) => setFullAccessPin(e.target.value)}
-                        placeholder="For admins"
+                        placeholder={hasStoredFullAccessPin ? "PIN already set" : "For admins"}
                         className="mt-1 h-11 w-full rounded-xl border border-[#ead7c5] bg-[#fffdf8] px-3 text-sm text-[#3a2112] outline-none focus:border-[#7a3f13]"
                       />
+                      {hasStoredFullAccessPin && !fullAccessPin ? (
+                        <span className="mt-1 block text-xs font-medium text-[#7a6a55]">Leave blank to keep current PIN.</span>
+                      ) : null}
                     </label>
                     <label className="text-sm font-semibold text-[#5b3a23]">
                       Guest PIN
                       <input
                         value={guestPin}
                         onChange={(e) => setGuestPin(e.target.value)}
-                        placeholder="For guests"
+                        placeholder={hasStoredGuestPin ? "PIN already set" : "For guests"}
                         className="mt-1 h-11 w-full rounded-xl border border-[#ead7c5] bg-[#fffdf8] px-3 text-sm text-[#3a2112] outline-none focus:border-[#7a3f13]"
                       />
+                      {hasStoredGuestPin && !guestPin ? (
+                        <span className="mt-1 block text-xs font-medium text-[#7a6a55]">Leave blank to keep current PIN.</span>
+                      ) : null}
                     </label>
                   </div>
                 </article>
