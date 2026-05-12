@@ -1,8 +1,9 @@
 import { createOtp, OtpRateLimitError } from "@/lib/otp-store";
-import { enqueueSendOtp } from "@/lib/job-queue";
+import { sendOtpEmail } from "@/lib/email";
 import { normalizeEmail } from "@/lib/input-security";
 import { checkIpThrottle } from "@/lib/ip-throttle";
 import { getClientIp } from "@/lib/request-ip";
+import { getPrismaUnavailableMessage, isPrismaUnavailableError } from "@/lib/prisma-errors";
 import { rejectCrossOriginWrite } from "@/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 import { withApiHandler } from "@/lib/withApiHandler";
@@ -66,22 +67,45 @@ export const POST = withApiHandler(
         throw err;
       }
 
-      try {
-        await enqueueSendOtp({ to: email, otp: code });
+      const delivery = await sendOtpEmail({ to: email, otp: code });
+      if (delivery.ok) {
         if (process.env.NODE_ENV !== "production") {
-          console.warn(`[DEV OTP ENQUEUED] ${email}: ${code}`);
-          return NextResponse.json({ ok: true, delivered: false, message: "OTP enqueued (development fallback)." });
+          console.warn(`[DEV OTP SENT:${delivery.provider}] ${email}: ${code}`);
         }
-        return NextResponse.json({ ok: true });
-      } catch (err) {
-        console.error("[auth/request-otp] enqueue failed", { error: err, email });
-        if (process.env.NODE_ENV !== "production") {
-          console.warn(`[DEV OTP FALLBACK] ${email}: ${code}`);
-          return NextResponse.json({ ok: true, delivered: false });
-        }
-        return NextResponse.json({ ok: true });
+        return NextResponse.json({ ok: true, delivered: true, provider: delivery.provider });
       }
-    } catch {
+
+      console.error("[auth/request-otp] email delivery failed", {
+        email,
+        reason: delivery.reason,
+        message: delivery.message,
+      });
+
+      if (process.env.NODE_ENV !== "production") {
+        console.warn(`[DEV OTP FALLBACK] ${email}: ${code}`);
+        return NextResponse.json({
+          ok: true,
+          delivered: false,
+          message: "OTP email was not sent. Development fallback printed the code to the server console.",
+        });
+      }
+
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "Unable to send OTP email right now. Please try again in a moment.",
+        },
+        { status: 503 }
+      );
+    } catch (error) {
+      console.error("[auth/request-otp] request failed", error);
+      if (isPrismaUnavailableError(error)) {
+        return NextResponse.json(
+          { ok: false, message: getPrismaUnavailableMessage() },
+          { status: 503 }
+        );
+      }
+
       return NextResponse.json({ ok: false, message: "Bad request" }, { status: 400 });
     }
   }, { keyPrefix: "auth:otp:request", limit: 25, windowMs: 60 * 60 * 1000 })
