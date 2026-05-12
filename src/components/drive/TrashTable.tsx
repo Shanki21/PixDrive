@@ -109,7 +109,7 @@ export default function TrashTable({
         {rows.map((gallery, index) => {
           const deletedAt = gallery.deletedAt ? new Date(gallery.deletedAt) : null;
           const canRestore = deletedAt
-            ? (nowMs - deletedAt.getTime()) / (1000 * 60 * 60 * 24) <= 7
+            ? (nowMs - deletedAt.getTime()) / (1000 * 60 * 60 * 24) <= 14
             : false;
           return (
             <div
@@ -152,7 +152,7 @@ export default function TrashTable({
           rows.map((gallery, index) => {
             const deletedAt = gallery.deletedAt ? new Date(gallery.deletedAt) : null;
             const canRestore = deletedAt
-              ? (nowMs - deletedAt.getTime()) / (1000 * 60 * 60 * 24) <= 7
+              ? (nowMs - deletedAt.getTime()) / (1000 * 60 * 60 * 24) <= 14
               : false;
 
             return (
@@ -183,7 +183,7 @@ export default function TrashTable({
                     <p className="text-sm leading-5 text-gray-400">
                       Not restorable: deleted
                       <br />
-                      more than 7 days ago
+                      more than 14 days ago
                     </p>
                   )}
                 </div>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import fetchWithRetry from "@/lib/fetchWithRetry";
 import { getClientGalleryBasePathForDisplay } from "@/lib/client-gallery-url";
+import { showPixoraAlert, showPixoraToast } from "@/lib/pixora-alerts";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 
 type Tab = "main" | "products" | "reviews" | "contacts" | "privacy";
@@ -152,7 +153,11 @@ export default function AddGalleryModal({
     async function handleAdd() {
         const trimmedName = name.trim();
         if (!trimmedName) {
-            alert("Event name is required.");
+            void showPixoraAlert({
+                title: "Event name is required",
+                text: "Add a clear event name before saving this gallery.",
+                icon: "warning",
+            });
             return;
         }
 
@@ -175,7 +180,11 @@ export default function AddGalleryModal({
                 }, { dedupeKey: `galleries:update:${initialGallery.id}`, idempotencyKey: `galleries:update:${initialGallery.id}:${Date.now()}` });
 
                 if (!res.ok) {
-                    alert("Unable to update event settings. Please try again.");
+                    void showPixoraAlert({
+                        title: "Unable to update event",
+                        text: "Please try again in a moment.",
+                        icon: "error",
+                    });
                     return;
                 }
 
@@ -185,6 +194,7 @@ export default function AddGalleryModal({
                     ...payload,
                     ...data,
                 });
+                void showPixoraToast({ title: "Event settings updated" });
                 onClose();
                 return;
             }
@@ -201,7 +211,11 @@ export default function AddGalleryModal({
             }
 
             if (!res.ok) {
-                alert("Unable to create event. Please try again.");
+                void showPixoraAlert({
+                    title: "Unable to create event",
+                    text: "Please check your connection and try again.",
+                    icon: "error",
+                });
                 return;
             }
 
@@ -210,10 +224,15 @@ export default function AddGalleryModal({
                 ...data,
                 ...payload,
             });
+            void showPixoraToast({ title: "Event created" });
             onClose();
         } catch (error) {
             console.error(error);
-            alert("Something went wrong. Please try again.");
+            void showPixoraAlert({
+                title: "Something went wrong",
+                text: "Please try again.",
+                icon: "error",
+            });
         } finally {
             setIsSaving(false);
         }

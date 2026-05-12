@@ -7,8 +7,9 @@ import { rejectCrossOriginWrite } from "@/lib/request-security";
 import { normalizePublicUrl } from "@/lib/url-security";
 import {
   hasGalleryAccessFromRequest,
+  getGalleryAccessModeFromRequest,
   setGalleryAccessCookie,
-  verifyGalleryPin,
+  verifyGalleryPinAccessMode,
   getRequiredGalleryPin,
 } from "@/lib/gallery-pin-access";
 import { normalizeGalleryMeta } from "@/lib/gallery-config";
@@ -59,7 +60,7 @@ function isAllowedImageContentType(contentType: string) {
 
 async function resolveGalleryBySlug(slug: string) {
   return prisma.gallery.findFirst({
-    where: { OR: [{ slug }, { id: slug }] },
+    where: { OR: [{ slug }, { id: slug }], deletedAt: null },
     select: {
       id: true,
       name: true,
@@ -125,12 +126,13 @@ export const POST = withApiHandler(
       );
     }
 
-    if (!(await verifyGalleryPin(gallery.settings, pin))) {
+    const accessMode = await verifyGalleryPinAccessMode(gallery.settings, pin);
+    if (!accessMode) {
       return NextResponse.json({ ok: false, error: "Invalid PIN." }, { status: 401 });
     }
 
-    const response = NextResponse.json({ ok: true });
-    const cookieSet = setGalleryAccessCookie(response, gallery.id);
+    const response = NextResponse.json({ ok: true, accessMode });
+    const cookieSet = setGalleryAccessCookie(response, gallery.id, accessMode);
     if (!cookieSet) {
       return NextResponse.json({ ok: false, error: "Session secret is missing." }, { status: 500 });
     }
@@ -169,6 +171,7 @@ export async function GET(req: NextRequest) {
   if (requiredPin && !hasGalleryAccessFromRequest(req, gallery.id)) {
     return NextResponse.json({ error: "PIN required." }, { status: 401 });
   }
+  const accessMode = requiredPin ? getGalleryAccessModeFromRequest(req, gallery.id) ?? "guest" : "full";
 
   const ip = getClientIp(req) ?? "unknown";
   const bulkDownloadLimit = await checkIpThrottle({
@@ -189,7 +192,18 @@ export async function GET(req: NextRequest) {
   const allPhotos = gallery.photos;
   let targetPhotos = allPhotos;
 
-  if (scope === "favorites") {
+  if (accessMode === "guest") {
+    if (!clientKey) {
+      return NextResponse.json({ error: "clientKey is required for guest downloads." }, { status: 400 });
+    }
+    const matches = await prisma.faceMatch.findMany({
+      where: { galleryId: gallery.id, clientKey },
+      select: { photoId: true },
+      take: 1000,
+    });
+    const matchedIds = new Set(matches.map((match) => match.photoId));
+    targetPhotos = allPhotos.filter((photo) => matchedIds.has(photo.id));
+  } else if (scope === "favorites") {
     if (!clientKey) {
       return NextResponse.json({ error: "clientKey is required for favorites download." }, { status: 400 });
     }

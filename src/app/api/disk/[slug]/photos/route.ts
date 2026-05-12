@@ -1,5 +1,5 @@
 import { getGalleryPublicAccess } from "@/lib/gallery-public-access";
-import { getRequiredGalleryPin, hasGalleryAccessFromRequest } from "@/lib/gallery-pin-access";
+import { getGalleryAccessModeFromRequest, getRequiredGalleryPin, hasGalleryAccessFromRequest } from "@/lib/gallery-pin-access";
 import { normalizePublicUrl } from "@/lib/url-security";
 import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
@@ -44,10 +44,12 @@ export async function GET(
   const take = Number.isFinite(rawTake) ? Math.min(Math.max(rawTake, 1), MAX_PAGE_SIZE) : 60;
   const cursor = searchParams.get("cursor");
   const downloadId = String(searchParams.get("downloadId") ?? "").trim();
+  const clientKey = String(searchParams.get("clientKey") ?? "").trim();
 
   const gallery = await prisma.gallery.findFirst({
     where: {
       OR: [{ slug }, { id: slug }],
+      deletedAt: null,
     },
     select: { id: true, settings: true, meta: true },
   });
@@ -63,6 +65,23 @@ export async function GET(
   if (requiredPin && !hasGalleryAccessFromRequest(req, gallery.id)) {
     return NextResponse.json({ error: "PIN required." }, { status: 401 });
   }
+  const accessMode = requiredPin ? getGalleryAccessModeFromRequest(req, gallery.id) ?? "guest" : "full";
+  const matchedIds =
+    accessMode === "guest" && clientKey
+      ? new Set(
+          (
+            await prisma.faceMatch.findMany({
+              where: { galleryId: gallery.id, clientKey },
+              select: { photoId: true },
+              take: 1000,
+            })
+          ).map((match) => match.photoId)
+        )
+      : null;
+  const photoWhere = {
+    galleryId: gallery.id,
+    ...(matchedIds ? { id: { in: Array.from(matchedIds) } } : {}),
+  };
 
   if (downloadId) {
     if (!publicAccess.allowSingleDownload) {
@@ -70,7 +89,7 @@ export async function GET(
     }
 
     const photo = await prisma.photo.findFirst({
-      where: { id: downloadId, galleryId: gallery.id },
+      where: { ...photoWhere, id: downloadId },
       select: { id: true, name: true, url: true },
     });
 
@@ -119,7 +138,7 @@ export async function GET(
   }
 
   const photos = await prisma.photo.findMany({
-    where: { galleryId: gallery.id },
+    where: photoWhere,
     orderBy: { id: "asc" },
     take,
     ...(cursor

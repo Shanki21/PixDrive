@@ -1,6 +1,7 @@
 import { normalizePublicOrigin } from "./url-security";
 
 const DISK_ROUTE_PREFIX = "/disk";
+const STUDIO_ROUTE_PREFIX = "/studio";
 
 function normalizeOrigin(raw: string) {
   return (
@@ -29,6 +30,16 @@ export function buildClientGalleryPath(slug: string) {
 
 export function buildClientGalleryUrl(slug: string, fallbackOrigin?: string) {
   const path = buildClientGalleryPath(slug);
+  const origin = getClientGalleryOrigin(fallbackOrigin);
+  return origin ? `${origin}${path}` : path;
+}
+
+export function buildClientStudioPath(ownerId: string) {
+  return `${STUDIO_ROUTE_PREFIX}/${encodeURIComponent(ownerId)}`;
+}
+
+export function buildClientStudioUrl(ownerId: string, fallbackOrigin?: string) {
+  const path = buildClientStudioPath(ownerId);
   const origin = getClientGalleryOrigin(fallbackOrigin);
   return origin ? `${origin}${path}` : path;
 }

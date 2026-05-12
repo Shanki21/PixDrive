@@ -50,6 +50,7 @@ export const GET = withApiHandler(async (
       settings: true,
       meta: true,
       createdAt: true,
+      deletedAt: true,
       _count: {
         select: { photos: true },
       },
@@ -91,6 +92,7 @@ export const GET = withApiHandler(async (
     folders: parsedMeta?.folders ?? [],
     folderPhotosMap: parsedMeta?.folderPhotosMap ?? {},
     folderOrder: parsedMeta?.folderOrder ?? [],
+    deletedAt: gallery.deletedAt?.toISOString() ?? null,
   });
 });
 
@@ -124,8 +126,9 @@ export const PATCH = withApiHandler(
   const hasNameUpdate = nextName.length > 0;
   const hasSettingsUpdate = body?.settings !== undefined;
   const hasMetaUpdate = body?.meta !== undefined;
+  const hasDeletedAtUpdate = body?.deletedAt === null;
 
-  if (!hasNameUpdate && !hasSettingsUpdate && !hasMetaUpdate) {
+  if (!hasNameUpdate && !hasSettingsUpdate && !hasMetaUpdate && !hasDeletedAtUpdate) {
     return NextResponse.json(
       { error: "Provide at least one field to update: name, settings, or meta." },
       { status: 400 }
@@ -155,6 +158,7 @@ export const PATCH = withApiHandler(
       ...(hasNameUpdate ? { name: nextName } : {}),
       ...(hasSettingsUpdate && secureSettings ? { settings: secureSettings } : {}),
       ...(hasMetaUpdate && nextMeta ? { meta: nextMeta } : {}),
+      ...(hasDeletedAtUpdate ? { deletedAt: null } : {}),
     },
     select: {
       id: true,
@@ -165,6 +169,7 @@ export const PATCH = withApiHandler(
       settings: true,
       meta: true,
       createdAt: true,
+      deletedAt: true,
     },
   });
 
@@ -172,6 +177,7 @@ export const PATCH = withApiHandler(
     ...gallery,
     settings: maskEventSettingsPins(normalizeEventSettings(gallery.settings)),
     meta: normalizeGalleryMeta(gallery.meta),
+    deletedAt: gallery.deletedAt?.toISOString() ?? null,
   });
 }, { keyPrefix: "gallery:update", limit: 10, windowMs: 60 * 60 * 1000 })
 );
@@ -198,13 +204,22 @@ export const DELETE = withApiHandler(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
+    const permanent = new URL(req.url).searchParams.get("permanent") === "1";
     const existing = await prisma.gallery.findFirst({
       where: { id, userId: user.id },
-      select: { id: true },
+      select: { id: true, deletedAt: true },
     });
 
     if (!existing) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    if (!permanent) {
+      await prisma.gallery.update({
+        where: { id: existing.id },
+        data: { deletedAt: new Date() },
+      });
+      return NextResponse.json({ ok: true, deletedAt: new Date().toISOString() });
     }
 
     await prisma.$transaction(async (tx) => {

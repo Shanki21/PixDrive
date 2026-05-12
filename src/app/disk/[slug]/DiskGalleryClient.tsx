@@ -639,9 +639,11 @@ export default function DiskGalleryClient({
     url.searchParams.set("action", "download");
     url.searchParams.set("slug", gallerySlug);
     url.searchParams.set("scope", scope);
+    if (clientKey) {
+      url.searchParams.set("clientKey", clientKey);
+    }
     if (scope === "favorites") {
       if (!clientKey) return false;
-      url.searchParams.set("clientKey", clientKey);
     }
     const response = await fetchWithRetry(url.toString(), { method: "GET" }, { dedupeKey: `download-zip:${gallerySlug}:${scope}:${clientKey ?? ""}` });
     if (!response.ok) {
@@ -733,6 +735,7 @@ export default function DiskGalleryClient({
       const url = new URL(`/api/disk/${gallerySlug}/photos`, window.location.origin);
       url.searchParams.set("take", "60");
       if (nextCursor) url.searchParams.set("cursor", nextCursor);
+      if (clientKey) url.searchParams.set("clientKey", clientKey);
       const res = await fetchWithRetry(url.toString(), { method: "GET" }, { dedupeKey: `loadmore:${gallerySlug}:${nextCursor ?? "start"}` });
       const contentType = res.headers.get("content-type") ?? "";
       if (!res.ok || !contentType.includes("application/json")) {
@@ -745,7 +748,7 @@ export default function DiskGalleryClient({
     } finally {
       setIsLoadingMore(false);
     }
-  }, [gallerySlug, hasMorePhotos, isLoadingMore, isLocked, nextCursor]);
+  }, [clientKey, gallerySlug, hasMorePhotos, isLoadingMore, isLocked, nextCursor]);
 
   useEffect(() => {
     if (isLocked) return;

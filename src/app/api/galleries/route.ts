@@ -50,6 +50,7 @@ function serializeGalleryRow(
     settings: Prisma.JsonValue | null;
     meta: Prisma.JsonValue | null;
     createdAt: Date;
+    deletedAt: Date | null;
     photos: Array<{ url: string }>;
     coverPhoto: { url: string } | null;
     _count: { photos: number };
@@ -114,8 +115,24 @@ export async function GET(req: NextRequest) {
       return NextResponse.json([]);
     }
 
+    const { searchParams } = new URL(req.url);
+    const trash = searchParams.get("trash") === "1";
+    const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+
+    if (trash) {
+      await prisma.gallery.deleteMany({
+        where: {
+          userId: user.id,
+          deletedAt: { lt: cutoff },
+        },
+      });
+    }
+
     const galleries = await prisma.gallery.findMany({
-      where: { userId: user.id },
+      where: {
+        userId: user.id,
+        deletedAt: trash ? { not: null } : null,
+      },
       orderBy: { createdAt: "desc" },
       include: {
         photos: {

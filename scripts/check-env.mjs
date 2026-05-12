@@ -70,6 +70,9 @@ function main() {
   const strict =
     process.env.CHECK_ENV_STRICT === "1" ||
     process.env.NODE_ENV === "production";
+  const requireDirectUrl =
+    process.env.CHECK_ENV_REQUIRE_DIRECT_URL === "1" ||
+    process.env.CHECK_ENV_MODE === "migrate";
 
   if (!strict) {
     console.log("[env:check] Skipping strict checks (development mode).");
@@ -79,7 +82,13 @@ function main() {
   const errors = [];
   const warnings = [];
   validateRequired("DATABASE_URL", errors);
-  validateRequired("DIRECT_URL", errors);
+  if (requireDirectUrl) {
+    validateRequired("DIRECT_URL", errors);
+  } else if (!isConfigured(readEnv("DIRECT_URL"))) {
+    warnings.push(
+      "DIRECT_URL is not configured. Runtime builds can continue, but Prisma migrate/deploy commands require DIRECT_URL."
+    );
+  }
   validateRequired("NEXT_PUBLIC_CLIENT_GALLERY_BASE_URL", errors);
   validateOneOf(["NEXTAUTH_SECRET", "AUTH_SECRET"], errors);
   validateEmailProvider(errors);

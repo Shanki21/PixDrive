@@ -8,7 +8,7 @@ import { useSearchParams } from "next/navigation";
 import { Copy, Download, ExternalLink, QrCode, RefreshCw } from "lucide-react";
 import { filterShareReadyGalleries, buildQrApiUrl } from "@/lib/qr";
 import { MinimalGallery } from "@/types/DriveTableTypes";
-import { buildClientGalleryUrl } from "@/lib/client-gallery-url";
+import { buildClientStudioUrl } from "@/lib/client-gallery-url";
 
 type GalleryWithSlug = MinimalGallery & {
   slug?: string | null;
@@ -90,9 +90,8 @@ export default function QrCodePage() {
 
   const publicGalleryUrl = useMemo(() => {
     if (!selectedGallery) return "";
-    const slug = selectedGallery.slug || selectedGallery.id;
     const runtimeOrigin = typeof window === "undefined" ? undefined : (selectedGallery.customDomain ?? window.location.origin);
-    return buildClientGalleryUrl(slug, runtimeOrigin);
+    return buildClientStudioUrl(selectedGallery.userId || selectedGallery.id, runtimeOrigin);
   }, [selectedGallery]);
 
   const qrImageUrl = useMemo(() => {
@@ -147,8 +146,7 @@ export default function QrCodePage() {
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7a3f13]">QR Code Delivery</p>
         <h1 className="font-display mt-3 text-3xl font-bold text-[#2a170d] sm:text-4xl">Share event access with QR</h1>
         <p className="mt-3 max-w-2xl text-sm text-[#7a6a55] sm:text-base">
-          Select a gallery, generate a QR code, and place it on invitation cards, venue stands, or WhatsApp messages
-          for instant client access.
+          Generate a studio QR that opens event selection first, then guides clients through the Get Your Photos form.
         </p>
       </section>
 
@@ -205,7 +203,7 @@ export default function QrCodePage() {
                   className="inline-flex items-center gap-2 rounded-xl border border-[#ead7c5] bg-white px-4 py-2 text-sm font-semibold text-[#5b3a23] transition hover:border-[#7a3f13] hover:text-[#7a3f13]"
                 >
                   <ExternalLink className="h-4 w-4" />
-                  Open Gallery
+                   Open Event Selector
                 </Link>
               </div>
             </div>
@@ -225,7 +223,7 @@ export default function QrCodePage() {
             <QrCode className="h-6 w-6" />
           </div>
           <h2 className="mt-3 text-xl font-semibold text-[#2a170d]">QR Preview</h2>
-          <p className="mt-1 text-sm text-[#7a6a55]">Scan to open the selected event gallery.</p>
+          <p className="mt-1 text-sm text-[#7a6a55]">Scan to choose an event, submit details, and open the gallery.</p>
 
           {qrImageUrl && !qrImageFailed ? (
             <div className="mx-auto mt-5 w-fit rounded-3xl border border-[#dcebe4] bg-[#fffaf4] p-4">
