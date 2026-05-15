@@ -122,12 +122,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           clientKey: true,
           clientName: true,
           clientEmail: true,
+          photo: {
+            select: {
+              id: true,
+              name: true,
+              url: true,
+            },
+          },
         },
       });
       const grouped = new Map<
         string,
         { name: string; email: string; clientKey: string; photoIds: Set<string> }
       >();
+      const photos = new Map<string, { id: string; name: string; url: string }>();
       for (const row of rows) {
         const name = row.clientName?.trim() || `Client ${row.clientKey.slice(0, 6)}`;
         const emailOrFallback = row.clientEmail?.trim().toLowerCase() || `${row.clientKey}@pixora.local`;
@@ -142,6 +150,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           };
         existing.photoIds.add(row.photoId);
         grouped.set(key, existing);
+        photos.set(row.photo.id, row.photo);
       }
       return NextResponse.json({
         selections: Array.from(grouped.values()).map((entry) => ({
@@ -150,6 +159,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           clientKey: entry.clientKey,
           photoIds: Array.from(entry.photoIds),
         })),
+        photos: Array.from(photos.values()),
       });
     }
 
@@ -261,22 +271,10 @@ export const POST = withApiHandler(
         ? Math.max(1, meta.favoritesMaxSelected ?? 1)
         : null;
 
-    const [validPhotos, existingActions] = await Promise.all([
-      prisma.photo.findMany({
-        where: { galleryId: id, id: { in: photoIds } },
-        select: { id: true },
-      }),
-      prisma.clientPhotoAction.findMany({
-        where: {
-          galleryId: id,
-          OR: actions.map(a => ({
-            photoId: a.photoId,
-            clientKey: a.clientKey,
-            action: a.action,
-          })),
-        },
-      }),
-    ]);
+    const validPhotos = await prisma.photo.findMany({
+      where: { galleryId: id, id: { in: photoIds } },
+      select: { id: true },
+    });
 
     const validPhotoSet = new Set(validPhotos.map(p => p.id));
     if (favoriteLimit !== null) {
@@ -309,78 +307,72 @@ export const POST = withApiHandler(
       }
     }
 
-    const existingSet = new Set(
-      existingActions.map(
-        a => `${a.photoId}-${a.clientKey}-${a.action}`
-      )
-    );
-
-    const createOps: Prisma.PrismaPromise<unknown>[] = [];
-    const updateOps: Prisma.PrismaPromise<unknown>[] = [];
+    const favoriteCreates: Prisma.ClientPhotoActionCreateManyInput[] = [];
+    const downloadCreates: Prisma.ClientPhotoActionCreateManyInput[] = [];
+    const favoriteDeletes: Array<{ photoId: string; clientKey: string }> = [];
 
     for (const action of actions) {
       if (!validPhotoSet.has(action.photoId)) continue;
 
-      const key = `${action.photoId}-${action.clientKey}-${action.action}`;
-      const exists = existingSet.has(key);
+      const actionData = {
+        galleryId: id,
+        photoId: action.photoId,
+        clientKey: action.clientKey,
+        clientName: action.clientName,
+        clientEmail: action.clientEmail,
+      };
 
       if (action.action === "favorite") {
         const liked = action.liked ?? true;
 
-        if (liked && !exists) {
-          createOps.push(
-            prisma.clientPhotoAction.create({
-              data: { galleryId: id, ...action, action: "favorite" },
-            })
-          );
-
-          updateOps.push(
-            prisma.photo.update({
-              where: { id: action.photoId },
-              data: { favoriteCount: { increment: 1 } },
-            })
-          );
-        }
-
-        if (!liked && exists) {
-          createOps.push(
-            prisma.clientPhotoAction.delete({
-              where: {
-                photoId_clientKey_action: {
-                  photoId: action.photoId,
-                  clientKey: action.clientKey,
-                  action: "favorite",
-                },
-              },
-            })
-          );
-
-          updateOps.push(
-            prisma.photo.update({
-              where: { id: action.photoId },
-              data: { favoriteCount: { decrement: 1 } },
-            })
-          );
+        if (liked) {
+          favoriteCreates.push({ ...actionData, action: "favorite" });
+        } else {
+          favoriteDeletes.push({ photoId: action.photoId, clientKey: action.clientKey });
         }
       }
 
-      if (action.action === "download" && !exists) {
-        createOps.push(
-          prisma.clientPhotoAction.create({
-            data: { galleryId: id, ...action, action: "download" },
-          })
-        );
-
-        updateOps.push(
-          prisma.photo.update({
-            where: { id: action.photoId },
-            data: { downloadCount: { increment: 1 } },
-          })
-        );
+      if (action.action === "download") {
+        downloadCreates.push({ ...actionData, action: "download" });
       }
     }
 
-    await prisma.$transaction([...createOps, ...updateOps]);
+    const writeOps: Prisma.PrismaPromise<unknown>[] = [];
+    if (favoriteCreates.length > 0) {
+      writeOps.push(prisma.clientPhotoAction.createMany({ data: favoriteCreates, skipDuplicates: true }));
+    }
+    if (downloadCreates.length > 0) {
+      writeOps.push(prisma.clientPhotoAction.createMany({ data: downloadCreates, skipDuplicates: true }));
+    }
+    favoriteDeletes.forEach((item) => {
+      writeOps.push(
+        prisma.clientPhotoAction.deleteMany({
+          where: {
+            galleryId: id,
+            photoId: item.photoId,
+            clientKey: item.clientKey,
+            action: "favorite",
+          },
+        })
+      );
+    });
+
+    if (writeOps.length > 0) {
+      await prisma.$transaction(writeOps);
+    }
+
+    await Promise.all(
+      photoIds.map(async (photoId) => {
+        const [favoriteCount, downloadCount] = await Promise.all([
+          prisma.clientPhotoAction.count({ where: { galleryId: id, photoId, action: "favorite" } }),
+          prisma.clientPhotoAction.count({ where: { galleryId: id, photoId, action: "download" } }),
+        ]);
+        await prisma.photo.update({
+          where: { id: photoId },
+          data: { favoriteCount, downloadCount },
+        });
+      })
+    );
 
     return NextResponse.json({ ok: true });
   }, { keyPrefix: "gallery:client-actions", limit: 1000, windowMs: 15 * 60 * 1000 })

@@ -87,6 +87,8 @@ export default async function DiskGalleryPage({ params, searchParams }: DiskGall
         allowSingleDownload={publicAccess.allowSingleDownload}
         allowBulkDownload={publicAccess.allowBulkDownload}
         favoritesEnabled={publicAccess.favoritesEnabled}
+        favoritesLimitSelected={meta?.favoritesLimitSelected ?? false}
+        favoritesMaxSelected={meta?.favoritesMaxSelected ?? null}
         serverFolders={meta?.folders ?? []}
         serverFolderPhotosMap={meta?.folderPhotosMap ?? {}}
         hostLabel={getClientGalleryHostLabel(fallbackOrigin)}
@@ -158,6 +160,8 @@ export default async function DiskGalleryPage({ params, searchParams }: DiskGall
         allowSingleDownload={publicAccess.allowSingleDownload}
         allowBulkDownload={publicAccess.allowBulkDownload}
         favoritesEnabled={publicAccess.favoritesEnabled}
+        favoritesLimitSelected={meta?.favoritesLimitSelected ?? false}
+        favoritesMaxSelected={meta?.favoritesMaxSelected ?? null}
         serverFolders={meta?.folders ?? []}
         serverFolderPhotosMap={meta?.folderPhotosMap ?? {}}
         hostLabel={getClientGalleryHostLabel(fallbackOrigin)}

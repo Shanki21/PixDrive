@@ -21,6 +21,7 @@ export async function handleVerifyOtp(req: NextRequest) {
     const email = normalizeEmail(body?.email);
     emailForFallback = email;
     const code = String(body?.code ?? "").replace(/\D/g, "");
+    const intent: userService.AuthIntent = body?.intent === "signup" ? "signup" : "login";
 
     if (!email || code.length !== 6) {
       return NextResponse.json({ ok: false, message: "Invalid email or OTP format." }, { status: 400 });
@@ -60,8 +61,20 @@ export async function handleVerifyOtp(req: NextRequest) {
     }
 
     try {
-      const result = await userService.verifyOtpAndEnsureUser(email, code);
+      const result = await userService.verifyOtpForIntent(email, code, intent);
       if (!result.ok) {
+        if (result.code === "ACCOUNT_NOT_FOUND") {
+          return NextResponse.json(
+            { ok: false, code: result.code, message: "No Pixora account exists for this email. Please sign up first." },
+            { status: 404 }
+          );
+        }
+        if (result.code === "ACCOUNT_EXISTS") {
+          return NextResponse.json(
+            { ok: false, code: result.code, message: "An account already exists for this email. Please log in instead." },
+            { status: 409 }
+          );
+        }
         return NextResponse.json({ ok: false, message: "Invalid or expired OTP." }, { status: 401 });
       }
     } catch (err) {

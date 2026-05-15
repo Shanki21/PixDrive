@@ -70,6 +70,11 @@ type ClientFavoritesSelection = {
   photoIds: string[];
 };
 
+type ClientFavoritesPayload = {
+  selections?: ClientFavoritesSelection[];
+  photos?: GalleryPhoto[];
+};
+
 type FavoriteFolderMeta = {
   name: string;
   description: string;
@@ -273,6 +278,19 @@ function writeFavoriteFolderMeta(galleryId: string, next: Record<string, Favorit
   window.localStorage.setItem(`${FAVORITE_FOLDER_STORAGE_PREFIX}${galleryId}`, JSON.stringify(next));
 }
 
+function mergePhotosById(current: GalleryPhoto[], incoming: GalleryPhoto[]) {
+  if (incoming.length === 0) return current;
+  const existingIds = new Set(current.map((photo) => photo.id));
+  const next = [...current];
+  incoming.forEach((photo) => {
+    if (!existingIds.has(photo.id)) {
+      existingIds.add(photo.id);
+      next.push(photo);
+    }
+  });
+  return next;
+}
+
 export default function DriveDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -432,11 +450,13 @@ export default function DriveDetailPage() {
         ]);
 
         if (favoritesRes.ok) {
-          const favoritesPayload = (await favoritesRes.json()) as { selections?: ClientFavoritesSelection[] };
+          const favoritesPayload = (await favoritesRes.json()) as ClientFavoritesPayload;
           const selections = Array.isArray(favoritesPayload.selections) ? favoritesPayload.selections : [];
+          const favoritePhotos = Array.isArray(favoritesPayload.photos) ? favoritesPayload.photos : [];
           if (active) {
             setClientSelections(selections);
             writeClientSelections(galleryId, selections);
+            setPhotos((prev) => mergePhotosById(prev, favoritePhotos));
             const nextFavorites = new Set<string>();
             selections.forEach((entry) => entry.photoIds.forEach((photoId) => nextFavorites.add(photoId)));
             setFavoriteIds(nextFavorites);
@@ -461,6 +481,43 @@ export default function DriveDetailPage() {
       active = false;
     };
   }, [galleryId]);
+
+  useEffect(() => {
+    if (!galleryId || activeTab !== "favorites") return;
+    let active = true;
+
+    const refreshFavorites = async () => {
+      try {
+        const favoritesRes = await fetchWithRetry(
+          `/api/galleries/${galleryId}/client-actions?action=favorite`,
+          { cache: "no-store" },
+          { dedupeKey: `client:galleries:client-actions:${galleryId}:favorite:tab:${Date.now()}` }
+        );
+        if (!favoritesRes.ok) return;
+
+        const favoritesPayload = (await favoritesRes.json()) as ClientFavoritesPayload;
+        const selections = Array.isArray(favoritesPayload.selections) ? favoritesPayload.selections : [];
+        const favoritePhotos = Array.isArray(favoritesPayload.photos) ? favoritesPayload.photos : [];
+        if (!active) return;
+
+        setClientSelections(selections);
+        writeClientSelections(galleryId, selections);
+        setPhotos((prev) => mergePhotosById(prev, favoritePhotos));
+        const nextFavorites = new Set<string>();
+        selections.forEach((entry) => entry.photoIds.forEach((photoId) => nextFavorites.add(photoId)));
+        setFavoriteIds(nextFavorites);
+      } catch {
+        // Keep the tab usable if the live refresh fails.
+      }
+    };
+
+    void refreshFavorites();
+    const interval = window.setInterval(refreshFavorites, 8000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [activeTab, galleryId]);
 
   useEffect(() => {
     if (!galleryId) return;
@@ -546,17 +603,15 @@ export default function DriveDetailPage() {
         const ids = Array.from(new Set(selection.photoIds ?? []));
         const idSet = new Set(ids);
         const items = photos.filter((photo) => idSet.has(photo.id));
-        const selectionKey = `${selection.name}::${selection.email}`;
-        const meta = favoriteFolderMeta[selectionKey];
         return {
           ...selection,
-          folderName: meta?.name ?? selection.name,
-          folderDescription: meta?.description ?? selection.email,
+          folderName: selection.name,
+          folderDescription: selection.email,
           items,
         };
       })
       .filter((selection) => selection.items.length > 0);
-  }, [clientSelections, favoriteFolderMeta, photos]);
+  }, [clientSelections, photos]);
 
   const getFavoriteSelectionKey = (selection: ClientFavoritesSelection) => `${selection.name}::${selection.email}`;
 
@@ -601,17 +656,6 @@ export default function DriveDetailPage() {
       setSelectedFavoriteFolderKey(getFavoriteSelectionKey(favoriteFolders[0]));
     }
   }, [favoriteFolders, selectedFavoriteFolderKey]);
-
-  useEffect(() => {
-    if (activeTab !== "favorites" || showFavoriteFolderModal) return;
-    const missing = favoriteFolders.find((selection) => !favoriteFolderMeta[getFavoriteSelectionKey(selection)]);
-    if (!missing) return;
-
-    setPendingFavoriteFolderKey(getFavoriteSelectionKey(missing));
-    setFavoriteFolderName(missing.name);
-    setFavoriteFolderDescription(missing.email);
-    setShowFavoriteFolderModal(true);
-  }, [activeTab, favoriteFolders, favoriteFolderMeta, showFavoriteFolderModal]);
 
   const orderedFolderIds = useMemo(() => normalizeFolderOrder(folderOrder, folders), [folderOrder, folders]);
 
@@ -1422,7 +1466,7 @@ export default function DriveDetailPage() {
                         className="h-56 w-full object-cover transition duration-300 group-hover:scale-[1.02]"
                       />
 
-                      <div className="absolute inset-x-2 top-1 flex flex-wrap items-center gap-1 rounded-xl bg-white/90 p-1.5 opacity-0 shadow-sm backdrop-blur transition group-hover:opacity-70">
+                      <div className="absolute right-6 top-2 inline-flex w-auto max-w-[calc(100%-1rem)] flex-wrap items-center gap-2 rounded-xl bg-white/90 p-1.5 opacity-0 shadow-sm backdrop-blur transition group-hover:opacity-60">
                         {[
                           {
                             label: isCover ? "Cover selected" : "Set cover",
@@ -1614,7 +1658,7 @@ export default function DriveDetailPage() {
                         className="h-56 w-full object-cover transition duration-300 group-hover:scale-[1.02]"
                       />
 
-                      <div className="absolute inset-x-2 top-1 flex flex-wrap items-center gap-1 rounded-xl bg-white/90 p-1.5 opacity-0 shadow-sm backdrop-blur transition group-hover:opacity-70">
+                      <div className="absolute right-12 top-2 inline-flex w-auto max-w-[calc(100%-1rem)] flex-wrap items-center gap-2 rounded-xl bg-white/90 p-1.5 opacity-0 shadow-sm backdrop-blur transition group-hover:opacity-60">
                         {[
                           {
                             label: isCover ? "Cover selected" : "Set cover",
