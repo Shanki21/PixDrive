@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import fetchWithRetry from "@/lib/fetchWithRetry";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -9,6 +9,7 @@ import AuthShell from "@/components/auth/AuthShell";
 import AuthVisuals from "@/components/auth/AuthVisuals";
 import OtpCodeInput from "@/components/auth/OtpCodeInput";
 import { loadProfile, saveProfile } from "@/lib/profile-storage";
+import { showPixoraAlert, showPixoraToast } from "@/lib/pixora-alerts";
 
 const tutorialItems = [
   {
@@ -44,6 +45,42 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [tutorialStep, setTutorialStep] = useState(0);
+  const [resendIn, setResendIn] = useState(0);
+
+  const showAuthError = (message: string) => {
+    setError(message);
+    void showPixoraAlert({
+      title: "Signup needs attention",
+      text: message,
+      icon: "error",
+    });
+  };
+
+  useEffect(() => {
+    if (step !== "otp" || resendIn <= 0) return;
+    const timer = window.setTimeout(() => {
+      setResendIn((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendIn, step]);
+
+  const requestOtp = async () => {
+    const dedupe = `request-otp:${email.trim().toLowerCase()}`;
+    const res = await fetchWithRetry("/api/auth/request-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, intent: "signup" }),
+    }, { dedupeKey: dedupe, idempotencyKey: `${dedupe}:${Date.now()}` });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      showAuthError(data.message ?? "Please enter a valid email address");
+      return false;
+    }
+
+    setResendIn(30);
+    void showPixoraToast({ title: "OTP sent to your email" });
+    return true;
+  };
 
   const logout = async () => {
     try {
@@ -67,18 +104,24 @@ export default function SignupPage() {
     setLoading(true);
     setError("");
     try {
-      const dedupe = `request-otp:${email.trim().toLowerCase()}`;
-      const res = await fetchWithRetry("/api/auth/request-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      }, { dedupeKey: dedupe, idempotencyKey: `${dedupe}:${Date.now()}` });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        setError(data.message ?? "Please enter a valid email address");
-        return;
-      }
+      const sent = await requestOtp();
+      if (!sent) return;
       setStep("otp");
+    } catch {
+      showAuthError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onResendOtp = async () => {
+    if (resendIn > 0 || loading) return;
+    setLoading(true);
+    setError("");
+    try {
+      await requestOtp();
+    } catch {
+      showAuthError("Network error. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -93,14 +136,16 @@ export default function SignupPage() {
       const res = await fetchWithRetry("/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code: otp }),
+        body: JSON.stringify({ email, code: otp, intent: "signup" }),
       }, { dedupeKey: dedupe, idempotencyKey: dedupe });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        setError(data.message ?? "Invalid or expired OTP");
+        showAuthError(data.message ?? "Invalid or expired OTP");
         return;
       }
       setStep("language");
+    } catch {
+      showAuthError("Network error. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -179,6 +224,19 @@ export default function SignupPage() {
             Access code sent to <strong className="text-[#111111]">{email}</strong>.
           </p>
           <OtpCodeInput value={otp} onChange={setOtp} />
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="text-[#666666]">
+              {resendIn > 0 ? `Resend available in ${resendIn}s` : "Did not receive the code?"}
+            </span>
+            <button
+              type="button"
+              onClick={onResendOtp}
+              disabled={loading || resendIn > 0}
+              className="font-semibold text-[#7a3f13] hover:text-[#5b2b0c] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Resend OTP
+            </button>
+          </div>
           {error ? <p className="text-sm text-red-500">{error}</p> : null}
           <motion.button
             whileHover={{ scale: 1.01, y: -2 }}

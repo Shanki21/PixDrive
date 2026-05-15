@@ -2,6 +2,7 @@ import { createOtp, OtpRateLimitError } from "@/lib/otp-store";
 import { sendOtpEmail } from "@/lib/email";
 import { normalizeEmail } from "@/lib/input-security";
 import { checkIpThrottle } from "@/lib/ip-throttle";
+import prisma from "@/lib/prisma";
 import { getClientIp } from "@/lib/request-ip";
 import { getPrismaUnavailableMessage, isPrismaUnavailableError } from "@/lib/prisma-errors";
 import { rejectCrossOriginWrite } from "@/lib/request-security";
@@ -19,9 +20,29 @@ export const POST = withApiHandler(
     try {
       const body = await req.json();
       const email = normalizeEmail(body?.email);
+      const intent = body?.intent === "signup" ? "signup" : "login";
 
       if (!email) {
         return NextResponse.json({ ok: false, message: "Invalid email" }, { status: 400 });
+      }
+
+      const existingUser = await prisma.user.findUnique({
+        where: { email },
+        select: { id: true },
+      });
+
+      if (intent === "login" && !existingUser) {
+        return NextResponse.json(
+          { ok: false, code: "ACCOUNT_NOT_FOUND", message: "No Pixora account exists for this email. Please sign up first." },
+          { status: 404 }
+        );
+      }
+
+      if (intent === "signup" && existingUser) {
+        return NextResponse.json(
+          { ok: false, code: "ACCOUNT_EXISTS", message: "An account already exists for this email. Please log in instead." },
+          { status: 409 }
+        );
       }
 
       const ip = getClientIp(req) ?? "unknown";

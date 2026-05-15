@@ -301,7 +301,7 @@ export default function DriveTable({
           return (
             <article
               key={gallery.id}
-              className={`cursor-pointer overflow-hidden rounded-3xl border bg-[#fffdf8] shadow-[0_14px_35px_rgba(73,39,20,0.07)] ${
+              className={`group cursor-pointer overflow-visible rounded-[28px] border bg-white shadow-[0_18px_45px_rgba(73,39,20,0.10)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(73,39,20,0.16)] ${
                 dragOverId === gallery.id ? "border-[#7a3f13]" : "border-[#eadccf]"
               }`}
               onClick={() => onOpen?.(gallery)}
@@ -324,24 +324,25 @@ export default function DriveTable({
                 }
               }}
             >
-              <div className="relative h-64 overflow-hidden border-b border-[#f0e4d7] bg-[#f6eadb]">
+              <div className="relative h-72 overflow-hidden rounded-t-[28px] border-b border-[#f0e4d7] bg-[#2a170d]">
                 {cover ? (
                   <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={cover} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-25 blur-xl" />
-                    <div className="absolute inset-0 bg-[linear-gradient(160deg,rgba(122,63,19,0.16),rgba(255,250,244,0.18))]" />
+                    <img src={cover} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-35 blur-2xl" />
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(255,250,244,0.28),transparent_34%),linear-gradient(160deg,rgba(42,23,13,0.42),rgba(122,63,19,0.10)_42%,rgba(255,250,244,0.12))]" />
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={cover}
                       alt={gallery.name}
-                      className="relative z-0 h-full w-full object-contain"
+                      className="relative z-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
                       loading="lazy"
                       decoding="async"
                     />
                   </>
                 ) : (
-                  <div className="absolute inset-0 bg-[linear-gradient(140deg,rgba(122,63,19,0.14),rgba(185,120,59,0.18))]" />
+                  <div className="absolute inset-0 bg-[linear-gradient(140deg,#2a170d_0%,#7a3f13_48%,#ead4bd_100%)]" />
                 )}
+                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_top,rgba(42,23,13,0.50),transparent_48%)]" />
                 <div className="absolute left-4 top-4 flex items-center gap-2">
                   <span
                     className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -422,7 +423,7 @@ export default function DriveTable({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-[1fr_repeat(4,40px)] items-center gap-2">
+                <div className="grid grid-cols-[minmax(0,1fr)_repeat(4,40px)] items-center gap-2">
                   <button
                     type="button"
                     onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
@@ -480,7 +481,7 @@ export default function DriveTable({
                       <MoreVertical className="h-4 w-4" />
                     </button>
                     {openMenuFor === gallery.id ? (
-                      <div className="absolute right-0 top-11 z-20 w-56 overflow-hidden rounded-xl border border-[#ead7c5] bg-white shadow-lg">
+                      <div className="absolute bottom-12 right-0 z-50 w-60 overflow-hidden rounded-2xl border border-[#ead7c5] bg-white shadow-[0_18px_45px_rgba(73,39,20,0.18)]">
                         <button
                           type="button"
                           onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {

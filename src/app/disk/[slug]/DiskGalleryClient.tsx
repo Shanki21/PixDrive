@@ -14,6 +14,7 @@ import {
 import { HeartIcon as HeartSolidIcon } from "@heroicons/react/24/solid";
 import { HeartIcon as HeartOutlineIcon } from "@heroicons/react/24/outline";
 import { getGalleryMeta, saveGalleryMeta } from "@/lib/gallery-meta-storage";
+import { showPixoraAlert, showPixoraToast } from "@/lib/pixora-alerts";
 
 type GalleryPhoto = {
   id: string;
@@ -43,6 +44,8 @@ type DiskGalleryClientProps = {
   allowSingleDownload: boolean;
   allowBulkDownload: boolean;
   favoritesEnabled: boolean;
+  favoritesLimitSelected: boolean;
+  favoritesMaxSelected: number | null;
   serverFolders: Folder[];
   serverFolderPhotosMap: Record<string, string[]>;
   hostLabel: string;
@@ -59,6 +62,11 @@ type ClientFavoritesSelection = {
 type ClientIdentity = {
   name: string;
   email: string;
+};
+
+type ClientActionResult = {
+  ok: boolean;
+  error?: string;
 };
 
 const CLIENT_FAVORITES_PREFIX = "wf_client_favorites:";
@@ -141,6 +149,18 @@ function markDownloaded(galleryId: string, photoIds: string[]) {
   writeClientDownloads(galleryId, Array.from(next));
 }
 
+function getOrCreateClientKey(galleryId: string) {
+  let key = window.localStorage.getItem(`${CLIENT_KEY_PREFIX}${galleryId}`) ?? "";
+  if (!key) {
+    key =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    window.localStorage.setItem(`${CLIENT_KEY_PREFIX}${galleryId}`, key);
+  }
+  return key;
+}
+
 function favoritesListExists(galleryId: string, listName: string) {
   if (!listName.trim()) return false;
   try {
@@ -149,6 +169,21 @@ function favoritesListExists(galleryId: string, listName: string) {
     return parsedLists.some((list) => list.name === listName.trim());
   } catch {
     return false;
+  }
+}
+
+async function readClientActionError(response: Response) {
+  try {
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const payload = (await response.json()) as { error?: unknown; message?: unknown };
+      const message = typeof payload.error === "string" ? payload.error : payload.message;
+      return typeof message === "string" && message.trim() ? message : "Unable to save your selection.";
+    }
+    const text = await response.text();
+    return text.trim() || "Unable to save your selection.";
+  } catch {
+    return "Unable to save your selection.";
   }
 }
 
@@ -197,6 +232,8 @@ export default function DiskGalleryClient({
   allowSingleDownload,
   allowBulkDownload,
   favoritesEnabled: serverFavoritesEnabled,
+  favoritesLimitSelected: serverFavoritesLimitSelected,
+  favoritesMaxSelected: serverFavoritesMaxSelected,
   serverFolders,
   serverFolderPhotosMap,
   hostLabel,
@@ -207,14 +244,18 @@ export default function DiskGalleryClient({
   const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [favoritesEnabled, setFavoritesEnabled] = useState(serverFavoritesEnabled);
-  const [favoritesLimitSelected, setFavoritesLimitSelected] = useState(false);
-  const [favoritesMaxSelected, setFavoritesMaxSelected] = useState<number | null>(null);
+  const [favoritesLimitSelected, setFavoritesLimitSelected] = useState(serverFavoritesLimitSelected);
+  const [favoritesMaxSelected, setFavoritesMaxSelected] = useState<number | null>(serverFavoritesMaxSelected);
   const [clientProfile, setClientProfile] = useState<ClientIdentity | null>(null);
   const [isIdentityModalOpen, setIsIdentityModalOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [emailDraft, setEmailDraft] = useState("");
   const [pendingLikePhotoId, setPendingLikePhotoId] = useState<string | null>(null);
+  const [identityError, setIdentityError] = useState<string | null>(null);
+  const [isIdentitySubmitting, setIsIdentitySubmitting] = useState(false);
   const [favoritesLimitMessage, setFavoritesLimitMessage] = useState<string | null>(null);
+  const [savingFavoriteIds, setSavingFavoriteIds] = useState<Set<string>>(new Set());
+  const [serverFavoritesLoaded, setServerFavoritesLoaded] = useState(false);
   const [clientKey, setClientKey] = useState("");
   const [photos, setPhotos] = useState<GalleryPhoto[]>(initialPhotos);
   const [nextCursor, setNextCursor] = useState<string | null>(initialCursor);
@@ -236,6 +277,7 @@ export default function DiskGalleryClient({
   const [pinValue, setPinValue] = useState("");
   const [unlockError, setUnlockError] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
+  const syncedFavoriteSignatureRef = useRef("");
 
   const likedCount = useMemo(() => Object.values(liked).filter(Boolean).length, [liked]);
   const selectionLimit = favoritesLimitSelected ? Math.max(1, favoritesMaxSelected ?? 1) : null;
@@ -257,7 +299,7 @@ export default function DiskGalleryClient({
   const visiblePhotos = useMemo(() => {
     return photos.filter((photo) => {
       if (hiddenPhotoIds.has(photo.id)) return false;
-      if (folderFilterSet) return folderFilterSet.has(photo.id);
+      if (folderFilterSet && !folderFilterSet.has(photo.id)) return false;
       return true;
     });
   }, [photos, hiddenPhotoIds, folderFilterSet]);
@@ -295,8 +337,8 @@ export default function DiskGalleryClient({
     const syncGalleryMeta = () => {
       const meta = getGalleryMeta(galleryId);
       setFavoritesEnabled(serverFavoritesEnabled && (meta?.favoritesEnabled ?? true));
-      setFavoritesLimitSelected(Boolean(meta?.favoritesLimitSelected));
-      setFavoritesMaxSelected(meta?.favoritesMaxSelected ?? null);
+      setFavoritesLimitSelected(serverFavoritesLimitSelected);
+      setFavoritesMaxSelected(serverFavoritesMaxSelected);
     };
     const handleStorage = (event: StorageEvent) => {
       if (event.key === "wf_gallery_meta") {
@@ -307,15 +349,7 @@ export default function DiskGalleryClient({
     syncGalleryMeta();
     window.addEventListener("storage", handleStorage);
 
-    let key = window.localStorage.getItem(`${CLIENT_KEY_PREFIX}${galleryId}`) ?? "";
-    if (!key) {
-      const random =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      key = random;
-      window.localStorage.setItem(`${CLIENT_KEY_PREFIX}${galleryId}`, key);
-    }
+    const key = getOrCreateClientKey(galleryId);
     setClientKey(key);
 
     void (async () => {
@@ -350,7 +384,7 @@ export default function DiskGalleryClient({
     }
 
     return () => window.removeEventListener("storage", handleStorage);
-  }, [galleryId, isLocked, serverFavoritesEnabled]);
+  }, [galleryId, isLocked, serverFavoritesEnabled, serverFavoritesLimitSelected, serverFavoritesMaxSelected]);
 
   useEffect(() => {
     if (isLocked) return;
@@ -358,11 +392,11 @@ export default function DiskGalleryClient({
     let active = true;
 
     const loadServerFavorites = async () => {
-        try {
+      try {
         const response = await fetchWithRetry(
           `/api/galleries/${galleryId}/client-actions?clientKey=${encodeURIComponent(clientKey)}&action=favorite`,
           { method: "GET" },
-          { dedupeKey: `client-favorites:${galleryId}:${clientKey}` }
+          { dedupeKey: `client-favorites:${galleryId}:${clientKey}:${Date.now()}` }
         );
         if (!response.ok) return;
         const data = (await response.json()) as {
@@ -373,7 +407,6 @@ export default function DiskGalleryClient({
         if (!active) return;
 
         const ids = Array.isArray(data.photoIds) ? data.photoIds : [];
-        if (ids.length === 0 && !data.clientName && !data.clientEmail) return;
 
         const storedProfile = readClientProfile(galleryId);
         let profile: ClientIdentity | null = null;
@@ -390,19 +423,15 @@ export default function DiskGalleryClient({
           profile = storedProfile;
         }
 
-        if (ids.length > 0) {
-          const likedFromServer: Record<string, boolean> = {};
-          ids.forEach((id) => {
-            likedFromServer[id] = true;
-          });
+        const likedFromServer: Record<string, boolean> = {};
+        ids.forEach((id) => {
+          likedFromServer[id] = true;
+        });
+        setLiked(likedFromServer);
+        setServerFavoritesLoaded(true);
 
-          setLiked((prev) => {
-            const next = { ...prev, ...likedFromServer };
-            if (profile) {
-              persistLikes(next, profile);
-            }
-            return next;
-          });
+        if (profile) {
+          persistLikes(likedFromServer, profile);
         }
       } catch {
         // Ignore fetch errors.
@@ -410,8 +439,12 @@ export default function DiskGalleryClient({
     };
 
     void loadServerFavorites();
+    const refresh = window.setInterval(loadServerFavorites, 10000);
+    window.addEventListener("focus", loadServerFavorites);
     return () => {
       active = false;
+      window.clearInterval(refresh);
+      window.removeEventListener("focus", loadServerFavorites);
     };
   }, [clientKey, galleryId, isLocked, persistLikes]);
   useEffect(() => {
@@ -437,7 +470,7 @@ export default function DiskGalleryClient({
     setFolderFilterId(validFolderParam);
   }, [galleryId, isLocked, serverFolderPhotosMap, serverFolders]);
 
-  const recordClientActions = async (
+  const recordClientActions = useCallback(async (
     actions: Array<{
       photoId: string;
       action: "favorite" | "download";
@@ -446,29 +479,58 @@ export default function DiskGalleryClient({
       clientEmail?: string;
     }>
   ) => {
-    if (!clientKey || actions.length === 0) return;
+    if (actions.length === 0) return { ok: true } satisfies ClientActionResult;
+    const key = clientKey || getOrCreateClientKey(galleryId);
+    if (!key) return { ok: false, error: "Unable to identify this device. Please refresh and try again." };
+    if (!clientKey) setClientKey(key);
     try {
-      const dedupe = `client-actions:${galleryId}:${clientKey}:${actions
-        .map((a) => `${a.action}:${a.photoId}`)
+      const dedupe = `client-actions:${galleryId}:${key}:${actions
+        .map((a) => `${a.action}:${a.photoId}:${a.liked ?? "track"}`)
         .join(",")}`;
-      await fetchWithRetry(`/api/galleries/${galleryId}/client-actions`, {
+      const response = await fetchWithRetry(`/api/galleries/${galleryId}/client-actions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           actions: actions.map((action) => ({
             ...action,
-            clientKey,
+            clientKey: key,
           })),
         }),
       }, { dedupeKey: dedupe, idempotencyKey: dedupe });
+      if (!response.ok) {
+        return { ok: false, error: await readClientActionError(response) };
+      }
+      return { ok: true };
     } catch {
-      // Ignore tracking failures to keep UI responsive.
+      return { ok: false, error: "Network issue. Please check your connection and try again." };
     }
-  };
+  }, [clientKey, galleryId]);
 
-  const toggleLike = (id: string) => {
+  useEffect(() => {
+    if (isLocked || !clientProfile || !serverFavoritesLoaded) return;
+    const selectedIds = Object.keys(liked).filter((id) => liked[id]).sort();
+    if (selectedIds.length === 0) return;
+
+    const signature = `${clientKey}:${clientProfile.name}:${clientProfile.email}:${selectedIds.join(",")}`;
+    if (syncedFavoriteSignatureRef.current === signature) return;
+    syncedFavoriteSignatureRef.current = signature;
+
+    void recordClientActions(
+      selectedIds.map((photoId) => ({
+        photoId,
+        action: "favorite",
+        liked: true,
+        clientName: clientProfile.name,
+        clientEmail: clientProfile.email,
+      }))
+    );
+  }, [clientKey, clientProfile, isLocked, liked, recordClientActions, serverFavoritesLoaded]);
+
+  const toggleLike = async (id: string) => {
     if (!favoritesEnabled) return;
+    if (savingFavoriteIds.has(id)) return;
     setFavoritesLimitMessage(null);
+    setIdentityError(null);
     if (!clientProfile) {
       setPendingLikePhotoId(id);
       setIsIdentityModalOpen(true);
@@ -484,16 +546,23 @@ export default function DiskGalleryClient({
 
     const nextValue = !liked[id];
     if (nextValue && selectionLimit !== null && likedCount >= selectionLimit) {
-      setFavoritesLimitMessage(`You can only select ${selectionLimit} photo${selectionLimit === 1 ? "" : "s"} in this gallery.`);
+      const message = `Maximum selection reached. You can select only ${selectionLimit} photo${selectionLimit === 1 ? "" : "s"} in this gallery.`;
+      setFavoritesLimitMessage(message);
+      void showPixoraAlert({
+        title: "Selection limit reached",
+        text: message,
+        icon: "warning",
+      });
       return;
     }
 
-    setLiked((prev) => {
-      const next = { ...prev, [id]: nextValue };
-      persistLikes(next, clientProfile);
-      return next;
-    });
-    void recordClientActions([
+    const previousLiked = liked;
+    const nextLiked = { ...liked, [id]: nextValue };
+    setSavingFavoriteIds((prev) => new Set(prev).add(id));
+    setLiked(nextLiked);
+    persistLikes(nextLiked, clientProfile);
+
+    const result = await recordClientActions([
       {
         photoId: id,
         action: "favorite",
@@ -502,29 +571,61 @@ export default function DiskGalleryClient({
         clientEmail: clientProfile.email,
       },
     ]);
+
+    setSavingFavoriteIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+
+    if (!result.ok) {
+      setLiked(previousLiked);
+      persistLikes(previousLiked, clientProfile);
+      await showPixoraAlert({
+        title: "Selection not saved",
+        text: result.error ?? "Unable to save your selection. Please try again.",
+        icon: "error",
+      });
+      return;
+    }
+
+    void showPixoraToast({
+      title: nextValue ? "Photo added to your selection" : "Photo removed from your selection",
+      icon: "success",
+    });
   };
 
-  const onSubmitIdentity = (e: FormEvent<HTMLFormElement>) => {
+  const onSubmitIdentity = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const name = nameDraft.trim();
     const email = emailDraft.trim().toLowerCase();
-    if (!name || !email) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+    setIdentityError(null);
+    if (!name || !email) {
+      setIdentityError("Please enter your name and email to save selections.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setIdentityError("Enter a valid email address.");
+      return;
+    }
 
     const profile = { name, email };
-    setClientProfile(profile);
-    writeClientProfile(galleryId, profile);
-    setIsIdentityModalOpen(false);
-    setNameDraft("");
-    setEmailDraft("");
 
     if (pendingLikePhotoId) {
       if (!liked[pendingLikePhotoId] && selectionLimit !== null && likedCount >= selectionLimit) {
-        setFavoritesLimitMessage(`You can only select ${selectionLimit} photo${selectionLimit === 1 ? "" : "s"} in this gallery.`);
+        const message = `Maximum selection reached. You can select only ${selectionLimit} photo${selectionLimit === 1 ? "" : "s"} in this gallery.`;
+        setFavoritesLimitMessage(message);
+        void showPixoraAlert({
+          title: "Selection limit reached",
+          text: message,
+          icon: "warning",
+        });
         setPendingLikePhotoId(null);
         return;
       }
-      void recordClientActions([
+      setIsIdentitySubmitting(true);
+      setSavingFavoriteIds((prev) => new Set(prev).add(pendingLikePhotoId));
+      const result = await recordClientActions([
         {
           photoId: pendingLikePhotoId,
           action: "favorite",
@@ -533,14 +634,31 @@ export default function DiskGalleryClient({
           clientEmail: profile.email,
         },
       ]);
-      setLiked((prev) => {
-        const next = { ...prev, [pendingLikePhotoId]: true };
-        persistLikes(next, profile);
+
+      setIsIdentitySubmitting(false);
+      setSavingFavoriteIds((prev) => {
+        const next = new Set(prev);
+        next.delete(pendingLikePhotoId);
         return next;
       });
+
+      if (!result.ok) {
+        setIdentityError(result.error ?? "Unable to save your selection. Please try again.");
+        return;
+      }
+
+      const nextLiked = { ...liked, [pendingLikePhotoId]: true };
+      setLiked(nextLiked);
+      persistLikes(nextLiked, profile);
+      void showPixoraToast({ title: "Selection saved", icon: "success" });
     } else {
       persistLikes(liked, profile);
     }
+    setClientProfile(profile);
+    writeClientProfile(galleryId, profile);
+    setIsIdentityModalOpen(false);
+    setNameDraft("");
+    setEmailDraft("");
     setPendingLikePhotoId(null);
   };
 
@@ -634,16 +752,13 @@ export default function DiskGalleryClient({
     return true;
   };
 
-  const downloadServerZip = async (scope: "all" | "favorites") => {
+  const downloadServerZip = async (scope: "all") => {
     const url = new URL("/api/disk", window.location.origin);
     url.searchParams.set("action", "download");
     url.searchParams.set("slug", gallerySlug);
     url.searchParams.set("scope", scope);
     if (clientKey) {
       url.searchParams.set("clientKey", clientKey);
-    }
-    if (scope === "favorites") {
-      if (!clientKey) return false;
     }
     const response = await fetchWithRetry(url.toString(), { method: "GET" }, { dedupeKey: `download-zip:${gallerySlug}:${scope}:${clientKey ?? ""}` });
     if (!response.ok) {
@@ -664,23 +779,6 @@ export default function DiskGalleryClient({
       const ok = await downloadServerZip("all");
       if (!ok) {
         for (const photo of visiblePhotos) {
-          await downloadSinglePhoto(photo);
-        }
-      }
-      setIsDownloadMenuOpen(false);
-    })();
-  };
-
-  const onDownloadFavorites = () => {
-    if (!bulkDownloadAllowed) return;
-    const selected = visiblePhotos.filter((photo) => liked[photo.id]);
-    const photoIds = selected.map((photo) => photo.id);
-    registerDownloadedPhotos(photoIds);
-    void recordClientActions(photoIds.map((photoId) => ({ photoId, action: "download" })));
-    void (async () => {
-      const ok = await downloadServerZip("favorites");
-      if (!ok) {
-        for (const photo of selected) {
           await downloadSinglePhoto(photo);
         }
       }
@@ -877,17 +975,11 @@ export default function DiskGalleryClient({
       </section>
 
       <section className="sticky top-0 z-20 border-b border-[#eadccf] bg-white/85 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-end gap-4 px-4 py-4 sm:px-8">
-          {favoritesEnabled ? (
-            <button
-              type="button"
-              className="inline-flex items-center text-[#4f6d63] hover:text-[#7a3f13]"
-              onClick={() => setIsIdentityModalOpen(true)}
-              aria-label="Favorites"
-            >
-              <HeartOutlineIcon className="h-6 w-6" />
-            </button>
-          ) : null}
+        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-8">
+          <div className="rounded-full border border-[#eadccf] bg-[#fffaf4] px-4 py-2 text-sm font-semibold text-[#2a170d]">
+            All photos
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-4">
           <button
             type="button"
             className="inline-flex items-center text-[#4f6d63] hover:text-[#7a3f13]"
@@ -931,22 +1023,11 @@ export default function DiskGalleryClient({
                     <span className="block text-xs text-[#5d7f73]">All files and folders</span>
                   </span>
                 </button>
-                {favoritesEnabled ? (
-                  <button
-                    className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-[#f6eadb]"
-                    onClick={onDownloadFavorites}
-                  >
-                    <HeartSolidIcon className="h-4 w-4" />
-                    <span>
-                      <span className="block font-medium text-[#14352d]">Favorites</span>
-                      <span className="block text-xs text-[#5d7f73]">Only liked files</span>
-                    </span>
-                  </button>
-                ) : null}
               </div>
               ) : null}
             </div>
           ) : null}
+          </div>
         </div>
         {favoritesEnabled && selectionLimit !== null ? (
           <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 pb-4 text-sm text-[#476a5e] sm:px-8">
@@ -976,16 +1057,15 @@ export default function DiskGalleryClient({
       <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-8 sm:py-10">
         {hasPhotos ? (
           <>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,380px),1fr))] gap-2 sm:gap-3">
                 {visiblePhotos.map((photo, idx) => {
                   const isLiked = Boolean(liked[photo.id]);
                   const disableLike = !isLiked && selectionLimit !== null && likedCount >= selectionLimit;
-                  const tileAspect =
-                    idx % 7 === 0 ? "aspect-[4/5]" : idx % 5 === 0 ? "aspect-square" : "aspect-[4/3]";
+                  const isSavingFavorite = savingFavoriteIds.has(photo.id);
                   return (
                     <figure
                       key={photo.id}
-                      className="group relative overflow-hidden rounded-[20px] border border-[#eadccf] bg-white shadow-[0_14px_30px_rgba(122,63,19,0.12)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(122,63,19,0.2)]"
+                      className="group relative w-full overflow-hidden rounded-sm border border-white bg-[#e7ebe7] shadow-[0_10px_24px_rgba(122,63,19,0.12)] transition duration-300 hover:z-10 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(122,63,19,0.2)]"
                     >
                     <button
                       type="button"
@@ -997,7 +1077,7 @@ export default function DiskGalleryClient({
                       <img
                         src={photo.url}
                         alt={photo.name}
-                        className={`${tileAspect} h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.06]`}
+                        className="h-auto w-full object-contain transition-transform duration-500 group-hover:scale-[1.01]"
                         loading="lazy"
                         decoding="async"
                       />
@@ -1012,7 +1092,10 @@ export default function DiskGalleryClient({
                       <button
                         type="button"
                         className="rounded-full bg-white/95 p-2 text-[#1f3b33] shadow-md"
-                        onClick={() => openShareModal(photo.url)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openShareModal(photo.url);
+                        }}
                         aria-label="Share photo"
                       >
                         <ShareIcon className="h-3.5 w-3.5" />
@@ -1021,7 +1104,8 @@ export default function DiskGalleryClient({
                         <button
                           type="button"
                           className="rounded-full bg-white/95 p-2 text-[#1f3b33] shadow-md"
-                          onClick={() => {
+                          onClick={(event) => {
+                            event.stopPropagation();
                             registerDownloadedPhotos([photo.id]);
                             void recordClientActions([
                               {
@@ -1039,12 +1123,17 @@ export default function DiskGalleryClient({
                       {favoritesEnabled ? (
                         <button
                           type="button"
+                          disabled={isSavingFavorite}
                           className={`rounded-full p-2 text-white shadow-md ${
                             isLiked ? "bg-[#7a3f13]" : "bg-black/55"
-                          } ${disableLike ? "cursor-not-allowed opacity-60" : ""}`}
-                          onClick={() => toggleLike(photo.id)}
-                          disabled={disableLike}
-                          aria-label="Favorite photo"
+                          } ${disableLike ? "opacity-80 ring-2 ring-white/70" : ""} ${
+                            isSavingFavorite ? "cursor-wait opacity-70" : ""
+                          }`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void toggleLike(photo.id);
+                          }}
+                          aria-label={isLiked ? "Remove from selection" : "Add to selection"}
                         >
                           {isLiked ? (
                             <HeartSolidIcon className="h-3.5 w-3.5" />
@@ -1100,14 +1189,14 @@ export default function DiskGalleryClient({
               {favoritesEnabled ? (
                 <button
                   type="button"
-                  onClick={() => toggleLike(activePhoto.id)}
-                  disabled={!liked[activePhoto.id] && selectionLimit !== null && likedCount >= selectionLimit}
+                  disabled={savingFavoriteIds.has(activePhoto.id)}
+                  onClick={() => void toggleLike(activePhoto.id)}
                   className={`${liked[activePhoto.id] ? "text-rose-400" : "text-white"} ${
                     !liked[activePhoto.id] && selectionLimit !== null && likedCount >= selectionLimit
-                      ? "cursor-not-allowed opacity-60"
+                      ? "opacity-80"
                       : ""
-                  }`}
-                  aria-label="Favorite photo"
+                  } ${savingFavoriteIds.has(activePhoto.id) ? "cursor-wait opacity-70" : ""}`}
+                  aria-label={liked[activePhoto.id] ? "Remove from selection" : "Add to selection"}
                 >
                   {liked[activePhoto.id] ? (
                     <HeartSolidIcon className="h-6 w-6" />
@@ -1159,14 +1248,16 @@ export default function DiskGalleryClient({
       ) : null}
 
       {isIdentityModalOpen ? (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 p-4">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4">
           <div className="relative w-full max-w-lg rounded-[28px] bg-white px-5 py-7 sm:px-7">
             <button
               type="button"
               className="absolute right-4 top-4 rounded-full bg-[#f0e6db] p-2 text-[#6b645c]"
               onClick={() => {
+                if (isIdentitySubmitting) return;
                 setIsIdentityModalOpen(false);
                 setPendingLikePhotoId(null);
+                setIdentityError(null);
               }}
               aria-label="Close"
             >
@@ -1182,26 +1273,36 @@ export default function DiskGalleryClient({
             </p>
             <form className="mx-auto mt-5 max-w-md space-y-3.5" onSubmit={onSubmitIdentity}>
               <input
-                className="h-12 w-full rounded-full border border-[#d9cfc4] bg-white px-4 text-base"
+                className="h-12 w-full rounded-full border border-[#d9cfc4] bg-white px-4 text-base outline-none transition focus:border-[#7a3f13]"
                 placeholder="First name and last name"
                 value={nameDraft}
                 onChange={(e) => setNameDraft(e.target.value)}
+                disabled={isIdentitySubmitting}
+                autoComplete="name"
                 required
               />
               <input
                 type="email"
-                className="h-12 w-full rounded-full border border-[#d9cfc4] bg-white px-4 text-base"
+                className="h-12 w-full rounded-full border border-[#d9cfc4] bg-white px-4 text-base outline-none transition focus:border-[#7a3f13]"
                 placeholder="Email"
                 value={emailDraft}
                 onChange={(e) => setEmailDraft(e.target.value)}
+                disabled={isIdentitySubmitting}
+                autoComplete="email"
                 required
               />
+              {identityError ? (
+                <div className="rounded-2xl border border-[#f1b8a0] bg-[#fff1eb] px-4 py-3 text-sm text-[#9a4428]">
+                  {identityError}
+                </div>
+              ) : null}
               <div className="flex justify-center pt-2">
                 <button
                   type="submit"
-                  className="h-12 min-w-48 rounded-full bg-[#2a170d] px-6 text-lg font-semibold text-white"
+                  disabled={isIdentitySubmitting}
+                  className="h-12 min-w-48 rounded-full bg-[#2a170d] px-6 text-lg font-semibold text-white transition hover:bg-[#4a2a18] disabled:cursor-wait disabled:opacity-70"
                 >
-                  Continue
+                  {isIdentitySubmitting ? "Saving..." : "Continue"}
                 </button>
               </div>
             </form>
@@ -1210,7 +1311,7 @@ export default function DiskGalleryClient({
       ) : null}
 
       {isShareModalOpen ? (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4">
           <div className="relative w-full max-w-xl rounded-[28px] bg-white px-5 py-8 shadow-2xl sm:px-7">
             <button
               type="button"

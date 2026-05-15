@@ -13,6 +13,10 @@ export async function findOrCreateUserByEmail(email: string) {
   return prisma.user.upsert({ where: { email }, update: {}, create: { email } });
 }
 
+export async function createUserByEmail(email: string) {
+  return prisma.user.create({ data: { email } });
+}
+
 export async function getUserById(id: string) {
   return prisma.user.findUnique({ where: { id } });
 }
