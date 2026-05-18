@@ -10,7 +10,8 @@ import { TRUST_LOGOS, fadeUp } from "./content";
 export default function Hero() {
   return (
     <>
-      <section className="relative bg-[#fffaf4]">
+      <section className="pixora-hero-bloom relative overflow-hidden">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-b from-transparent to-[#FAFAF8]" />
         <Container className="relative grid grid-cols-1 gap-12 pb-24 pt-16 md:grid-cols-12 md:gap-6 md:pt-24">
           <motion.div
             className="order-2 md:order-none md:col-span-6"
@@ -19,9 +20,9 @@ export default function Hero() {
             variants={fadeUp}
             transition={{ duration: 0.6, ease: "easeOut" }}
           >
-            <p className="mb-4 text-[14px] font-medium uppercase tracking-[0.12em] text-[#7a3f13]">Pixora Platform</p>
+            <p className="mb-4 inline-flex rounded-full border border-[#ead7c5]/80 bg-white/72 px-4 py-2 text-[13px] font-semibold uppercase tracking-[0.12em] text-[#7a3f13] shadow-sm backdrop-blur">Pixora Platform</p>
             <motion.h1
-              className="font-display text-[48px] font-bold leading-[1.05] text-[#2a170d]"
+              className="font-display text-[48px] font-bold leading-[1.05] text-[#2a170d] sm:text-[58px] lg:text-[68px]"
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.1 }}
@@ -30,10 +31,10 @@ export default function Hero() {
                 Your Photos.
               </motion.span>
               <br />
-              <span className="bg-gradient-to-r from-[#7a3f13] to-[#b9783b] bg-clip-text text-transparent">Delivered Beautifully.</span>
+              <span className="bg-gradient-to-r from-[#7a3f13] via-[#b9783b] to-[#55756d] bg-clip-text text-transparent">Delivered Beautifully.</span>
             </motion.h1>
             <motion.p
-              className="mt-6 max-w-[520px] text-[16px] leading-relaxed text-[#666666]"
+              className="mt-6 max-w-[560px] text-[16px] leading-relaxed text-[#5f4a39]"
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.2 }}
@@ -58,14 +59,14 @@ export default function Hero() {
             transition={{ duration: 0.7, delay: 0.15 }}
           >
             <motion.div
-              className="absolute -left-4 -top-4 rounded-full border border-[#ead7c5] bg-white px-4 py-2 text-[14px] font-medium text-[#7a3f13] shadow-sm"
+              className="absolute -left-4 -top-4 rounded-full border border-[#ead7c5] bg-white/90 px-4 py-2 text-[14px] font-medium text-[#7a3f13] shadow-sm backdrop-blur"
               animate={{ y: [0, -8, 0] }}
               transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
             >
               Live Proofing
             </motion.div>
             <motion.div
-              className="absolute -right-4 top-12 rounded-full border border-[#ead7c5] bg-white px-4 py-2 text-[14px] font-medium text-[#7a3f13] shadow-sm"
+              className="absolute -right-4 top-12 rounded-full border border-[#ead7c5] bg-white/90 px-4 py-2 text-[14px] font-medium text-[#7a3f13] shadow-sm backdrop-blur"
               animate={{ y: [0, -10, 0] }}
               transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
             >
@@ -74,7 +75,7 @@ export default function Hero() {
             <div className="relative mx-auto w-full max-w-[520px] md:max-w-none">
               <div className="relative min-h-[340px] sm:min-h-[380px] md:min-h-[420px]">
                 <motion.div
-                  className="absolute left-0 top-6 z-10 w-[58%] overflow-hidden rounded-2xl bg-white shadow-[0_20px_50px_rgba(0,0,0,0.14)] ring-1 ring-black/[0.07]"
+                  className="absolute left-0 top-6 z-10 w-[58%] overflow-hidden rounded-lg bg-white shadow-[0_20px_50px_rgba(73,39,20,0.16)] ring-1 ring-black/[0.07]"
                   initial={{ opacity: 0, x: -24, rotate: -6 }}
                   animate={{ opacity: 1, x: 0, rotate: -5 }}
                   transition={{ duration: 0.65, delay: 0.2, type: "spring", stiffness: 120 }}
@@ -92,7 +93,7 @@ export default function Hero() {
                 </motion.div>
 
                 <motion.div
-                  className="absolute right-0 top-0 z-20 w-[68%] overflow-hidden rounded-2xl bg-white shadow-[0_28px_70px_rgba(0,0,0,0.16)] ring-1 ring-black/[0.08]"
+                  className="absolute right-0 top-0 z-20 w-[68%] overflow-hidden rounded-lg bg-white shadow-[0_28px_70px_rgba(73,39,20,0.18)] ring-1 ring-black/[0.08]"
                   initial={{ opacity: 0, y: 28, rotate: 4 }}
                   animate={{ opacity: 1, y: 0, rotate: 3 }}
                   transition={{ duration: 0.65, delay: 0.08, type: "spring", stiffness: 115 }}
@@ -116,7 +117,7 @@ export default function Hero() {
                 </motion.div>
 
                 <motion.div
-                  className="absolute bottom-2 left-[12%] z-30 w-[48%] overflow-hidden rounded-2xl bg-white shadow-[0_18px_45px_rgba(0,0,0,0.12)] ring-1 ring-black/[0.06]"
+                  className="absolute bottom-2 left-[12%] z-30 w-[48%] overflow-hidden rounded-lg bg-white shadow-[0_18px_45px_rgba(73,39,20,0.13)] ring-1 ring-black/[0.06]"
                   initial={{ opacity: 0, y: 40, rotate: -2 }}
                   animate={{ opacity: 1, y: 0, rotate: -2 }}
                   transition={{ duration: 0.65, delay: 0.32, type: "spring", stiffness: 125 }}
@@ -138,7 +139,7 @@ export default function Hero() {
         </Container>
       </section>
 
-      <section className="overflow-hidden border-y border-[#E5E5E5] bg-white/70 py-10">
+      <section className="pixora-botanical-band overflow-hidden border-y border-[#ead7c5] py-10">
         <div className="mb-5 text-center text-[14px] font-medium uppercase tracking-[0.08em] text-[#666666]">Trusted by creators</div>
         <div className="animate-pixora-slide flex min-w-max gap-10 px-6 text-[22px] font-medium text-[#111111]">
           {[...TRUST_LOGOS, ...TRUST_LOGOS].map((logo, index) => (

@@ -25,6 +25,11 @@ body {
   overflow-x: hidden;
 }
 
+body::selection {
+  background: rgba(185, 120, 59, 0.24);
+  color: var(--pix-text-primary);
+}
+
 img,
 video,
 canvas,
@@ -130,7 +135,7 @@ select {
 
 .pix-card {
   border: 1px solid var(--pix-border);
-  border-radius: 22px;
+  border-radius: 8px;
   background: var(--pix-surface);
   box-shadow: var(--pix-shadow);
 }
@@ -188,9 +193,61 @@ select {
 
 .pixora-shell {
   background:
+    linear-gradient(180deg, rgba(255, 250, 244, 0.86), rgba(247, 239, 230, 0.94)),
+    url("/background/kollsd-flowers-5718624.png") center top / cover fixed,
     radial-gradient(ellipse at 18% 8%, rgba(255, 250, 244, 0.98), rgba(255, 250, 244, 0) 42%),
     linear-gradient(180deg, rgba(255, 250, 244, 0.94), rgba(247, 239, 230, 0.98)),
     repeating-linear-gradient(90deg, rgba(154, 93, 37, 0.035) 0 1px, transparent 1px 64px);
+}
+
+.pixora-marketing-shell {
+  background:
+    linear-gradient(180deg, rgba(255, 250, 244, 0.92), rgba(250, 250, 248, 0.96) 48%, rgba(255, 253, 248, 0.92)),
+    url("/background/9549580.jpg") top center / min(1900px, 150vw) auto no-repeat,
+    #fffaf4;
+}
+
+.pixora-hero-bloom {
+  background:
+    linear-gradient(90deg, rgba(255, 250, 244, 0.98) 0%, rgba(255, 250, 244, 0.88) 43%, rgba(255, 250, 244, 0.42) 100%),
+    url("/background/9549580.jpg") center / cover no-repeat;
+}
+
+.pixora-botanical-band {
+  background:
+    linear-gradient(90deg, rgba(255, 253, 248, 0.96), rgba(255, 253, 248, 0.78)),
+    url("/background/kollsd-leaves-5713310.png") center / cover no-repeat;
+}
+
+.pixora-cta-bloom {
+  background:
+    linear-gradient(180deg, rgba(42, 23, 13, 0.74), rgba(91, 43, 12, 0.58)),
+    url("/background/kollsd-flowers-5718624.png") center / cover no-repeat;
+}
+
+.pixora-auth-bg {
+  background:
+    linear-gradient(135deg, rgba(255, 250, 244, 0.9), rgba(246, 234, 219, 0.78)),
+    url("/background/biasadesain-floral-wallpaper-6772609.png") center / cover no-repeat;
+}
+
+.pixora-auth-visual-bg {
+  background:
+    linear-gradient(145deg, rgba(255, 250, 244, 0.2), rgba(42, 23, 13, 0.15)),
+    url("/background/c7b60221-7bf4-444c-bf95-5e1daf2d4ce1.jpg") center / cover no-repeat;
+}
+
+.pixora-dashboard-bg {
+  background:
+    linear-gradient(180deg, rgba(247, 243, 238, 0.94), rgba(255, 250, 244, 0.92)),
+    url("/background/kollsd-leaves-5713310.png") center top / min(1800px, 160vw) auto fixed no-repeat,
+    #f7f3ee;
+}
+
+.pixora-sidebar-bg {
+  background:
+    linear-gradient(180deg, rgba(255, 250, 244, 0.96) 0%, rgba(255, 253, 248, 0.92) 44%, rgba(246, 234, 219, 0.96) 100%),
+    url("/background/biasadesain-floral-wallpaper-6772609.png") 18% center / cover no-repeat;
 }
 
 .pixora-atmosphere {
@@ -252,8 +309,10 @@ select {
 
 .pixora-panel {
   border: 1px solid var(--pix-border);
+  border-radius: 8px;
   background: linear-gradient(145deg, rgba(255, 253, 248, 0.94), rgba(255, 250, 244, 0.82));
   box-shadow: var(--pix-shadow);
+  backdrop-filter: blur(18px);
 }
 
 .tracking-\[-0\.02em\],

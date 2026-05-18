@@ -10,7 +10,7 @@ export default function Gallery() {
   return (
     <motion.section
       id="gallery"
-      className="pb-24 pt-24"
+      className="relative pb-24 pt-24"
       initial="hidden"
       whileInView="show"
       viewport={{ once: true, amount: 0.15 }}
@@ -21,11 +21,11 @@ export default function Gallery() {
           <SectionHeading title="Gallery Preview" />
         </motion.div>
         <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-12">
-          <motion.div variants={fadeUp} className="relative h-[440px] overflow-hidden rounded-2xl md:col-span-6">
+          <motion.div variants={fadeUp} className="relative h-[440px] overflow-hidden rounded-lg md:col-span-6">
             <Image src="/Img/pexels-apasaric-2464535.webp" alt="Large gallery tile" fill className="object-cover transition duration-500 hover:scale-105" />
           </motion.div>
           <div className="grid gap-6 md:col-span-6">
-            <motion.div variants={fadeUp} className="relative h-[208px] overflow-hidden rounded-2xl">
+            <motion.div variants={fadeUp} className="relative h-[208px] overflow-hidden rounded-lg">
               <Image
                 src="/Img/pexels-carlos-oratto-1115158-2111255.webp"
                 alt="Top right gallery tile"
@@ -33,7 +33,7 @@ export default function Gallery() {
                 className="object-cover transition duration-500 hover:scale-105"
               />
             </motion.div>
-            <motion.div variants={fadeUp} className="relative h-[208px] overflow-hidden rounded-2xl">
+            <motion.div variants={fadeUp} className="relative h-[208px] overflow-hidden rounded-lg">
               <Image
                 src="/Img/pexels-habib-hosseini-2908569.webp"
                 alt="Bottom right gallery tile"
@@ -42,13 +42,13 @@ export default function Gallery() {
               />
             </motion.div>
           </div>
-          <motion.div variants={fadeUp} className="relative h-[180px] overflow-hidden rounded-2xl md:col-span-3">
+          <motion.div variants={fadeUp} className="relative h-[180px] overflow-hidden rounded-lg md:col-span-3">
             <Image src="/Img/pexels-soldiervip-1406766.webp" alt="Gallery block one" fill className="object-cover transition duration-500 hover:scale-105" />
           </motion.div>
-          <motion.div variants={fadeUp} className="relative h-[220px] overflow-hidden rounded-2xl md:col-span-5">
+          <motion.div variants={fadeUp} className="relative h-[220px] overflow-hidden rounded-lg md:col-span-5">
             <Image src="/Img/pexels-ian-panelo-3049394.webp" alt="Gallery block two" fill className="object-cover transition duration-500 hover:scale-105" />
           </motion.div>
-          <motion.div variants={fadeUp} className="relative h-[180px] overflow-hidden rounded-2xl md:col-span-4">
+          <motion.div variants={fadeUp} className="relative h-[180px] overflow-hidden rounded-lg md:col-span-4">
             <Image src="/Img/pexels-pham-hoang-kha-1582786-3785644.webp" alt="Gallery block three" fill className="object-cover transition duration-500 hover:scale-105" />
           </motion.div>
         </div>

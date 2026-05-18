@@ -12,19 +12,20 @@ type AuthShellProps = {
 
 export default function AuthShell({ children, right, bottom }: AuthShellProps) {
   return (
-    <div className="font-body min-h-screen bg-[#FAFAF8]">
+    <div className="font-body pixora-auth-bg min-h-screen">
       <div className="grid min-h-screen lg:grid-cols-2">
-        <section className="relative flex min-h-screen flex-col bg-[#fffaf4]">
+        <section className="relative flex min-h-screen flex-col bg-[#fffaf4]/82 backdrop-blur-sm">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/78 via-white/28 to-transparent" />
           <motion.div
             initial={{ opacity: 0, y: -12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
             className="relative z-10 flex items-center justify-between px-9 pt-8"
           >
-            <Link href="/" className="text-3xl font-semibold leading-none tracking-tight text-[#111111]">
+            <Link href="/" className="text-3xl font-semibold leading-none tracking-tight text-[#2a170d]">
               Pixora
             </Link>
-            <Link href="/" className="rounded-full border border-[#E5E5E5] px-3 py-1 text-sm font-medium text-[#666666] transition hover:text-[#111111]">
+            <Link href="/" className="rounded-full border border-[#ead7c5] bg-white/72 px-3 py-1 text-sm font-medium text-[#6b4c35] shadow-sm backdrop-blur transition hover:text-[#2a170d]">
               Home
             </Link>
           </motion.div>

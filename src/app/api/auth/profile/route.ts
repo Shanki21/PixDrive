@@ -16,6 +16,9 @@ export const runtime = "nodejs";
 const MAX_PROFILE_NAME_LENGTH = 120;
 const MAX_OCCUPATION_LENGTH = 120;
 const MAX_PHONE_LENGTH = 40;
+const MAX_LOCATION_LENGTH = 80;
+const MAX_COMPANY_FIELD_LENGTH = 140;
+const MAX_TAX_NUMBER_LENGTH = 80;
 const MAX_SOCIAL_PLATFORM_LENGTH = 40;
 const MAX_SOCIAL_URL_LENGTH = 2048;
 const MAX_SOCIAL_ACCOUNTS = 12;
@@ -117,6 +120,60 @@ export const PATCH = withApiHandler(
       const phone = normalizeOptionalSingleLine(body.phone, MAX_PHONE_LENGTH);
       updateData.phone = phone;
       createData.phone = phone;
+    }
+
+    if ("country" in body) {
+      const country = normalizeOptionalSingleLine(body.country, MAX_LOCATION_LENGTH);
+      updateData.country = country;
+      createData.country = country;
+    }
+
+    if ("state" in body) {
+      const state = normalizeOptionalSingleLine(body.state, MAX_LOCATION_LENGTH);
+      updateData.state = state;
+      createData.state = state;
+    }
+
+    if ("city" in body) {
+      const city = normalizeOptionalSingleLine(body.city, MAX_LOCATION_LENGTH);
+      updateData.city = city;
+      createData.city = city;
+    }
+
+    if ("companyName" in body) {
+      const companyName = normalizeOptionalSingleLine(body.companyName, MAX_COMPANY_FIELD_LENGTH);
+      updateData.companyName = companyName;
+      createData.companyName = companyName;
+    }
+
+    if ("industry" in body) {
+      const industry = normalizeOptionalSingleLine(body.industry, MAX_COMPANY_FIELD_LENGTH);
+      updateData.industry = industry;
+      createData.industry = industry;
+    }
+
+    if ("industryArea" in body) {
+      const industryArea = normalizeOptionalSingleLine(body.industryArea, MAX_COMPANY_FIELD_LENGTH);
+      updateData.industryArea = industryArea;
+      createData.industryArea = industryArea;
+    }
+
+    if ("averageEventsPerYear" in body) {
+      const averageEventsPerYear = normalizeOptionalSingleLine(body.averageEventsPerYear, MAX_COMPANY_FIELD_LENGTH);
+      updateData.averageEventsPerYear = averageEventsPerYear;
+      createData.averageEventsPerYear = averageEventsPerYear;
+    }
+
+    if ("billingCompanyName" in body) {
+      const billingCompanyName = normalizeOptionalSingleLine(body.billingCompanyName, MAX_COMPANY_FIELD_LENGTH);
+      updateData.billingCompanyName = billingCompanyName;
+      createData.billingCompanyName = billingCompanyName;
+    }
+
+    if ("taxNumber" in body) {
+      const taxNumber = normalizeOptionalSingleLine(body.taxNumber, MAX_TAX_NUMBER_LENGTH);
+      updateData.taxNumber = taxNumber;
+      createData.taxNumber = taxNumber;
     }
 
     if ("avatarUrl" in body) {

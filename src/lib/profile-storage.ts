@@ -8,6 +8,15 @@ export type DashboardProfile = {
   occupation: string;
   phone: string;
   email: string;
+  country: string;
+  state: string;
+  city: string;
+  companyName: string;
+  industry: string;
+  industryArea: string;
+  averageEventsPerYear: string;
+  billingCompanyName: string;
+  taxNumber: string;
   avatarDataUrl: string;
   showOnWebsite: boolean;
   socialAccounts: SocialAccount[];
@@ -20,6 +29,15 @@ export const DEFAULT_PROFILE: DashboardProfile = {
   occupation: "",
   phone: "",
   email: "",
+  country: "",
+  state: "",
+  city: "",
+  companyName: "",
+  industry: "Photographer",
+  industryArea: "",
+  averageEventsPerYear: "",
+  billingCompanyName: "",
+  taxNumber: "",
   avatarDataUrl: "",
   showOnWebsite: true,
   socialAccounts: [],
@@ -80,6 +98,15 @@ export function saveProfile(next: DashboardProfile) {
           name: next.name || undefined,
           occupation: next.occupation || undefined,
           phone: next.phone || undefined,
+          country: next.country || undefined,
+          state: next.state || undefined,
+          city: next.city || undefined,
+          companyName: next.companyName || undefined,
+          industry: next.industry || undefined,
+          industryArea: next.industryArea || undefined,
+          averageEventsPerYear: next.averageEventsPerYear || undefined,
+          billingCompanyName: next.billingCompanyName || undefined,
+          taxNumber: next.taxNumber || undefined,
           avatarUrl: next.avatarDataUrl || undefined,
           socialAccounts: next.socialAccounts || undefined,
         }),
@@ -89,5 +116,4 @@ export function saveProfile(next: DashboardProfile) {
     }
   })();
 }
-
 

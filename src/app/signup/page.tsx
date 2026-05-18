@@ -28,9 +28,13 @@ const tutorialItems = [
 
 const languages = ["English", "Espanol", "Deutsch", "Francais", "Russkiy"];
 
-type SignupStep = "email" | "otp" | "language" | "contacts" | "tutorial";
+type SignupStep = "email" | "otp" | "language" | "contacts" | "company" | "tutorial";
 
 const inputClass = "pix-input";
+const selectClass = "pix-input appearance-none";
+const industryOptions = ["Photographer", "Videographer", "Photo Studio", "Event Agency", "Creative Agency", "Other"];
+const industryAreaOptions = ["Freelancer", "Wedding", "Events", "Portraits", "Corporate", "School", "Fashion"];
+const eventsPerYearOptions = ["Less Than 10", "10 - 25", "26 - 50", "51 - 100", "100+"];
 
 export default function SignupPage() {
   const router = useRouter();
@@ -40,6 +44,15 @@ export default function SignupPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [occupation, setOccupation] = useState("");
+  const [country, setCountry] = useState("");
+  const [stateName, setStateName] = useState("");
+  const [city, setCity] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [industry, setIndustry] = useState("Photographer");
+  const [industryArea, setIndustryArea] = useState("");
+  const [averageEventsPerYear, setAverageEventsPerYear] = useState("");
+  const [billingCompanyName, setBillingCompanyName] = useState("");
+  const [taxNumber, setTaxNumber] = useState("");
   const [useWhatsApp, setUseWhatsApp] = useState(true);
   const [useTelegram, setUseTelegram] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -94,7 +107,7 @@ export default function SignupPage() {
   };
 
   const right = useMemo(() => {
-    if (step === "contacts") return <AuthVisuals mode="contactCard" />;
+    if (step === "contacts" || step === "company") return <AuthVisuals mode="contactCard" />;
     if (step === "tutorial") return <AuthVisuals mode="tutorial" tutorialStep={tutorialStep} />;
     return <AuthVisuals mode="darkGallery" />;
   }, [step, tutorialStep]);
@@ -172,6 +185,7 @@ export default function SignupPage() {
           if (step === "otp") setStep("email");
           if (step === "language") setStep("otp");
           if (step === "contacts") setStep("language");
+          if (step === "company") setStep("contacts");
         }}
       >
         Back
@@ -308,8 +322,95 @@ export default function SignupPage() {
             />
           </div>
           <p className="text-xs text-[#666666]">
-            Your contacts will appear in the Card section, where you can also add social network links.
+            These details help Pixora prepare your account and client-facing studio identity.
           </p>
+          <motion.button
+            whileHover={{ scale: 1.01, y: -2 }}
+            whileTap={{ scale: 0.99 }}
+            className="pix-btn pix-btn-primary w-full"
+            onClick={() => {
+              setStep("company");
+            }}
+          >
+            Continue
+          </motion.button>
+          <button className="text-sm font-medium text-[#666666] underline" onClick={() => void logout()}>
+            Log out from this account
+          </button>
+        </motion.div>
+      ) : null}
+
+      {step === "company" ? (
+        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="pix-card space-y-4 p-8 md:p-10">
+          <h1 className="pix-heading-xl">Company Details</h1>
+          <p className="text-base leading-relaxed text-[#666666]">
+            Tell us how your studio operates so Pixora can shape your dashboard around the way you deliver events.
+          </p>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-[#111111]">Company Name</label>
+            <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Your studio name" className={inputClass} />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-[#111111]">Industry</label>
+              <select value={industry} onChange={(e) => setIndustry(e.target.value)} className={selectClass}>
+                {industryOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-[#111111]">Area</label>
+              <select value={industryArea} onChange={(e) => setIndustryArea(e.target.value)} className={selectClass}>
+                <option value="">Select industry area</option>
+                {industryAreaOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-[#111111]">Average Number of Events per Year</label>
+            <select value={averageEventsPerYear} onChange={(e) => setAverageEventsPerYear(e.target.value)} className={selectClass}>
+              <option value="">Select volume</option>
+              {eventsPerYearOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-[#111111]">Country</label>
+              <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="India" className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-[#111111]">State</label>
+              <input value={stateName} onChange={(e) => setStateName(e.target.value)} placeholder="Uttar Pradesh" className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-[#111111]">City</label>
+              <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Noida" className={inputClass} />
+            </div>
+          </div>
+          <div className="rounded-lg border border-[#ead7c5] bg-white/72 p-4">
+            <p className="text-sm font-semibold text-[#2a170d]">Billing Details</p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-[#111111]">Company Name</label>
+                <input value={billingCompanyName} onChange={(e) => setBillingCompanyName(e.target.value)} placeholder="Registered company name" className={inputClass} />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-[#111111]">GST/VAT Number</label>
+                <input value={taxNumber} onChange={(e) => setTaxNumber(e.target.value)} placeholder="Optional" className={inputClass} />
+              </div>
+            </div>
+          </div>
           <motion.button
             whileHover={{ scale: 1.01, y: -2 }}
             whileTap={{ scale: 0.99 }}
@@ -322,6 +423,15 @@ export default function SignupPage() {
                 phone: phone.trim(),
                 occupation: occupation.trim(),
                 email: email.trim().toLowerCase(),
+                country: country.trim(),
+                state: stateName.trim(),
+                city: city.trim(),
+                companyName: companyName.trim(),
+                industry: industry.trim(),
+                industryArea: industryArea.trim(),
+                averageEventsPerYear: averageEventsPerYear.trim(),
+                billingCompanyName: billingCompanyName.trim(),
+                taxNumber: taxNumber.trim(),
               });
               setStep("tutorial");
             }}

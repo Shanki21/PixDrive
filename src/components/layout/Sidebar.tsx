@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ComponentType } from "react";
-import { BarChart3, CalendarDays, Home, PlusSquare, QrCode, Sparkles } from "lucide-react";
+import { BarChart3, CalendarDays, Home, PlusSquare, QrCode, Settings, Sparkles } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 type NavBadge = {
@@ -46,10 +46,15 @@ export default function Sidebar() {
       label: "Analytics",
       icon: BarChart3,
     },
+    {
+      href: "/dashboard/settings",
+      label: "Settings",
+      icon: Settings,
+    },
   ];
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-50 hidden w-20 flex-col items-center border-r border-[#eadccf] bg-[linear-gradient(180deg,#fffaf4_0%,#fffdf8_44%,#f6eadb_100%)] text-[#3a2112] md:flex">
+    <aside className="pixora-sidebar-bg fixed inset-y-0 left-0 z-50 hidden w-20 flex-col items-center border-r border-[#eadccf] text-[#3a2112] md:flex">
       <div className="flex h-20 w-full items-center justify-center border-b border-[#eadccf]">
         <Link
           href="/dashboard"
