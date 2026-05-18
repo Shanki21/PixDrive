@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, CalendarDays, Home, PlusSquare, QrCode } from "lucide-react";
+import { BarChart3, CalendarDays, Home, PlusSquare, QrCode, Settings } from "lucide-react";
 
 export default function MobileNav() {
   const pathname = usePathname();
@@ -12,6 +12,7 @@ export default function MobileNav() {
     { href: "/dashboard/create-events", label: "Create", icon: PlusSquare },
     { href: "/dashboard/qr-code", label: "QR", icon: QrCode },
     { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
+    { href: "/dashboard/settings", label: "Settings", icon: Settings },
   ];
 
   return (
