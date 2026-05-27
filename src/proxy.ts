@@ -12,6 +12,7 @@ const PUBLIC_PREFIXES = [
   "/disk/",
   "/studio/",
   "/api/auth",
+  "/api/custom-domains/resolve",
   "/api/disk",
   "/api/qr",
   "/api/reviews/metadata",
@@ -152,8 +153,59 @@ async function maybeRedirectEmptyDrive(req: NextRequest) {
   return null;
 }
 
+function isCustomDomainBypassPath(pathname: string) {
+  return (
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/_next/") ||
+    pathname === "/favicon.ico" ||
+    pathname === "/robots.txt" ||
+    pathname.startsWith("/sitemap") ||
+    /\.[a-zA-Z0-9]+$/.test(pathname)
+  );
+}
+
+async function maybeRewriteCustomDomain(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+  if (isCustomDomainBypassPath(pathname)) return null;
+
+  const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
+  if (!host) return null;
+
+  try {
+    const url = new URL("/api/custom-domains/resolve", req.url);
+    url.searchParams.set("host", host);
+    const res = await fetchWithRetry(url.toString(), { cache: "no-store" }, { dedupeKey: `proxy:custom-domain:${host}` });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { ok?: boolean; userId?: string };
+    if (!data.ok || !data.userId) return null;
+
+    const rewriteUrl = req.nextUrl.clone();
+    const parts = pathname.split("/").filter(Boolean);
+    if (parts.length === 0) {
+      rewriteUrl.pathname = `/studio/${encodeURIComponent(data.userId)}`;
+    } else if (parts.length === 1) {
+      rewriteUrl.pathname = `/disk/${encodeURIComponent(parts[0])}`;
+    } else if (parts.length === 2 && parts[1] === "get-photos") {
+      rewriteUrl.pathname = `/studio/${encodeURIComponent(data.userId)}/${encodeURIComponent(parts[0])}/get-photos`;
+    } else {
+      return null;
+    }
+
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set("x-pixora-custom-domain", host);
+    return NextResponse.rewrite(rewriteUrl, { request: { headers: requestHeaders } });
+  } catch {
+    return null;
+  }
+}
+
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const customDomainRewrite = await maybeRewriteCustomDomain(req);
+  if (customDomainRewrite) {
+    return applySecurityHeaders(customDomainRewrite, req);
+  }
+
   if (isPublicPath(pathname)) {
     return applySecurityHeaders(NextResponse.next(), req);
   }

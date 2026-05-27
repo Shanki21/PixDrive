@@ -7,7 +7,6 @@ import {
   Eye,
   FileDown,
   Images,
-  PlugZap,
   RefreshCw,
   Search,
   UserRoundPlus,
@@ -32,13 +31,11 @@ type RegistrationRow = {
   name: string;
   email: string;
   mobile: string;
-  selfieDataUrl: string;
   createdAt: string;
   imageViews: number;
   downloads: number;
   consent: boolean;
   marketingOptIn: boolean;
-  faceSearchEnabled: boolean;
 };
 
 type ActivityRow = {
@@ -62,12 +59,11 @@ type AnalyticsPayload = {
   registrations: RegistrationRow[];
 };
 
-type TabKey = "analytics" | "registrations" | "integrations";
+type TabKey = "analytics" | "registrations";
 
 const tabs: Array<{ key: TabKey; label: string; icon: typeof BarChart3 }> = [
   { key: "analytics", label: "Analytics", icon: BarChart3 },
   { key: "registrations", label: "Registrations", icon: Users },
-  { key: "integrations", label: "Integrations", icon: PlugZap },
 ];
 
 const emptyPayload: AnalyticsPayload = {
@@ -310,10 +306,9 @@ export default function AnalyticsPage() {
               </div>
 
               <div className="overflow-x-auto rounded-2xl border border-[#eadccf] bg-white">
-                <table className="min-w-[980px] w-full text-left text-sm">
+                <table className="min-w-[900px] w-full text-left text-sm">
                   <thead className="bg-[#2a170d] text-xs font-bold uppercase tracking-[0.08em] text-white">
                     <tr>
-                      <th className="px-4 py-3">Selfie</th>
                       <th className="px-4 py-3">Date</th>
                       <th className="px-4 py-3">Event Name</th>
                       <th className="px-4 py-3">Name</th>
@@ -325,22 +320,12 @@ export default function AnalyticsPage() {
                   </thead>
                   <tbody>
                     {loading ? (
-                      <tr><td colSpan={8} className="px-4 py-12 text-center text-[#7a6a55]">Loading registrations...</td></tr>
+                      <tr><td colSpan={7} className="px-4 py-12 text-center text-[#7a6a55]">Loading registrations...</td></tr>
                     ) : filteredRegistrations.length === 0 ? (
-                      <tr><td colSpan={8} className="px-4 py-12 text-center text-[#7a6a55]">No registrations found.</td></tr>
+                      <tr><td colSpan={7} className="px-4 py-12 text-center text-[#7a6a55]">No registrations found.</td></tr>
                     ) : (
                       filteredRegistrations.map((row) => (
                         <tr key={row.id} className="border-b border-[#f2ece4] text-[#3a2112] last:border-b-0">
-                          <td className="px-4 py-3">
-                            {row.selfieDataUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={row.selfieDataUrl} alt={`${row.name} selfie`} className="h-11 w-11 rounded-full object-cover" />
-                            ) : (
-                              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#f6eadb] text-xs font-bold text-[#7a3f13]">
-                                {row.name.slice(0, 1).toUpperCase()}
-                              </span>
-                            )}
-                          </td>
                           <td className="px-4 py-3">{formatDate(row.createdAt)}</td>
                           <td className="px-4 py-3 font-semibold">{row.eventName}</td>
                           <td className="px-4 py-3">{row.name}</td>
@@ -357,15 +342,6 @@ export default function AnalyticsPage() {
             </div>
           ) : null}
 
-          {activeTab === "integrations" ? (
-            <div className="rounded-2xl border border-dashed border-[#d8b895] bg-[#fffdf8] p-8 text-center">
-              <PlugZap className="mx-auto h-8 w-8 text-[#7a3f13]" />
-              <h2 className="mt-3 text-lg font-semibold text-[#2a170d]">Recognition integrations coming next</h2>
-              <p className="mx-auto mt-2 max-w-xl text-sm text-[#7a6a55]">
-                This tab is ready for the face-recognition provider, storage pipeline, and delivery automations.
-              </p>
-            </div>
-          ) : null}
         </div>
       </section>
     </div>

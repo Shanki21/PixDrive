@@ -13,7 +13,6 @@ import {
   Megaphone,
   QrCode,
   ShieldCheck,
-  Smartphone,
 } from "lucide-react";
 import type { GalleryEventSettings, GalleryMetaConfig } from "@/lib/gallery-config";
 
@@ -133,7 +132,6 @@ function CreateEventsPageContent() {
   const [eventType, setEventType] = useState<string>(EVENT_TYPES[0]);
   const [eventLocation, setEventLocation] = useState("");
   const [description, setDescription] = useState("");
-  const [brandingEnabled, setBrandingEnabled] = useState(false);
   const [favoritesEnabled, setFavoritesEnabled] = useState(true);
   const [favoritesLimitSelected, setFavoritesLimitSelected] = useState(false);
   const [favoritesMaxSelected, setFavoritesMaxSelected] = useState(1);
@@ -149,8 +147,6 @@ function CreateEventsPageContent() {
   const [oneQrEnabled, setOneQrEnabled] = useState(true);
   const [oneQrRequirePin, setOneQrRequirePin] = useState(false);
   const [oneQrAccessLevel, setOneQrAccessLevel] = useState<"full" | "guest">("guest");
-  const [galleryAppEnabled, setGalleryAppEnabled] = useState(true);
-  const [livenessDetectionEnabled, setLivenessDetectionEnabled] = useState(false);
   const [published, setPublished] = useState(false);
   const [hasStoredFullAccessPin, setHasStoredFullAccessPin] = useState(false);
   const [hasStoredGuestPin, setHasStoredGuestPin] = useState(false);
@@ -190,7 +186,6 @@ function CreateEventsPageContent() {
       setEventType(normalizedEventType);
       setEventLocation(settings?.eventLocation ?? "");
       setDescription(settings?.description ?? "");
-      setBrandingEnabled(settings?.brandingEnabled ?? false);
       setFavoritesEnabled(galleryMeta?.favoritesEnabled ?? true);
       setFavoritesLimitSelected(galleryMeta?.favoritesLimitSelected ?? false);
       setFavoritesMaxSelected(Math.max(1, galleryMeta?.favoritesMaxSelected ?? 1));
@@ -206,8 +201,6 @@ function CreateEventsPageContent() {
       setOneQrEnabled(settings?.oneQrEnabled ?? true);
       setOneQrRequirePin(settings?.oneQrRequirePin ?? false);
       setOneQrAccessLevel(settings?.oneQrAccessLevel ?? "guest");
-      setGalleryAppEnabled(settings?.galleryAppEnabled ?? true);
-      setLivenessDetectionEnabled(settings?.livenessDetectionEnabled ?? false);
       setPublished(settings?.published ?? false);
       setAdvancedOpen(true);
     };
@@ -283,9 +276,7 @@ function CreateEventsPageContent() {
         eventLocation: eventLocation.trim() || null,
         description: description.trim() || null,
         published,
-        photoSellingEnabled: false,
         reelitAiEnabled: false,
-        brandingEnabled,
         expiryDate: expiryDate || null,
         ...pinPayload,
         allowSingleDownload,
@@ -295,8 +286,7 @@ function CreateEventsPageContent() {
         oneQrEnabled,
         oneQrRequirePin,
         oneQrAccessLevel,
-        galleryAppEnabled,
-        livenessDetectionEnabled,
+        galleryAppEnabled: true,
       };
       const metaPayload: GalleryMetaConfig = {
         expiresAt: expiresAtIso,
@@ -483,29 +473,6 @@ function CreateEventsPageContent() {
         </section>
 
         <section className="rounded-3xl border border-[#eadccf] bg-white p-6 shadow-[0_10px_30px_rgba(73,39,20,0.06)]">
-          <div className="relative overflow-hidden rounded-2xl border border-[#ead7c5] bg-[linear-gradient(140deg,#f7fcfa_0%,#f6eadb_55%,#fff4e8_100%)] p-5">
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[#ead7c5]" />
-            <SectionHeader
-              icon={<BadgeCheck className="h-5 w-5" />}
-              title="Brand Experience Kit"
-              subtitle="Give this event a distinctive Pixora look and feel."
-              trailing={<Toggle checked={brandingEnabled} onChange={setBrandingEnabled} />}
-            />
-            <div className="mt-4 flex flex-wrap gap-2">
-              <span className="rounded-full border border-[#ead7c5] bg-white/80 px-3 py-1 text-xs font-semibold text-[#5b3a23]">
-                Personalized cover
-              </span>
-              <span className="rounded-full border border-[#ead7c5] bg-white/80 px-3 py-1 text-xs font-semibold text-[#5b3a23]">
-                Brand color accents
-              </span>
-              <span className="rounded-full border border-[#ead7c5] bg-white/80 px-3 py-1 text-xs font-semibold text-[#5b3a23]">
-                Consistent delivery style
-              </span>
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-3xl border border-[#eadccf] bg-white p-6 shadow-[0_10px_30px_rgba(73,39,20,0.06)]">
           <SectionHeader
             icon={<BadgeCheck className="h-5 w-5" />}
             title="Favorites Settings"
@@ -548,7 +515,7 @@ function CreateEventsPageContent() {
             >
               <div>
                 <p className="inline-flex items-center rounded-full border border-[#ead7c5] bg-[#fff7ee] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#6d4426]">
-                  Event Intelligence
+                  Event Controls
                 </p>
                 <p className="mt-3 text-xl font-semibold text-[#163129]">Advanced Control Board</p>
                 <p className="mt-1 text-sm text-[#7a6a55]">
@@ -716,32 +683,6 @@ function CreateEventsPageContent() {
                         </button>
                       </div>
                     </div>
-                  </div>
-                </article>
-
-                <article className="rounded-2xl border border-[#ead7c5] bg-white p-5 shadow-[0_8px_22px_rgba(73,39,20,0.06)] xl:col-span-2">
-                  <div className="mb-4 flex items-center gap-3">
-                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#f4e5d3] text-[#7a3f13]">
-                      <Smartphone className="h-5 w-5" />
-                    </span>
-                    <div>
-                      <p className="text-base font-semibold text-[#2a170d]">Experience Lab</p>
-                      <p className="text-xs text-[#8a735f]">Control app-like delivery and identity safeguards.</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <ControlToggleRow
-                      title="Enable Gallery App"
-                      description="Allow guests to install this event as a mobile app."
-                      value={galleryAppEnabled}
-                      onChange={setGalleryAppEnabled}
-                    />
-                    <ControlToggleRow
-                      title="Enable Liveness Detection"
-                      description="Validate guest identity before selfie capture."
-                      value={livenessDetectionEnabled}
-                      onChange={setLivenessDetectionEnabled}
-                    />
                   </div>
                 </article>
               </div>

@@ -6,7 +6,7 @@ import { getClientGalleryBasePathForDisplay } from "@/lib/client-gallery-url";
 import { showPixoraAlert, showPixoraToast } from "@/lib/pixora-alerts";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 
-type Tab = "main" | "products" | "reviews" | "contacts" | "privacy";
+type Tab = "main" | "reviews" | "contacts" | "privacy";
 type StorageDuration = "14 days" | "1 month" | "3 months" | "6 months" | "1 year";
 
 const STORAGE_OPTIONS: StorageDuration[] = [
@@ -15,13 +15,6 @@ const STORAGE_OPTIONS: StorageDuration[] = [
     "3 months",
     "6 months",
     "1 year",
-];
-
-const PRODUCT_CATALOG = [
-    { id: "frame-12x18", name: "12 x 18 Photo Frame", price: "INR 850" },
-    { id: "frame-16x24", name: "16 x 24 Photo Frame", price: "INR 1,300" },
-    { id: "album-premium", name: "Premium Photo Album", price: "INR 2,400" },
-    { id: "canvas-20x30", name: "20 x 30 Canvas Print", price: "INR 3,200" },
 ];
 
 function normalizeStorageDuration(value?: string | null): StorageDuration {
@@ -78,7 +71,8 @@ export default function AddGalleryModal({
     initialGallery?: MinimalGallery | null;
 }) {
     const runtimeOrigin = typeof window === "undefined" ? undefined : window.location.origin;
-    const displayGalleryBaseUrl = getClientGalleryBasePathForDisplay(runtimeOrigin);
+    const [customGalleryBaseUrl, setCustomGalleryBaseUrl] = useState("");
+    const displayGalleryBaseUrl = customGalleryBaseUrl || getClientGalleryBasePathForDisplay(runtimeOrigin);
     const isEditMode = Boolean(initialGallery);
     const [tab, setTab] = useState<Tab>("main");
     const [isSaving, setIsSaving] = useState(false);
@@ -88,18 +82,10 @@ export default function AddGalleryModal({
     const [shootDate, setShootDate] = useState(initialGallery?.createdAt?.slice(0, 10) ?? "");
     const [allowOriginals, setAllowOriginals] = useState(true);
     const [addWatermark, setAddWatermark] = useState(false);
-    const [galleryType, setGalleryType] = useState<"client" | "sales">("client");
-    const [pricePerPhoto, setPricePerPhoto] = useState("");
-    const [discountRows, setDiscountRows] = useState<Array<{ quantity: string; discount: string }>>([]);
     const [specifyLifetime, setSpecifyLifetime] = useState(initialGallery?.storageTimeLabel !== "Indefinite");
     const [storageTime, setStorageTime] = useState<StorageDuration>(
         normalizeStorageDuration(initialGallery?.storageTimeLabel)
     );
-
-    // PRODUCTS
-    const [showProducts, setShowProducts] = useState(false);
-    const [productsDropdownOpen, setProductsDropdownOpen] = useState(false);
-    const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
 
     // REVIEWS
     const [allowReviews, setAllowReviews] = useState(false);
@@ -117,20 +103,35 @@ export default function AddGalleryModal({
     const [guestAccess, setGuestAccess] = useState(false);
 
     useEffect(() => {
+        let active = true;
+        const loadCustomDomain = async () => {
+            try {
+                const response = await fetchWithRetry("/api/custom-domains", { cache: "no-store" }, { dedupeKey: "drive:custom-domains" });
+                if (!response.ok) return;
+                const data = (await response.json()) as { domains?: Array<{ domain?: string; verified?: boolean }> };
+                const verified = data.domains?.find((domain) => domain.verified && domain.domain);
+                if (active && verified?.domain) {
+                    setCustomGalleryBaseUrl(`https://${verified.domain}/`);
+                }
+            } catch {
+                // Keep the default Pixora gallery URL.
+            }
+        };
+        void loadCustomDomain();
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    useEffect(() => {
         if (!open) return;
         setTab("main");
         setName(initialGallery?.name ?? "");
         setShootDate(initialGallery?.createdAt?.slice(0, 10) ?? "");
         setAllowOriginals(true);
         setAddWatermark(false);
-        setGalleryType("client");
-        setPricePerPhoto("");
-        setDiscountRows([]);
         setSpecifyLifetime(initialGallery?.storageTimeLabel !== "Indefinite");
         setStorageTime(normalizeStorageDuration(initialGallery?.storageTimeLabel));
-        setShowProducts(false);
-        setProductsDropdownOpen(false);
-        setSelectedProducts([]);
         setAllowReviews(false);
         setReviewMessage("");
         setAskAfterDownload(false);
@@ -254,7 +255,7 @@ export default function AddGalleryModal({
 
                 {/* TABS */}
                 <div className="flex gap-3 px-6 pt-4 border-b text-sm">
-                    {["main", "products", "reviews", "contacts", "privacy"].map(t => (
+                    {["main", "reviews", "contacts", "privacy"].map(t => (
                         <button
                             type="button"
                             key={t}
@@ -352,103 +353,22 @@ export default function AddGalleryModal({
                                 </div>
                             </Section>
 
-                            {/* GALLERY TYPE */}
+                            {/* DELIVERY OPTIONS */}
                             <Section>
-                                <div>
-                                    <p className="text-sm font-medium mb-2">Event type</p>
+                                <ToggleRow
+                                    title="Allow original file downloads"
+                                    value={allowOriginals}
+                                    onChange={setAllowOriginals}
+                                />
 
-                                    <div className="grid grid-cols-2 gap-2 rounded-md bg-gray-100 p-1">
-                                        <OptionButton active={galleryType === "client"} onClick={() => setGalleryType("client")}>
-                                            Client delivery
-                                        </OptionButton>
-                                        <OptionButton active={galleryType === "sales"} onClick={() => setGalleryType("sales")}>
-                                            Photo sales
-                                        </OptionButton>
-                                    </div>
+                                <div className={allowOriginals ? "opacity-50" : ""}>
+                                    <ToggleRow
+                                        title="Add watermark"
+                                        description="Applied to photos. Available only when downloads are disabled."
+                                        value={addWatermark}
+                                        onChange={allowOriginals ? undefined : setAddWatermark}
+                                    />
                                 </div>
-
-                                {galleryType === "client" ? (
-                                    <>
-                                        <ToggleRow
-                                            title="Allow original file downloads"
-                                            value={allowOriginals}
-                                            onChange={setAllowOriginals}
-                                        />
-
-                                        <div className={allowOriginals ? "opacity-50" : ""}>
-                                            <ToggleRow
-                                                title="Add watermark"
-                                                description="Applied to photos. Available only when downloads are disabled."
-                                                value={addWatermark}
-                                                onChange={allowOriginals ? undefined : setAddWatermark}
-                                            />
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="space-y-3">
-                                        <Field label="Price per photo">
-                                            <div className="relative">
-                                                <input
-                                                    className="w-full border rounded px-3 py-2 pr-8"
-                                                    placeholder="Specify price per photo"
-                                                    value={pricePerPhoto}
-                                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                                                        setPricePerPhoto(e.target.value)
-                                                    }
-                                                />
-                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">?</span>
-                                            </div>
-                                        </Field>
-
-                                        {discountRows.map((row, idx) => (
-                                            <div key={idx} className="grid grid-cols-[1fr_1fr_36px] gap-2">
-                                                <input
-                                                    className="w-full border rounded px-3 py-2"
-                                                    placeholder="e.g. 5"
-                                                    value={row.quantity}
-                                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                                                        setDiscountRows((prev) =>
-                                                            prev.map((r, i) => (i === idx ? { ...r, quantity: e.target.value } : r))
-                                                        )
-                                                    }
-                                                />
-                                                <input
-                                                    className="w-full border rounded px-3 py-2"
-                                                    placeholder="e.g. 15"
-                                                    value={row.discount}
-                                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                                                        setDiscountRows((prev) =>
-                                                            prev.map((r, i) => (i === idx ? { ...r, discount: e.target.value } : r))
-                                                        )
-                                                    }
-                                                />
-                                                <button
-                                                    type="button"
-                                                    className="border rounded text-red-500"
-                                                    onClick={() =>
-                                                        setDiscountRows((prev) => prev.filter((_, i) => i !== idx))
-                                                    }
-                                                >
-                                                    x
-                                                </button>
-                                            </div>
-                                        ))}
-
-                                        <button
-                                            type="button"
-                                            className="w-full rounded border px-3 py-2 text-left text-sm hover:bg-gray-50"
-                                            onClick={() =>
-                                                setDiscountRows((prev) => [...prev, { quantity: "", discount: "" }])
-                                            }
-                                        >
-                                            + Add discount
-                                        </button>
-
-                                        <div className="rounded border-l-4 border-amber-400 bg-amber-50 px-3 py-2 text-xs text-gray-700">
-                                            To accept online payments, connect payment services.
-                                        </div>
-                                    </div>
-                                )}
                             </Section>
 
                             {/* LANGUAGE */}
@@ -466,81 +386,6 @@ export default function AddGalleryModal({
                             </Section>
 
                         </div>
-                    )}
-
-                    {/* PRODUCTS */}
-                    {tab === "products" && (
-                        <Section>
-                            <Toggle label="Show products in event" value={showProducts} onChange={setShowProducts} />
-                            {showProducts && (
-                                <div className="space-y-3">
-                                    <div>
-                                        <p className="text-sm font-medium">Products</p>
-                                        <p className="text-xs text-gray-500">Up to 4 products can be shown in the event.</p>
-                                    </div>
-
-                                    <div className="relative">
-                                        <button
-                                            type="button"
-                                            className="flex w-full items-center justify-between rounded border px-4 py-2.5 text-left"
-                                            onClick={() => setProductsDropdownOpen((v) => !v)}
-                                        >
-                                            <span className="text-base">+ Add product</span>
-                                            <span className="text-lg text-gray-600">?</span>
-                                        </button>
-
-                                        {productsDropdownOpen ? (
-                                            <div className="absolute z-20 mt-1 max-h-44 w-full overflow-y-auto rounded border bg-white shadow-sm">
-                                                {PRODUCT_CATALOG.map((product) => {
-                                                    const selected = selectedProducts.includes(product.id);
-                                                    return (
-                                                        <button
-                                                            key={product.id}
-                                                            type="button"
-                                                            className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-gray-50 ${
-                                                                selected ? "bg-blue-50" : ""
-                                                            }`}
-                                                            onClick={() => {
-                                                                setSelectedProducts((prev) => {
-                                                                    if (prev.includes(product.id)) {
-                                                                        return prev.filter((id) => id !== product.id);
-                                                                    }
-                                                                    if (prev.length >= 4) return prev;
-                                                                    return [...prev, product.id];
-                                                                });
-                                                            }}
-                                                        >
-                                                            <span className="inline-flex items-center gap-3">
-                                                                <span className="inline-flex h-6 w-6 items-center justify-center rounded bg-gray-100 text-xs">
-                                                                    IMG
-                                                                </span>
-                                                                <span>{product.name}</span>
-                                                            </span>
-                                                            <span className="text-gray-700">{product.price}</span>
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        ) : null}
-                                    </div>
-
-                                    {selectedProducts.length > 0 ? (
-                                        <div className="space-y-1 rounded border bg-gray-50 p-2">
-                                            {selectedProducts.map((id) => {
-                                                const product = PRODUCT_CATALOG.find((p) => p.id === id);
-                                                if (!product) return null;
-                                                return (
-                                                    <div key={id} className="flex items-center justify-between rounded bg-white px-3 py-2 text-sm">
-                                                        <span>{product.name}</span>
-                                                        <span className="text-gray-700">{product.price}</span>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    ) : null}
-                                </div>
-                            )}
-                        </Section>
                     )}
 
                     {/* REVIEWS */}

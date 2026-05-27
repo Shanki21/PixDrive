@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { AppError } from "@/lib/errors";
 import { isPrismaUnavailableError, getPrismaUnavailableMessage } from "@/lib/prisma-errors";
+import { captureException } from "@/lib/monitoring";
 
 export function withApiHandler<T extends unknown[]>(handler: (...args: T) => Promise<NextResponse> | NextResponse) {
   return async function (...args: T) {
@@ -10,6 +11,7 @@ export function withApiHandler<T extends unknown[]>(handler: (...args: T) => Pro
       return result;
     } catch (error: unknown) {
       logger.error("[api] unhandled error", error);
+      captureException(error, { layer: "api" });
       if (isPrismaUnavailableError(error)) {
         return NextResponse.json({ ok: false, message: getPrismaUnavailableMessage() }, { status: 503 });
       }

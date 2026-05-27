@@ -9,6 +9,7 @@ import { rejectCrossOriginWrite } from "@/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 import { withApiHandler } from "@/lib/withApiHandler";
 import { withRateLimit } from "@/lib/rate-limit";
+import { captureProductEvent } from "@/lib/product-analytics";
 
 export const POST = withApiHandler(
   withRateLimit(async (req: NextRequest) => {
@@ -89,6 +90,7 @@ export const POST = withApiHandler(
       }
 
       const delivery = await sendOtpEmail({ to: email, otp: code });
+      void captureProductEvent("signup_started", email, { intent, delivered: delivery.ok });
       if (delivery.ok) {
         if (process.env.NODE_ENV !== "production") {
           console.warn(`[DEV OTP SENT:${delivery.provider}] ${email}: ${code}`);

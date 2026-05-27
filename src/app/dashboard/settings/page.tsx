@@ -1,33 +1,35 @@
 "use client";
 
-import Link from "next/link";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import fetchWithRetry from "@/lib/fetchWithRetry";
 import {
   BadgeDollarSign,
-  Bell,
-  Brush,
   CheckCircle2,
   ClipboardList,
+  Copy,
+  ExternalLink,
   Crown,
   Globe2,
   IdCard,
   Image as ImageIcon,
   Loader2,
-  Network,
-  Palette,
-  Plug,
-  QrCode,
   ReceiptText,
+  RefreshCw,
   Save,
-  ShieldCheck,
   Sparkles,
   UserRound,
   Zap,
+  Trash2,
 } from "lucide-react";
 import { showPixoraAlert, showPixoraToast } from "@/lib/pixora-alerts";
+import {
+  ENTERPRISE_PLAN,
+  PAID_BILLING_PLAN_CARDS,
+  PHOTO_OVERAGE_COPY,
+  type PaidBillingPlan,
+} from "@/lib/billing-plans";
 
-type SettingsTab = "profile" | "branding" | "domains" | "one-qr" | "integrations" | "plan" | "invoices";
+type SettingsTab = "profile" | "domains" | "plan" | "invoices";
 
 type ProfileResponse = {
   name?: string | null;
@@ -59,6 +61,54 @@ type GalleriesPayload = {
   galleries?: GallerySummary[];
 };
 
+type CustomDomainRecord = {
+  id: string;
+  domain: string;
+  status: string;
+  verified: boolean;
+  verifiedAt: string | null;
+  lastCheckedAt: string | null;
+  records: {
+    txt: { type: string; name: string; value: string };
+    cname: { type: string; name: string; value: string };
+  };
+};
+
+type BillingPlanKey = "free" | "starter" | "studio" | "elite" | "scale";
+
+type BillingState = {
+  plan: BillingPlanKey;
+  planLabel: string;
+  status: string;
+  provider: "manual" | "razorpay" | "stripe";
+  interval: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  usage: {
+    galleries: number;
+    photos: number;
+  };
+  limits: {
+    galleryLimit: number;
+    photoLimit: number;
+    storageLimitGb: number;
+    customDomains: boolean;
+    customDomainLimit: number;
+    prioritySupport: boolean;
+  };
+  stripeCustomerId: string | null;
+  razorpayCustomerId: string | null;
+  razorpaySubscriptionId: string | null;
+};
+
+type BillingConfig = {
+  razorpay?: {
+    keyConfigured: boolean;
+    webhookConfigured: boolean;
+    plans: Record<Exclude<BillingPlanKey, "free">, Record<"monthly" | "yearly", boolean>>;
+  };
+};
+
 type SettingsItem = {
   key: SettingsTab;
   label: string;
@@ -68,19 +118,46 @@ type SettingsItem = {
 
 const tabs: SettingsItem[] = [
   { key: "profile", label: "Profile", description: "Studio identity", icon: UserRound },
-  { key: "branding", label: "Branding", description: "Logo and theme", icon: Palette },
   { key: "domains", label: "Domains", description: "Public links", icon: Globe2 },
-  { key: "one-qr", label: "My One QR", description: "QR destination", icon: QrCode },
-  { key: "integrations", label: "Integrations", description: "Connected tools", icon: Plug },
   { key: "plan", label: "My Plan", description: "Subscription", icon: BadgeDollarSign },
   { key: "invoices", label: "Invoices", description: "Billing history", icon: ReceiptText },
 ];
 
 const IMAGE_LIMIT = 1000;
 
+const PLAN_OPTIONS = PAID_BILLING_PLAN_CARDS;
 const INDUSTRY_OPTIONS = ["Photographer", "Videographer", "Photo Studio", "Event Agency", "Creative Agency", "Other"];
 const INDUSTRY_AREA_OPTIONS = ["Freelancer", "Wedding", "Events", "Portraits", "Corporate", "School", "Fashion"];
 const EVENTS_PER_YEAR_OPTIONS = ["Less Than 10", "10 - 25", "26 - 50", "51 - 100", "100+"];
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
+  }
+}
+
+function loadRazorpayCheckout() {
+  return new Promise<void>((resolve, reject) => {
+    if (window.Razorpay) {
+      resolve();
+      return;
+    }
+
+    const existing = document.querySelector<HTMLScriptElement>('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error("Unable to load Razorpay checkout.")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Unable to load Razorpay checkout."));
+    document.head.appendChild(script);
+  });
+}
 
 type ProfileDraft = {
   name: string;
@@ -310,17 +387,31 @@ export default function SettingsPage() {
   const [draft, setDraft] = useState<ProfileDraft>(() => toDraft(null));
   const [accountEmail, setAccountEmail] = useState("");
   const [galleries, setGalleries] = useState<GallerySummary[]>([]);
+  const [customDomains, setCustomDomains] = useState<CustomDomainRecord[]>([]);
+  const [domainInput, setDomainInput] = useState("");
+  const [domainBusy, setDomainBusy] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [billing, setBilling] = useState<BillingState | null>(null);
+  const [billingConfig, setBillingConfig] = useState<BillingConfig | null>(null);
+  const [billingBusy, setBillingBusy] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
 
+    const params = new URLSearchParams(window.location.search);
+    const requestedTab = params.get("tab");
+    if (requestedTab === "profile" || requestedTab === "domains" || requestedTab === "plan" || requestedTab === "invoices") {
+      setActiveTab(requestedTab);
+    }
+
     const load = async () => {
       try {
-        const [profileRes, meRes, galleriesRes] = await Promise.all([
+        const [profileRes, meRes, galleriesRes, domainsRes, billingRes] = await Promise.all([
           fetchWithRetry("/api/auth/profile", { cache: "no-store" }, { dedupeKey: "settings:profile" }),
           fetchWithRetry("/api/auth/me", { cache: "no-store" }, { dedupeKey: "settings:me" }),
           fetchWithRetry("/api/galleries", { cache: "no-store" }, { dedupeKey: "settings:galleries" }),
+          fetchWithRetry("/api/custom-domains", { cache: "no-store" }, { dedupeKey: "settings:custom-domains" }),
+          fetchWithRetry("/api/billing/status", { cache: "no-store" }, { dedupeKey: "settings:billing" }),
         ]);
 
         if (!active) return;
@@ -340,6 +431,17 @@ export default function SettingsPage() {
         if (galleriesRes.ok) {
           const payload = (await galleriesRes.json()) as GalleriesPayload;
           setGalleries(getGalleryItems(payload));
+        }
+
+        if (domainsRes.ok) {
+          const payload = (await domainsRes.json()) as { domains?: CustomDomainRecord[] };
+          setCustomDomains(Array.isArray(payload.domains) ? payload.domains : []);
+        }
+
+        if (billingRes.ok) {
+          const payload = (await billingRes.json()) as { billing?: BillingState; billingConfig?: BillingConfig };
+          setBilling(payload.billing ?? null);
+          setBillingConfig(payload.billingConfig ?? null);
         }
       } catch {
         // Empty states below keep the page usable if any summary request fails.
@@ -397,16 +499,253 @@ export default function SettingsPage() {
     }
   }, [accountEmail, draft, savingProfile]);
 
+  const createCustomDomain = useCallback(async () => {
+    if (domainBusy) return;
+    setDomainBusy(true);
+    try {
+      const response = await fetchWithRetry("/api/custom-domains", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain: domainInput }),
+      }, { dedupeKey: `settings:custom-domain:create:${domainInput}` });
+      const data = (await response.json().catch(() => ({}))) as { ok?: boolean; domain?: CustomDomainRecord; message?: string };
+      if (!response.ok || !data.ok || !data.domain) {
+        throw new Error(data.message || "Unable to add custom domain.");
+      }
+      setCustomDomains((current) => [data.domain!, ...current.filter((entry) => entry.id !== data.domain!.id)]);
+      setDomainInput("");
+      void showPixoraToast({ title: "DNS records generated" });
+    } catch (error) {
+      void showPixoraAlert({
+        title: "Domain needs attention",
+        text: error instanceof Error ? error.message : "Unable to add custom domain.",
+        icon: "error",
+      });
+    } finally {
+      setDomainBusy(false);
+    }
+  }, [domainBusy, domainInput]);
+
+  const verifyCustomDomain = useCallback(async (id: string) => {
+    if (domainBusy) return;
+    setDomainBusy(true);
+    try {
+      const response = await fetchWithRetry("/api/custom-domains/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      }, { dedupeKey: `settings:custom-domain:verify:${id}:${Date.now()}` });
+      const data = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        domain?: Partial<CustomDomainRecord> & { id: string };
+        message?: string;
+      };
+      if (data.domain) {
+        setCustomDomains((current) =>
+          current.map((entry) =>
+            entry.id === data.domain?.id
+              ? {
+                  ...entry,
+                  status: data.domain.status ?? entry.status,
+                  verified: Boolean(data.ok),
+                  verifiedAt: data.domain.verifiedAt ?? entry.verifiedAt,
+                  lastCheckedAt: data.domain.lastCheckedAt ?? entry.lastCheckedAt,
+                }
+              : entry
+          )
+        );
+      }
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || "DNS records are not ready yet.");
+      }
+      void showPixoraToast({ title: "Custom domain verified" });
+    } catch (error) {
+      void showPixoraAlert({
+        title: "Domain not verified yet",
+        text: error instanceof Error ? error.message : "Check TXT and CNAME records, then try again.",
+        icon: "info",
+      });
+    } finally {
+      setDomainBusy(false);
+    }
+  }, [domainBusy]);
+
+  const deleteCustomDomain = useCallback(async (id: string) => {
+    if (domainBusy) return;
+    setDomainBusy(true);
+    try {
+      const response = await fetchWithRetry("/api/custom-domains", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      }, { dedupeKey: `settings:custom-domain:delete:${id}` });
+      if (!response.ok) throw new Error("Unable to remove custom domain.");
+      setCustomDomains((current) => current.filter((entry) => entry.id !== id));
+      void showPixoraToast({ title: "Custom domain removed" });
+    } catch (error) {
+      void showPixoraAlert({
+        title: "Domain needs attention",
+        text: error instanceof Error ? error.message : "Unable to remove custom domain.",
+        icon: "error",
+      });
+    } finally {
+      setDomainBusy(false);
+    }
+  }, [domainBusy]);
+
+  const refreshBilling = useCallback(async () => {
+    const response = await fetchWithRetry("/api/billing/status", { cache: "no-store" }, { dedupeKey: `settings:billing:${Date.now()}` });
+    if (!response.ok) return;
+    const payload = (await response.json().catch(() => ({}))) as { billing?: BillingState; billingConfig?: BillingConfig };
+    setBilling(payload.billing ?? null);
+    setBillingConfig(payload.billingConfig ?? null);
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get("billing");
+    if (result === "success") {
+      void showPixoraToast({ title: "Checkout completed" });
+      void refreshBilling();
+    }
+    if (result === "cancelled") {
+      void showPixoraToast({ title: "Checkout cancelled" });
+    }
+  }, [refreshBilling]);
+
+  const startCheckout = useCallback(async (plan: PaidBillingPlan, interval: "monthly" | "yearly") => {
+    if (billingBusy) return;
+    setBillingBusy(`${plan}:${interval}`);
+    try {
+      const response = await fetchWithRetry("/api/billing/razorpay/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan, interval }),
+      }, { dedupeKey: `settings:billing:razorpay:checkout:${plan}:${interval}` });
+      const data = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        keyId?: string;
+        subscriptionId?: string;
+        email?: string;
+        message?: string;
+      };
+      if (!response.ok || !data.ok || !data.keyId || !data.subscriptionId) {
+        throw new Error(data.message || "Unable to start Razorpay checkout.");
+      }
+      await loadRazorpayCheckout();
+      const RazorpayCheckout = window.Razorpay;
+      if (!RazorpayCheckout) throw new Error("Razorpay checkout is not available.");
+      const checkout = new RazorpayCheckout({
+        key: data.keyId,
+        name: "Pixora",
+        description: `${plan} ${interval} subscription`,
+        subscription_id: data.subscriptionId,
+        prefill: {
+          email: data.email || accountEmail,
+        },
+        notes: {
+          plan,
+          interval,
+        },
+        handler: async (payment: Record<string, unknown>) => {
+          try {
+            const verifyResponse = await fetchWithRetry("/api/billing/razorpay/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...payment, plan, interval }),
+            }, { dedupeKey: `settings:billing:razorpay:verify:${data.subscriptionId}` });
+            const verifyData = (await verifyResponse.json().catch(() => ({}))) as { ok?: boolean; message?: string };
+            if (!verifyResponse.ok || !verifyData.ok) {
+              throw new Error(verifyData.message || "Unable to verify Razorpay payment.");
+            }
+            void showPixoraToast({ title: "Razorpay checkout completed" });
+            void refreshBilling();
+          } catch (error) {
+            void showPixoraAlert({
+              title: "Payment verification needs attention",
+              text: error instanceof Error ? error.message : "Unable to verify Razorpay payment.",
+              icon: "error",
+            });
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            void showPixoraToast({ title: "Checkout cancelled" });
+          },
+        },
+        theme: {
+          color: "#2d333b",
+        },
+      });
+      checkout.open();
+    } catch (error) {
+      void showPixoraAlert({
+        title: "Checkout needs attention",
+        text: error instanceof Error ? error.message : "Unable to start Razorpay checkout.",
+        icon: "error",
+      });
+    } finally {
+      setBillingBusy(null);
+    }
+  }, [accountEmail, billingBusy, refreshBilling]);
+
+  const openBillingPortal = useCallback(async () => {
+    if (billingBusy) return;
+    setBillingBusy("portal");
+    try {
+      const response = await fetchWithRetry("/api/billing/portal", {
+        method: "POST",
+      }, { dedupeKey: "settings:billing:portal" });
+      const data = (await response.json().catch(() => ({}))) as { ok?: boolean; url?: string; message?: string };
+      if (!response.ok || !data.ok || !data.url) {
+        throw new Error(data.message || "Unable to open Stripe billing portal.");
+      }
+      window.location.assign(data.url);
+    } catch (error) {
+      void showPixoraAlert({
+        title: "Billing portal needs attention",
+        text: error instanceof Error ? error.message : "Upgrade once before opening the Stripe billing portal.",
+        icon: "info",
+      });
+    } finally {
+      setBillingBusy(null);
+    }
+  }, [billingBusy]);
+
+  const copyValue = useCallback((value: string) => {
+    void navigator.clipboard?.writeText(value);
+    void showPixoraToast({ title: "Copied" });
+  }, []);
+
   const tabContent = useMemo(() => {
     if (activeTab === "plan") {
+      const planLabel = billing?.planLabel ?? "Free";
+      const planStatus = billing?.status ?? "inactive";
+      const planImageLimit = billing?.limits.photoLimit ?? IMAGE_LIMIT;
+      const planGalleryLimit = billing?.limits.galleryLimit ?? 1;
+      const planStorageLimit = billing?.limits.storageLimitGb ?? 2;
+      const planImageCount = billing?.usage.photos ?? imageCount;
+      const planGalleryCount = billing?.usage.galleries ?? galleries.length;
+      const galleriesLeft = Math.max(0, planGalleryLimit - planGalleryCount);
+      const renewalDate = billing?.currentPeriodEnd
+        ? new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(new Date(billing.currentPeriodEnd))
+        : "Not scheduled";
+      const razorpayReady = Boolean(billingConfig?.razorpay?.keyConfigured);
+
       return (
         <div className="space-y-6">
-          <SectionCard
-            title="My Active Plan"
-            description="A launch-ready plan summary for usage, billing, and upgrade decisions."
+            <SectionCard
+              title="My Active Plan"
+            description="Live subscription, usage, and India-first billing controls."
             action={
-              <button className="h-11 rounded-full bg-[#e9e9e9] px-5 text-sm font-semibold text-[#35413d] transition hover:bg-[#dedede]">
-                View invoices
+              <button
+                type="button"
+                onClick={() => void openBillingPortal()}
+                disabled={billingBusy === "portal" || !billing?.stripeCustomerId}
+                className="inline-flex h-11 items-center gap-2 rounded-full bg-[#e9e9e9] px-5 text-sm font-semibold text-[#35413d] transition hover:bg-[#dedede] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {billingBusy === "portal" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+                Stripe portal
               </button>
             }
           >
@@ -417,26 +756,30 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <div className="inline-flex items-center gap-2 rounded-full bg-[#e9f8ef] px-2.5 py-1 text-xs font-bold uppercase tracking-[0.24em] text-[#0b8b32]">
-                    Active
+                    {planStatus}
                   </div>
-                  <p className="mt-2 text-2xl font-semibold text-[#2a170d]">Rider</p>
-                  <p className="text-sm text-[#7a6a55]">Starter production plan</p>
+                  <p className="mt-2 text-2xl font-semibold text-[#2a170d]">{planLabel}</p>
+                  <p className="text-sm text-[#7a6a55]">
+                    {billing?.cancelAtPeriodEnd ? "Cancels on" : "Renews on"} {renewalDate}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#7a6a55]">
+                    Provider: {billing?.provider === "razorpay" ? "Razorpay" : billing?.provider === "stripe" ? "Stripe" : "Manual"}
+                  </p>
                 </div>
               </div>
               <div className="flex flex-col justify-center">
-                <UsageBar used={imageCount} limit={IMAGE_LIMIT} />
+                <UsageBar used={planImageCount} limit={planImageLimit} />
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <FieldView label="Events" value={`${galleries.length} total`} icon={IdCard} />
+                  <FieldView label="Events" value={`${planGalleryCount} of ${planGalleryLimit}`} icon={IdCard} />
                   <FieldView label="Published" value={`${publishedCount} live`} icon={CheckCircle2} />
-                  <FieldView label="Storage" value={`${Math.max(0, IMAGE_LIMIT - imageCount)} images left`} icon={ImageIcon} />
+                  <FieldView label="Storage" value={`${planStorageLimit} GB included`} icon={ImageIcon} />
                 </div>
               </div>
             </div>
             <div className="mt-6 flex flex-col gap-3 border-t border-[#f0e4d7] pt-5 sm:flex-row sm:items-center sm:justify-between">
-              <button className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#2c333a] px-6 text-sm font-semibold text-white transition hover:bg-[#17211d]">
-                <Crown className="h-4 w-4" />
-                Upgrade Plan
-              </button>
+              <p className="text-sm text-[#556660]">
+                {galleriesLeft} events left. Custom domains: {billing?.limits.customDomainLimit ?? 0} included.
+              </p>
               <div className="flex items-center gap-3 text-sm text-[#556660]">
                 <span>Custom needs?</span>
                 <button className="h-11 rounded-full bg-[#e9e9e9] px-5 font-semibold text-[#35413d] transition hover:bg-[#dedede]">
@@ -446,21 +789,91 @@ export default function SettingsPage() {
             </div>
           </SectionCard>
 
+          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+            {PLAN_OPTIONS.map((plan) => {
+              const monthlyBusy = billingBusy === `${plan.key}:monthly`;
+              const yearlyBusy = billingBusy === `${plan.key}:yearly`;
+              const current = billing?.plan === plan.key;
+              const yearlyConfigured = Boolean(billingConfig?.razorpay?.plans?.[plan.key]?.yearly);
+              const monthlyConfigured = Boolean(billingConfig?.razorpay?.plans?.[plan.key]?.monthly);
+              return (
+                <section
+                  key={plan.key}
+                  className={`rounded-3xl border bg-white p-5 shadow-[0_14px_34px_rgba(73,39,20,0.06)] ${
+                    plan.highlight ? "border-[#7a3f13] ring-2 ring-[#7a3f13]/15" : "border-[#eadccf]"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-lg font-semibold text-[#2a170d]">{plan.name}</p>
+                      <p className="mt-1 text-sm text-[#7a6a55]">{plan.description}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      {plan.highlight ? <span className="rounded-full bg-[#fff3e7] px-3 py-1 text-xs font-semibold text-[#7a3f13]">{plan.highlight}</span> : null}
+                      {current ? <span className="rounded-full bg-[#e4f7ed] px-3 py-1 text-xs font-semibold text-[#147844]">Current</span> : null}
+                    </div>
+                  </div>
+                  <p className="mt-5 text-2xl font-semibold text-[#2a170d]">{plan.monthlyInr}</p>
+                  <p className="mt-1 text-sm font-medium text-[#7a6a55]">
+                    Global: {plan.monthlyUsd} or {plan.yearlyUsd}
+                  </p>
+                  <p className="mt-3 rounded-2xl border border-[#f0e4d7] bg-[#fffaf4] px-3 py-2 text-sm font-semibold text-[#7a3f13]">
+                    Yearly: {plan.yearlyInr} - 2 months free
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void startCheckout(plan.key, "yearly")}
+                    disabled={yearlyBusy || current || !razorpayReady || !yearlyConfigured}
+                    className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#2d333b] px-5 text-sm font-semibold text-white transition hover:bg-[#17211d] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {yearlyBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crown className="h-4 w-4" />}
+                    {current ? "Active plan" : yearlyConfigured && razorpayReady ? "Razorpay yearly" : "Setup needed"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void startCheckout(plan.key, "monthly")}
+                    disabled={monthlyBusy || current || !razorpayReady || !monthlyConfigured}
+                    className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-full border border-[#d8c5b2] bg-white px-5 text-sm font-semibold text-[#2a170d] transition hover:bg-[#fffaf4] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {monthlyBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    {monthlyConfigured && razorpayReady ? "Razorpay monthly" : "Setup needed"}
+                  </button>
+                </section>
+              );
+            })}
+          </div>
+
+          <section className="rounded-3xl border border-[#eadccf] bg-white p-5 shadow-[0_14px_34px_rgba(73,39,20,0.06)]">
+            <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-center">
+              <div>
+                <p className="text-lg font-semibold text-[#2a170d]">{ENTERPRISE_PLAN.name} / Enterprise</p>
+                <p className="mt-1 text-sm text-[#7a6a55]">{ENTERPRISE_PLAN.description}</p>
+                <p className="mt-2 text-sm font-semibold text-[#7a3f13]">{PHOTO_OVERAGE_COPY}</p>
+              </div>
+              <p className="text-2xl font-semibold text-[#2a170d]">{ENTERPRISE_PLAN.price}</p>
+            </div>
+          </section>
+
           <section className="overflow-hidden rounded-3xl border border-[#272341] bg-[linear-gradient(120deg,#07052a_0%,#292741_52%,#8b8b8b_100%)] p-6 text-white shadow-[0_18px_40px_rgba(20,18,50,0.24)]">
             <div className="grid gap-6 md:grid-cols-[1fr_auto_1fr] md:items-center">
               <div className="flex items-center gap-4">
                 <Sparkles className="h-8 w-8 text-[#ffc33d]" />
                 <div>
-                  <p className="text-3xl font-semibold text-[#ffc33d]">Introducing Creator Pass</p>
-                  <p className="mt-2 text-sm text-white/75">Advanced AI sorting and client delivery controls.</p>
+                  <p className="text-3xl font-semibold text-[#ffc33d]">Subscription gating is live</p>
+                  <p className="mt-2 text-sm text-white/75">Razorpay controls India paid beta access; Stripe stays ready for global billing.</p>
                 </div>
               </div>
               <div className="hidden h-24 w-px bg-white/50 md:block" />
               <div className="flex flex-col gap-4 md:items-center">
-                <p className="text-lg font-semibold text-white/85">10,000 free AI face-recognized photo shares</p>
-                <button className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#ffc33d] px-6 text-sm font-semibold text-[#2a170d] transition hover:bg-[#ffd46d]">
+                <p className="text-lg font-semibold text-white/85">Use Razorpay for INR subscriptions. Stripe portal appears for global-card subscriptions.</p>
+                <button
+                  type="button"
+                  onClick={() => void openBillingPortal()}
+                  disabled={billingBusy === "portal" || !billing?.stripeCustomerId}
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#ffc33d] px-6 text-sm font-semibold text-[#2a170d] transition hover:bg-[#ffd46d] disabled:cursor-not-allowed disabled:opacity-60"
+                >
                   <Zap className="h-4 w-4" />
-                  Get Pass
+                  Manage billing
                 </button>
               </div>
             </div>
@@ -537,99 +950,170 @@ export default function SettingsPage() {
       );
     }
 
-    if (activeTab === "branding") {
-      return (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <SectionCard title="Brand System" description="Keep gallery delivery aligned with your studio tone.">
-            <div className="grid gap-4">
-              <FieldView label="Primary Theme" value="Warm editorial" icon={Palette} />
-              <FieldView label="Client Gallery" value="Pixora minimal gallery" icon={ImageIcon} />
-              <FieldView label="Watermark" value="Ready for upload pipeline" icon={Brush} />
-            </div>
-          </SectionCard>
-          <SectionCard title="Brand Preview" description="Current visual direction for public pages.">
-            <div className="rounded-3xl border border-[#eadccf] bg-[linear-gradient(145deg,#fff7ee,#edf7f3)] p-5">
-              <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#7a3f13]">Pixora Studio</p>
-              <h3 className="mt-4 text-3xl font-semibold text-[#2a170d]">{displayName}</h3>
-              <p className="mt-2 text-sm text-[#647c73]">Clean client proofing, favorites, delivery, and reviews.</p>
-            </div>
-          </SectionCard>
-        </div>
-      );
-    }
-
     if (activeTab === "domains") {
+      const primaryDomain = customDomains[0] ?? null;
       return (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="space-y-6">
           <SectionCard title="Pixora Domain" description="Your fast launch URL.">
             <FieldView label="Hosted URL" value={`pixdrive.site/studio/${studioSlug}`} icon={Globe2} />
             <p className="mt-4 text-sm text-[#6b7f78]">Use this while your custom domain and DNS are prepared.</p>
           </SectionCard>
-          <SectionCard title="Custom Domain" description="Connect your own branded gallery domain.">
-            <div className="rounded-2xl border border-dashed border-[#d7c6b5] bg-[#fffaf4] p-4">
-              <p className="text-sm font-semibold text-[#2a170d]">No custom domain connected</p>
-              <p className="mt-1 text-sm text-[#7a6a55]">Add DNS automation before enabling production domain onboarding.</p>
-            </div>
-          </SectionCard>
-        </div>
-      );
-    }
 
-    if (activeTab === "one-qr") {
-      return (
-        <SectionCard title="My One QR" description="Route clients from one QR code to the right event.">
-          <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
-            <div className="flex aspect-square items-center justify-center rounded-3xl border border-[#eadccf] bg-[#fffaf4]">
-              <QrCode className="h-24 w-24 text-[#2a170d]" />
+          <SectionCard title="Custom Domain" description="Let clients open your studio selector and galleries on your own domain.">
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <SettingsInput
+                label="Domain"
+                value={domainInput}
+                onChange={setDomainInput}
+                placeholder="gallery.yourstudio.com"
+              />
+              <button
+                type="button"
+                onClick={() => void createCustomDomain()}
+                disabled={domainBusy || !domainInput.trim()}
+                className="mt-6 inline-flex h-12 items-center justify-center rounded-full bg-[#2d333b] px-6 text-sm font-semibold text-white transition hover:bg-[#17211d] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Connect Domain
+              </button>
             </div>
-            <div className="space-y-4">
-              <FieldView label="Events attached" value={`${galleries.length} events`} icon={IdCard} />
-              <FieldView label="Mode" value="Dynamic gallery routing" icon={Network} />
-              <Link href="/dashboard/qr-code" className="inline-flex h-11 items-center rounded-xl bg-[#2a170d] px-5 text-sm font-semibold text-white">
-                Manage One QR
-              </Link>
-            </div>
-          </div>
-        </SectionCard>
-      );
-    }
 
-    if (activeTab === "integrations") {
-      return (
-        <div className="grid gap-6 lg:grid-cols-3">
-          {[
-            { name: "Resend", detail: "OTP and client email delivery", icon: Bell, status: "Configured by env" },
-            { name: "Cloudinary", detail: "Gallery media storage", icon: ImageIcon, status: "Configured by env" },
-            { name: "Supabase", detail: "Production PostgreSQL", icon: ShieldCheck, status: "Connected by Prisma" },
-          ].map((integration) => {
-            const Icon = integration.icon;
-            return (
-              <SectionCard key={integration.name} title={integration.name} description={integration.detail}>
-                <div className="flex items-center gap-3">
-                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#f4eadf] text-[#7a3f13]">
-                    <Icon className="h-5 w-5" />
-                  </span>
-                  <span className="rounded-full bg-[#edf7f3] px-3 py-1 text-xs font-semibold text-[#2b6659]">
-                    {integration.status}
-                  </span>
+            {primaryDomain ? (
+              <div className="mt-6 rounded-lg border border-[#eadccf] bg-[#fffaf4] p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-lg font-semibold text-[#2a170d]">{primaryDomain.domain}</p>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] ${
+                          primaryDomain.verified
+                            ? "bg-[#e4f7ed] text-[#147844]"
+                            : "bg-[#fff0d8] text-[#94610c]"
+                        }`}
+                      >
+                        {primaryDomain.verified ? "Verified" : primaryDomain.status}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-[#7a6a55]">
+                      {primaryDomain.verified
+                        ? `Client galleries can now open at https://${primaryDomain.domain}`
+                        : "Add the DNS records below, wait for propagation, then verify."}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void verifyCustomDomain(primaryDomain.id)}
+                      disabled={domainBusy}
+                      className="inline-flex h-10 items-center gap-2 rounded-full border border-[#d8c5b2] bg-white px-4 text-sm font-semibold text-[#2a170d] disabled:opacity-60"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${domainBusy ? "animate-spin" : ""}`} />
+                      Verify
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void deleteCustomDomain(primaryDomain.id)}
+                      disabled={domainBusy}
+                      className="inline-flex h-10 items-center justify-center rounded-full border border-[#f2c9c9] bg-white px-3 text-[#b42318] disabled:opacity-60"
+                      aria-label="Remove custom domain"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
-              </SectionCard>
-            );
-          })}
+
+                <div className="mt-5 grid gap-3">
+                  {[primaryDomain.records.txt, primaryDomain.records.cname].map((record) => (
+                    <div key={`${record.type}:${record.name}`} className="rounded-lg border border-[#eadccf] bg-white p-4">
+                      <div className="grid gap-3 lg:grid-cols-[90px_minmax(0,1fr)_minmax(0,1.4fr)] lg:items-center">
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7a3f13]">{record.type}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-[#7a6a55]">Name</p>
+                          <button
+                            type="button"
+                            onClick={() => copyValue(record.name)}
+                            className="mt-1 inline-flex max-w-full items-center gap-2 text-left text-sm font-semibold text-[#2a170d]"
+                          >
+                            <span className="truncate">{record.name}</span>
+                            <Copy className="h-3.5 w-3.5 shrink-0" />
+                          </button>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-[#7a6a55]">Value</p>
+                          <button
+                            type="button"
+                            onClick={() => copyValue(record.value)}
+                            className="mt-1 inline-flex max-w-full items-center gap-2 text-left text-sm font-semibold text-[#2a170d]"
+                          >
+                            <span className="truncate">{record.value || "Set CUSTOM_DOMAIN_CNAME_TARGET in production"}</span>
+                            <Copy className="h-3.5 w-3.5 shrink-0" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-6 rounded-lg border border-dashed border-[#d7c6b5] bg-[#fffaf4] p-5">
+                <p className="text-sm font-semibold text-[#2a170d]">No custom domain connected</p>
+                <p className="mt-1 text-sm text-[#7a6a55]">
+                  Use a subdomain like gallery.yourstudio.com. Root/apex domains need DNS flattening from your provider.
+                </p>
+              </div>
+            )}
+          </SectionCard>
         </div>
       );
     }
 
     return (
-      <SectionCard title="Invoices" description="Billing records will appear here after payment gateway launch.">
+      <SectionCard
+        title="Invoices"
+        description="Razorpay handles India receipts. Stripe portal is available only for global-card subscriptions."
+        action={
+          <button
+            type="button"
+            onClick={() => void openBillingPortal()}
+            disabled={billingBusy === "portal" || !billing?.stripeCustomerId}
+            className="inline-flex h-11 items-center gap-2 rounded-full bg-[#2d333b] px-5 text-sm font-semibold text-white transition hover:bg-[#17211d] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {billingBusy === "portal" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+            Open Stripe portal
+          </button>
+        }
+      >
         <div className="rounded-2xl border border-dashed border-[#d7c6b5] bg-[#fffaf4] p-6 text-center">
           <ClipboardList className="mx-auto h-8 w-8 text-[#7a3f13]" />
-          <p className="mt-3 text-sm font-semibold text-[#2a170d]">No invoices yet</p>
-          <p className="mt-1 text-sm text-[#7a6a55]">Stripe or Razorpay invoices can be connected in the billing phase.</p>
+          <p className="mt-3 text-sm font-semibold text-[#2a170d]">Billing receipts</p>
+          <p className="mt-1 text-sm text-[#7a6a55]">Razorpay sends India subscription receipts after successful payments. Stripe invoices appear here for global-card customers.</p>
         </div>
       </SectionCard>
     );
-  }, [accountEmail, activeTab, displayName, draft, galleries.length, imageCount, publishedCount, saveProfileDetails, savingProfile, studioSlug]);
+  }, [
+    accountEmail,
+    activeTab,
+    billing,
+    billingConfig,
+    billingBusy,
+    copyValue,
+    createCustomDomain,
+    customDomains,
+    deleteCustomDomain,
+    domainBusy,
+    domainInput,
+    draft,
+    galleries.length,
+    imageCount,
+    openBillingPortal,
+    publishedCount,
+    saveProfileDetails,
+    savingProfile,
+    studioSlug,
+    startCheckout,
+    verifyCustomDomain,
+  ]);
 
   return (
     <div className="mx-auto w-full max-w-7xl">
@@ -637,20 +1121,25 @@ export default function SettingsPage() {
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#7a3f13]">Settings</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-[#2a170d]">{activeLabel}</h1>
-          <p className="mt-1 text-sm text-[#7a6a55]">Manage your Pixora account, plan, branding, domains, and billing.</p>
+          <p className="mt-1 text-sm text-[#7a6a55]">Manage your Pixora account, plan, domains, and billing.</p>
         </div>
         <div className="min-w-60 rounded-2xl border border-[#eadccf] bg-[#fffaf4] p-4">
           <div className="flex items-center gap-3">
             <ImageIcon className="h-5 w-5 text-[#2a170d]" />
             <div className="flex-1">
-              <p className="text-sm font-semibold text-[#2a170d]">{imageCount} images</p>
-              <p className="text-xs text-[#7a6a55]">of {IMAGE_LIMIT} images used</p>
+              <p className="text-sm font-semibold text-[#2a170d]">{billing?.usage.photos ?? imageCount} images</p>
+              <p className="text-xs text-[#7a6a55]">of {billing?.limits.photoLimit ?? IMAGE_LIMIT} images used</p>
             </div>
           </div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#eadccf]">
             <div
               className="h-full rounded-full bg-[#2a3338]"
-              style={{ width: `${Math.min(100, Math.round((imageCount / IMAGE_LIMIT) * 100))}%` }}
+              style={{
+                width: `${Math.min(
+                  100,
+                  Math.round(((billing?.usage.photos ?? imageCount) / (billing?.limits.photoLimit ?? IMAGE_LIMIT)) * 100)
+                )}%`,
+              }}
             />
           </div>
         </div>

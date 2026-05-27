@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+
 const PLACEHOLDERS = new Set([
   "",
   "replace-me",
@@ -8,6 +11,33 @@ const PLACEHOLDERS = new Set([
   "undefined",
   "null",
 ]);
+
+function stripQuotes(value) {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function loadEnvFile(fileName) {
+  const filePath = path.join(process.cwd(), fileName);
+  if (!fs.existsSync(filePath)) return;
+  const raw = fs.readFileSync(filePath, "utf8");
+  for (const line of raw.split(/\r?\n/)) {
+    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+    if (!match) continue;
+    const [, name, value] = match;
+    if (!name || name.startsWith("#")) continue;
+    process.env[name] = stripQuotes(value ?? "");
+  }
+}
+
+loadEnvFile(".env");
+loadEnvFile(".env.local");
 
 function readEnv(name) {
   return (process.env[name] ?? "").trim();
@@ -66,6 +96,66 @@ function validateRateLimitProvider(warnings) {
   }
 }
 
+function validateStripeBilling(errors) {
+  const stripeKey = readEnv("STRIPE_SECRET_KEY");
+  const hasStripe = isConfigured(stripeKey);
+  if (!hasStripe) {
+    return;
+  }
+
+  const required = [
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "STRIPE_PRICE_STARTER_MONTHLY",
+    "STRIPE_PRICE_STARTER_YEARLY",
+    "STRIPE_PRICE_STUDIO_MONTHLY",
+    "STRIPE_PRICE_STUDIO_YEARLY",
+    "STRIPE_PRICE_ELITE_MONTHLY",
+    "STRIPE_PRICE_ELITE_YEARLY",
+    "STRIPE_PRICE_SCALE_MONTHLY",
+    "STRIPE_PRICE_SCALE_YEARLY",
+  ];
+
+  for (const name of required) {
+    validateRequired(name, errors);
+  }
+}
+
+function validateRazorpayBilling(errors) {
+  const enabled = readEnv("PAYMENTS_ENABLED") === "1" || readEnv("RAZORPAY_ENABLED") === "1";
+  if (!enabled) return;
+
+  const required = [
+    "RAZORPAY_KEY_ID",
+    "RAZORPAY_KEY_SECRET",
+    "RAZORPAY_WEBHOOK_SECRET",
+    "RAZORPAY_PLAN_STARTER_MONTHLY",
+    "RAZORPAY_PLAN_STARTER_YEARLY",
+    "RAZORPAY_PLAN_STUDIO_MONTHLY",
+    "RAZORPAY_PLAN_STUDIO_YEARLY",
+    "RAZORPAY_PLAN_ELITE_MONTHLY",
+    "RAZORPAY_PLAN_ELITE_YEARLY",
+    "RAZORPAY_PLAN_SCALE_MONTHLY",
+    "RAZORPAY_PLAN_SCALE_YEARLY",
+  ];
+
+  for (const name of required) {
+    validateRequired(name, errors);
+  }
+}
+
+function validateObservability(errors, warnings) {
+  const required = readEnv("MONITORING_REQUIRED") === "1" || readEnv("SENTRY_REQUIRED") === "1";
+  if (required) {
+    validateRequired("SENTRY_DSN", errors);
+  } else if (!isConfigured(readEnv("SENTRY_DSN"))) {
+    warnings.push("Sentry is not configured. Set SENTRY_DSN before public launch if you want error monitoring.");
+  }
+  if (!isConfigured(readEnv("NEXT_PUBLIC_POSTHOG_KEY"))) {
+    warnings.push("PostHog is not configured. Set NEXT_PUBLIC_POSTHOG_KEY for paid-beta product analytics.");
+  }
+}
+
 function main() {
   const strict =
     process.env.CHECK_ENV_STRICT === "1" ||
@@ -90,9 +180,13 @@ function main() {
     );
   }
   validateRequired("NEXT_PUBLIC_CLIENT_GALLERY_BASE_URL", errors);
+  validateRequired("NEXTAUTH_URL", errors);
   validateOneOf(["NEXTAUTH_SECRET", "AUTH_SECRET"], errors);
   validateEmailProvider(errors);
   validateRateLimitProvider(warnings);
+  validateObservability(errors, warnings);
+  validateRazorpayBilling(errors);
+  validateStripeBilling(errors);
 
   if (errors.length === 0) {
     console.log("[env:check] Environment validation passed.");

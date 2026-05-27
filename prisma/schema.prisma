@@ -12,6 +12,8 @@ model User {
   email String @unique
   galleries Gallery[]
   profile UserProfile?
+  customDomains CustomDomain[]
+  subscription Subscription?
 }
 
 model Gallery {
@@ -119,6 +121,50 @@ model UserProfile {
   socialAccounts Json?
 
   updatedAt DateTime @updatedAt
+}
+
+model CustomDomain {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  domain String @unique
+  verificationToken String
+  status String @default("pending")
+  verifiedAt DateTime?
+  lastCheckedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Subscription {
+  id String @id @default(cuid())
+  userId String @unique
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider String @default("manual")
+  stripeCustomerId String? @unique
+  stripeSubscriptionId String? @unique
+  stripePriceId String?
+  razorpayCustomerId String? @unique
+  razorpaySubscriptionId String? @unique
+  razorpayPlanId String?
+  razorpayPaymentId String?
+  plan String @default("free")
+  status String @default("inactive")
+  interval String?
+  currentPeriodEnd DateTime?
+  cancelAtPeriodEnd Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([provider])
+  @@index([plan])
+  @@index([status])
 }
 
 model GalleryVisit {

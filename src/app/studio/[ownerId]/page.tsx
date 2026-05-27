@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import { CalendarDays, Images, Sparkles } from "lucide-react";
+import { normalizeRequestHost, resolveVerifiedCustomDomain } from "@/lib/custom-domains";
 import { getGalleryPublicAccess } from "@/lib/gallery-public-access";
 import { normalizeEventSettings, normalizeGalleryMeta } from "@/lib/gallery-config";
 import prisma from "@/lib/prisma";
@@ -23,6 +25,12 @@ function formatEventDate(value: Date | string | null | undefined) {
 
 export default async function StudioEventSelectorPage({ params }: StudioPageProps) {
   const { ownerId } = await params;
+  const requestHeaders = await headers();
+  const customDomain = await resolveVerifiedCustomDomain(
+    normalizeRequestHost(requestHeaders.get("x-forwarded-host") || requestHeaders.get("host"))
+  );
+  if (customDomain && customDomain.userId !== ownerId) notFound();
+
   const user = await prisma.user.findUnique({
     where: { id: ownerId },
     select: {
@@ -77,11 +85,11 @@ export default async function StudioEventSelectorPage({ params }: StudioPageProp
         <div className="rounded-3xl border border-[#eadccf] bg-[#fffaf4] p-6 shadow-[0_18px_60px_rgba(73,39,20,0.08)] sm:p-8">
           <div className="inline-flex items-center gap-2 rounded-full border border-[#ead7c5] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#7a3f13]">
             <Sparkles className="h-3.5 w-3.5" />
-            Pixora AI Photo Delivery
+            Pixora Photo Delivery
           </div>
           <h1 className="font-display mt-4 text-4xl font-bold tracking-tight text-[#2a170d] sm:text-5xl">Select your event</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[#7a6a55]">
-            Choose the event you attended, add your details, capture a selfie, and continue to your gallery.
+            Choose the event you attended, add your details, and continue to your gallery.
           </p>
         </div>
 
@@ -110,7 +118,11 @@ export default async function StudioEventSelectorPage({ params }: StudioPageProp
                     <p className="mt-4 max-w-sm text-xs uppercase tracking-[0.16em] text-[#8a735f]">{event.description}</p>
                   ) : null}
                   <Link
-                    href={`/studio/${encodeURIComponent(user.id)}/${encodeURIComponent(event.slug || event.id)}/get-photos`}
+                    href={
+                      customDomain
+                        ? `/${encodeURIComponent(event.slug || event.id)}/get-photos`
+                        : `/studio/${encodeURIComponent(user.id)}/${encodeURIComponent(event.slug || event.id)}/get-photos`
+                    }
                     className="mt-8 inline-flex rounded-xl bg-[#7a3f13] px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-white shadow-[0_12px_22px_rgba(122,63,19,0.18)] transition hover:bg-[#5b2b0c]"
                   >
                     Show Gallery

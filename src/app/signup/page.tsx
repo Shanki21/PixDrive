@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import fetchWithRetry from "@/lib/fetchWithRetry";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -22,7 +22,7 @@ const tutorialItems = [
   },
   {
     title: "Shop",
-    body: "Add products to projects and accept direct requests from clients without extra tools.",
+    body: "Share polished galleries and collect client selections without extra tools.",
   },
 ];
 
@@ -35,6 +35,22 @@ const selectClass = "pix-input appearance-none";
 const industryOptions = ["Photographer", "Videographer", "Photo Studio", "Event Agency", "Creative Agency", "Other"];
 const industryAreaOptions = ["Freelancer", "Wedding", "Events", "Portraits", "Corporate", "School", "Fashion"];
 const eventsPerYearOptions = ["Less Than 10", "10 - 25", "26 - 50", "51 - 100", "100+"];
+
+type AuthJson = {
+  ok?: boolean;
+  code?: string;
+  message?: string;
+};
+
+async function parseJsonSafe(res: Response): Promise<AuthJson | null> {
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) return null;
+  try {
+    return (await res.json()) as AuthJson;
+  } catch {
+    return null;
+  }
+}
 
 export default function SignupPage() {
   const router = useRouter();
@@ -59,6 +75,8 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [tutorialStep, setTutorialStep] = useState(0);
   const [resendIn, setResendIn] = useState(0);
+  const otpRequestIdRef = useRef(0);
+  const verifyRequestIdRef = useRef(0);
 
   const showAuthError = (message: string) => {
     setError(message);
@@ -78,18 +96,21 @@ export default function SignupPage() {
   }, [resendIn, step]);
 
   const requestOtp = async () => {
-    const dedupe = `request-otp:${email.trim().toLowerCase()}`;
+    const normalizedEmail = email.trim().toLowerCase();
+    const dedupe = `request-otp:${normalizedEmail}`;
     const res = await fetchWithRetry("/api/auth/request-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, intent: "signup" }),
+      body: JSON.stringify({ email: normalizedEmail, intent: "signup" }),
     }, { dedupeKey: dedupe, idempotencyKey: `${dedupe}:${Date.now()}` });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      showAuthError(data.message ?? "Please enter a valid email address");
+    const data = await parseJsonSafe(res);
+    if (!res.ok || !data?.ok) {
+      showAuthError(data?.message ?? "Please enter a valid email address");
       return false;
     }
 
+    setEmail(normalizedEmail);
+    setOtp("");
     setResendIn(30);
     void showPixoraToast({ title: "OTP sent to your email" });
     return true;
@@ -114,53 +135,105 @@ export default function SignupPage() {
 
   const onRequestOtp = async (e: FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+    const requestId = otpRequestIdRef.current + 1;
+    otpRequestIdRef.current = requestId;
     setLoading(true);
     setError("");
     try {
       const sent = await requestOtp();
+      if (requestId !== otpRequestIdRef.current) return;
       if (!sent) return;
       setStep("otp");
     } catch {
+      if (requestId !== otpRequestIdRef.current) return;
       showAuthError("Network error. Please try again.");
     } finally {
-      setLoading(false);
+      if (requestId === otpRequestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
   const onResendOtp = async () => {
     if (resendIn > 0 || loading) return;
+    const requestId = otpRequestIdRef.current + 1;
+    otpRequestIdRef.current = requestId;
     setLoading(true);
     setError("");
     try {
       await requestOtp();
     } catch {
+      if (requestId !== otpRequestIdRef.current) return;
       showAuthError("Network error. Please try again.");
     } finally {
-      setLoading(false);
+      if (requestId === otpRequestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
   const onVerifyOtp = async (e: FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+    const requestId = verifyRequestIdRef.current + 1;
+    verifyRequestIdRef.current = requestId;
     setLoading(true);
     setError("");
     try {
-      const dedupe = `verify-otp:${email.trim().toLowerCase()}:${otp}`;
+      const normalizedEmail = email.trim().toLowerCase();
+      const dedupe = `verify-otp:${normalizedEmail}:${otp}`;
       const res = await fetchWithRetry("/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code: otp, intent: "signup" }),
+        body: JSON.stringify({ email: normalizedEmail, code: otp, intent: "signup" }),
       }, { dedupeKey: dedupe, idempotencyKey: dedupe });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        showAuthError(data.message ?? "Invalid or expired OTP");
+      const data = await parseJsonSafe(res);
+      if (requestId !== verifyRequestIdRef.current) return;
+      if (!res.ok || !data?.ok) {
+        showAuthError(data?.message ?? "Invalid or expired OTP");
         return;
       }
+      setEmail(normalizedEmail);
       setStep("language");
     } catch {
+      if (requestId !== verifyRequestIdRef.current) return;
       showAuthError("Network error. Please try again.");
     } finally {
-      setLoading(false);
+      if (requestId === verifyRequestIdRef.current) {
+        setLoading(false);
+      }
+    }
+  };
+
+  const saveOnboardingProfile = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    const profile = {
+      name: name.trim(),
+      phone: phone.trim(),
+      occupation: occupation.trim(),
+      email: normalizedEmail,
+      country: country.trim(),
+      state: stateName.trim(),
+      city: city.trim(),
+      companyName: companyName.trim(),
+      industry: industry.trim(),
+      industryArea: industryArea.trim(),
+      averageEventsPerYear: averageEventsPerYear.trim(),
+      billingCompanyName: billingCompanyName.trim(),
+      taxNumber: taxNumber.trim(),
+    };
+    const current = loadProfile();
+    saveProfile({ ...current, ...profile });
+
+    try {
+      await fetchWithRetry("/api/auth/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(profile),
+      }, { dedupeKey: `signup:profile:${normalizedEmail}` });
+    } catch {
+      // Local profile is already saved; settings page can retry later.
     }
   };
 
@@ -237,7 +310,7 @@ export default function SignupPage() {
           <p className="text-base leading-relaxed text-[#666666]">
             Access code sent to <strong className="text-[#111111]">{email}</strong>.
           </p>
-          <OtpCodeInput value={otp} onChange={setOtp} />
+          <OtpCodeInput value={otp} onChange={setOtp} disabled={loading} />
           <div className="flex items-center justify-between gap-3 text-sm">
             <span className="text-[#666666]">
               {resendIn > 0 ? `Resend available in ${resendIn}s` : "Did not receive the code?"}
@@ -415,28 +488,16 @@ export default function SignupPage() {
             whileHover={{ scale: 1.01, y: -2 }}
             whileTap={{ scale: 0.99 }}
             className="pix-btn pix-btn-primary w-full"
-            onClick={() => {
-              const current = loadProfile();
-              saveProfile({
-                ...current,
-                name: name.trim(),
-                phone: phone.trim(),
-                occupation: occupation.trim(),
-                email: email.trim().toLowerCase(),
-                country: country.trim(),
-                state: stateName.trim(),
-                city: city.trim(),
-                companyName: companyName.trim(),
-                industry: industry.trim(),
-                industryArea: industryArea.trim(),
-                averageEventsPerYear: averageEventsPerYear.trim(),
-                billingCompanyName: billingCompanyName.trim(),
-                taxNumber: taxNumber.trim(),
-              });
+            disabled={loading}
+            onClick={async () => {
+              if (loading) return;
+              setLoading(true);
+              await saveOnboardingProfile();
+              setLoading(false);
               setStep("tutorial");
             }}
           >
-            Start
+            {loading ? "Saving..." : "Start"}
           </motion.button>
           <button className="text-sm font-medium text-[#666666] underline" onClick={() => void logout()}>
             Log out from this account

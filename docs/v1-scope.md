@@ -21,7 +21,7 @@ Date: 2026-04-09
 - Domains
 - Integrations
 - Billing, plans, invoices
-- Photo selling
+- Photo selling removed from product scope
 - Unfinished design controls
 
 ## Scope Rules

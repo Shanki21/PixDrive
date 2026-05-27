@@ -20,7 +20,6 @@ export type MinimalGallery = {
   visitors?: number;
   downloads?: number;
   published?: boolean;
-  photoSellingEnabled?: boolean;
   allowSingleDownload?: boolean;
   allowBulkDownload?: boolean;
   oneQrEnabled?: boolean;

@@ -5,9 +5,7 @@ export type EventSettings = {
   eventLocation?: string | null;
   description?: string | null;
   published?: boolean;
-  photoSellingEnabled?: boolean;
   reelitAiEnabled?: boolean;
-  brandingEnabled?: boolean;
   expiryDate?: string | null;
   fullAccessPin?: string | null;
   guestPin?: string | null;
@@ -19,7 +17,6 @@ export type EventSettings = {
   oneQrRequirePin?: boolean;
   oneQrAccessLevel?: "full" | "guest";
   galleryAppEnabled?: boolean;
-  livenessDetectionEnabled?: boolean;
 };
 
 const EVENT_SETTINGS_KEY = "wf_event_settings_v1";
@@ -57,9 +54,7 @@ export function saveEventSettings(galleryId: string, settings: EventSettings) {
     eventLocation: settings.eventLocation ?? prev.eventLocation ?? null,
     description: settings.description ?? prev.description ?? null,
     published: settings.published ?? prev.published ?? true,
-    photoSellingEnabled: settings.photoSellingEnabled ?? prev.photoSellingEnabled ?? false,
     reelitAiEnabled: settings.reelitAiEnabled ?? prev.reelitAiEnabled ?? false,
-    brandingEnabled: settings.brandingEnabled ?? prev.brandingEnabled ?? false,
     expiryDate: settings.expiryDate ?? prev.expiryDate ?? null,
     fullAccessPin: settings.fullAccessPin ?? prev.fullAccessPin ?? null,
     guestPin: settings.guestPin ?? prev.guestPin ?? null,
@@ -71,7 +66,6 @@ export function saveEventSettings(galleryId: string, settings: EventSettings) {
     oneQrRequirePin: settings.oneQrRequirePin ?? prev.oneQrRequirePin ?? false,
     oneQrAccessLevel: settings.oneQrAccessLevel ?? prev.oneQrAccessLevel ?? "guest",
     galleryAppEnabled: settings.galleryAppEnabled ?? prev.galleryAppEnabled ?? true,
-    livenessDetectionEnabled: settings.livenessDetectionEnabled ?? prev.livenessDetectionEnabled ?? false,
   };
   writeAll(all);
 
@@ -89,4 +83,3 @@ export function saveEventSettings(galleryId: string, settings: EventSettings) {
     }
   })();
 }
-

@@ -28,7 +28,7 @@ export const CORE_FEATURES = [
 export const WORKFLOW_STEPS = [
   {
     label: "Create",
-    detail: "Create an event space with title, date, client visibility rules, and custom branding accents.",
+    detail: "Create an event space with title, date, client visibility rules, and polished gallery settings.",
     metric: "30 sec setup",
     Icon: Camera,
   },
