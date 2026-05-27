@@ -1,7 +1,7 @@
 import type { NextRequest, NextResponse } from "next/server";
 import { NextResponse as NR } from "next/server";
-import { getClientIp } from "../lib/session";
-import { checkIpThrottle } from "../lib/throttle";
+import { checkIpThrottle } from "@/lib/ip-throttle";
+import { getClientIp } from "@/lib/request-ip";
 
 
 declare global {

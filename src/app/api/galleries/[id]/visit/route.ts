@@ -2,6 +2,7 @@ import { getGalleryPublicAccess } from "@/lib/gallery-public-access";
 import { getRequiredGalleryPin, hasGalleryAccessFromRequest } from "@/lib/gallery-pin-access";
 import { normalizeClientKey, normalizeOptionalSingleLine } from "@/lib/input-security";
 import { checkIpThrottle } from "@/lib/ip-throttle";
+import { cacheGet, cacheSet } from "@/lib/cache";
 import prisma from "@/lib/prisma";
 import { getClientIp } from "@/lib/request-ip";
 import { rejectCrossOriginWrite } from "@/lib/request-security";
@@ -11,6 +12,7 @@ export const runtime = "nodejs";
 
 type RouteContext = { params: Promise<{ id: string }> };
 const VISIT_DEDUP_WINDOW_MS = 30 * 60 * 1000;
+const VISIT_DEDUP_WINDOW_SECONDS = Math.ceil(VISIT_DEDUP_WINDOW_MS / 1000);
 const MAX_CLIENT_LOCATION_LENGTH = 120;
 const MAX_USER_AGENT_LENGTH = 512;
 
@@ -73,6 +75,12 @@ export const POST = withApiHandler(
         );
       }
 
+      const dedupeKey = `gallery:visit:dedupe:${galleryId}:${clientKey}`;
+      const cachedVisit = await cacheGet(dedupeKey);
+      if (cachedVisit) {
+        return NextResponse.json({ ok: true, deduped: true });
+      }
+
       const recentVisit = await prisma.galleryVisit.findFirst({
         where: {
           galleryId,
@@ -85,10 +93,11 @@ export const POST = withApiHandler(
       });
 
       if (recentVisit) {
+        await cacheSet(dedupeKey, recentVisit.id, VISIT_DEDUP_WINDOW_SECONDS);
         return NextResponse.json({ ok: true, deduped: true });
       }
 
-      await prisma.galleryVisit.create({
+      const visit = await prisma.galleryVisit.create({
         data: {
           galleryId,
           clientKey,
@@ -97,6 +106,7 @@ export const POST = withApiHandler(
           userAgent,
         },
       });
+      await cacheSet(dedupeKey, visit.id, VISIT_DEDUP_WINDOW_SECONDS);
 
       void captureProductEvent("public_gallery_viewed", galleryId, { galleryId, clientKey });
 

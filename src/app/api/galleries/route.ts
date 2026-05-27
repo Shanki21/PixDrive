@@ -100,6 +100,11 @@ function serializeGalleryRow(
   };
 }
 
+function wantsMetrics(req: NextRequest) {
+  const value = new URL(req.url).searchParams.get("metrics");
+  return value === "1" || value === "true";
+}
+
 export async function GET(req: NextRequest) {
   try {
     const email = await getSessionEmail(req);
@@ -118,6 +123,7 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const trash = searchParams.get("trash") === "1";
+    const includeMetrics = wantsMetrics(req);
     const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
 
     if (trash) {
@@ -150,7 +156,7 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const galleryIds = galleries.map((gallery) => gallery.id);
+    const galleryIds = includeMetrics ? galleries.map((gallery) => gallery.id) : [];
     const [visitRows, downloadRows] =
       galleryIds.length === 0
         ? [[], []]
@@ -173,7 +179,11 @@ export async function GET(req: NextRequest) {
       serializeGalleryRow(gallery, visitsMap, downloadsMap)
     );
 
-    return NextResponse.json(enriched);
+    return NextResponse.json(enriched, {
+      headers: {
+        "Cache-Control": "private, max-age=15, stale-while-revalidate=120",
+      },
+    });
   } catch (error) {
     console.error("Failed to fetch galleries:", error);
     return NextResponse.json(

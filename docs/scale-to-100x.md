@@ -1,46 +1,40 @@
-# Scaling Pixora to 100x Traffic — Operational Notes
+# Scaling Pixora to 100x Traffic
 
-This document lists pragmatic, prioritized steps to make Pixora handle an order-of-magnitude more traffic.
+This document lists pragmatic, prioritized steps to keep Pixora smooth as traffic grows from beta studios to serious production volume.
 
-1) Horizontal scaling + stateless app
-- Run multiple app instances behind a CDN/load-balancer.
-- Ensure sessions are stateless (signed cookies) and session DB writes are optional/fallback-only.
+## Completed In Code
+- Dashboard gallery lists can load without expensive visit/download aggregation by using `/api/galleries?metrics=0`.
+- Dashboard metrics refresh later with `/api/galleries?metrics=1`, so navigation is not blocked by analytics.
+- Client gallery list cache now lasts 5 minutes and separates fast list data from metrics data.
+- Public gallery photo pagination returns CDN-friendly cache headers for unlocked galleries.
+- Public gallery visit dedupe uses the cache layer before touching Postgres.
+- Favorite/download counter refresh now uses grouped queries instead of two count queries per photo.
+- Dashboard visual weight was reduced by removing heavy blur/shadow/hover work from high-repeat surfaces.
 
-2) Connections and DB pooling
-- Put a connection pooler (PgBouncer) between Prisma and Postgres to avoid connection exhaustion.
-- Use read replicas for heavy read traffic and route reads there where possible.
-- Ensure Prisma client is shared/cached in serverless envs (already implemented in `src/lib/prisma.ts`).
+## Required For Million-User Scale
+- Run Pixora as stateless app instances behind Vercel/CDN with WAF and endpoint rate limits enabled.
+- Use Supabase Postgres Pro or higher with PITR, connection pooling, and database alerts.
+- Configure Upstash Redis in production for throttling, dedupe, cache, and background queues.
+- Keep uploads direct-to-Cloudinary and serve transformed images from Cloudinary CDN.
+- Move non-critical writes like analytics, email, and webhook enrichment into background jobs.
+- Add Sentry or equivalent error monitoring and PostHog/product analytics before paid beta growth.
+- Run load tests before major onboarding waves, especially public gallery view, photo pagination, OTP, upload, and dashboard list paths.
 
-3) Cache tier
-- Use Redis (Upstash or managed Redis) for rate-limits, sessions (if using server-side), caching expensive queries, and queues.
-- Cache frequently-read gallery metadata and photo lists with short TTLs.
+## Database Priorities
+- Keep gallery/photo listing queries paginated.
+- Avoid full-table groupBy calls on request paths used by navigation.
+- Add or verify indexes before introducing new filters.
+- Archive or roll up high-volume analytics tables once visit/action rows become large.
 
-4) Rate-limiting, throttling and DDoS
-- Enforce IP and endpoint-level rate limits at the edge (CDN) and in-app (Upstash-based throttles already present).
-- Fail open to local in-memory fallback only when Redis is unavailable, and prefer conservative thresholds.
+## Operational Checklist
+- Enable Supabase backups and test restore into a throwaway project.
+- Configure Vercel WAF/rate limits for auth, upload, billing, public gallery, and analytics APIs.
+- Keep production secrets only in the hosting provider.
+- Monitor p95/p99 latency, DB connection count, slow queries, error rate, queue depth, and Redis availability.
+- Use staged rollouts for schema changes and high-traffic features.
 
-5) Background workers
-- Offload email/sms and heavy IO to worker processes. Use Redis-backed queues and dedicate autoscaled worker fleets.
-- Provide a lightweight worker script (`scripts/run-job-worker.mjs`) to process email jobs.
-
-6) Storage and CDN
-- Store image assets in Cloudinary / S3 and serve via CDN.
-- Use signed URLs for uploads and direct-to-CDN/offload uploads.
-
-7) Observability
-- Ship structured logs and metrics (request latency, error rates, DB connections, queue lengths) to a monitoring system.
-- Add health checks and alerting for high error rates, worker backlog, and high DB connection counts.
-
-8) Security
-- Harden headers (CSP, HSTS, COOP) — `middleware.ts` already sets strict headers.
-- Use WAF/edge rules to block known bad traffic patterns.
-
-9) Testing and release
-- Run pre-production stress tests (k6, Artillery) to validate scaling assumptions.
-- Do incremental capacity tests: ramp RPS, evaluate DB pool pressure and worker backlog.
-
-10) Operational checklist
-- Add autoscaling policies for the app and worker pools.
-- Ensure backups, point-in-time recovery and tested rollback steps for DB migrations.
-
-If you want, I can produce an actionable rollout plan (exact infra pieces, load-test script, and a cost estimate) next.
+## Commands
+- `npm run readiness:prod` verifies required production services and runs an Upstash Redis read/write probe.
+- `npm run load:test` runs a lightweight HTTP load test against `http://localhost:3000` by default.
+- `LOAD_TEST_URL=https://your-domain.com LOAD_TEST_CONCURRENCY=50 LOAD_TEST_DURATION_SECONDS=60 npm run load:test` tests a deployed environment.
+- Follow `docs/production-scale-runbook.md` before onboarding paid beta studios.

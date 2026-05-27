@@ -29,21 +29,36 @@ export default function DrivePage() {
   const [tab, setTab] = useState<"galleries" | "trash">("galleries");
 
   useEffect(() => {
+    let active = true;
     const load = async () => {
       const rows = await loadGalleriesList<MinimalGallery>({
-        dedupeKey: `client:galleries:list`,
-        forceRefresh: true,
+        dedupeKey: `client:galleries:list:fast`,
       });
 
+      if (!active) return;
       setGalleries(rows);
-      const trashRes = await fetchWithRetry("/api/galleries?trash=1", { cache: "no-store" }, { dedupeKey: "client:galleries:trash" });
-      if (trashRes.ok) {
-        const trashRows = (await trashRes.json()) as MinimalGallery[];
-        setTrash(Array.isArray(trashRows) ? trashRows : []);
+      setLoading(false);
+      const loadTrash = async () => {
+        const trashRes = await fetchWithRetry("/api/galleries?trash=1&metrics=0", { cache: "no-store" }, { dedupeKey: "client:galleries:trash" });
+        if (!active) return;
+        if (trashRes.ok) {
+          const trashRows = (await trashRes.json()) as MinimalGallery[];
+          setTrash(Array.isArray(trashRows) ? trashRows : []);
+        }
+      };
+      if ("requestIdleCallback" in window) {
+        window.requestIdleCallback(() => void loadTrash(), { timeout: 1500 });
+      } else {
+        globalThis.setTimeout(() => void loadTrash(), 250);
       }
     };
 
-    load().finally(() => setLoading(false));
+    void load().catch(() => {
+      if (active) setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {

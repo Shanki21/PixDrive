@@ -194,7 +194,7 @@ select {
 .pixora-shell {
   background:
     linear-gradient(180deg, rgba(255, 250, 244, 0.86), rgba(247, 239, 230, 0.94)),
-    url("/background/kollsd-flowers-5718624.png") center top / cover fixed,
+    url("/background/kollsd-flowers-5718624.png") center top / cover,
     radial-gradient(ellipse at 18% 8%, rgba(255, 250, 244, 0.98), rgba(255, 250, 244, 0) 42%),
     linear-gradient(180deg, rgba(255, 250, 244, 0.94), rgba(247, 239, 230, 0.98)),
     repeating-linear-gradient(90deg, rgba(154, 93, 37, 0.035) 0 1px, transparent 1px 64px);
@@ -277,15 +277,11 @@ select {
 
 .pixora-content :where(article, .pix-card, .pixora-panel, [data-pixora-surface]) {
   transition:
-    transform 220ms ease,
-    box-shadow 220ms ease,
-    border-color 220ms ease,
-    background-color 220ms ease;
+    border-color 160ms ease,
+    background-color 160ms ease;
 }
 
 .pixora-content :where(article, .pix-card, .pixora-panel, [data-pixora-surface]):hover {
-  transform: translateY(-2px);
-  box-shadow: 0 22px 56px rgba(73, 39, 20, 0.11);
   border-color: rgba(122, 63, 19, 0.28);
 }
 
@@ -312,7 +308,11 @@ select {
   border-radius: 8px;
   background: linear-gradient(145deg, rgba(255, 253, 248, 0.94), rgba(255, 250, 244, 0.82));
   box-shadow: var(--pix-shadow);
-  backdrop-filter: blur(18px);
+}
+
+.pixora-virtual-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 520px;
 }
 
 .tracking-\[-0\.02em\],
