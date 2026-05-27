@@ -75,7 +75,6 @@ export const GET = withApiHandler(async (
     eventLocation: parsedSettings?.eventLocation ?? null,
     description: parsedSettings?.description ?? null,
     published: parsedSettings?.published ?? true,
-    photoSellingEnabled: parsedSettings?.photoSellingEnabled ?? false,
     allowSingleDownload: parsedSettings?.allowSingleDownload ?? true,
     allowBulkDownload: parsedSettings?.allowBulkDownload ?? false,
     oneQrEnabled: parsedSettings?.oneQrEnabled ?? true,

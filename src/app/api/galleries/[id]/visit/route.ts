@@ -16,6 +16,7 @@ const MAX_USER_AGENT_LENGTH = 512;
 
 import { withApiHandler } from "@/lib/withApiHandler";
 import { withRateLimit } from "@/lib/rate-limit";
+import { captureProductEvent } from "@/lib/product-analytics";
 
 export const POST = withApiHandler(
   withRateLimit(async (req: NextRequest, ...rest: unknown[]) => {
@@ -96,6 +97,8 @@ export const POST = withApiHandler(
           userAgent,
         },
       });
+
+      void captureProductEvent("public_gallery_viewed", galleryId, { galleryId, clientKey });
 
       return NextResponse.json({ ok: true });
     } catch (error) {

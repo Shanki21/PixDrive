@@ -7,7 +7,6 @@ import { rejectCrossOriginWrite } from "@/lib/request-security";
 import { normalizePublicUrl } from "@/lib/url-security";
 import {
   hasGalleryAccessFromRequest,
-  getGalleryAccessModeFromRequest,
   setGalleryAccessCookie,
   verifyGalleryPinAccessMode,
   getRequiredGalleryPin,
@@ -171,7 +170,6 @@ export async function GET(req: NextRequest) {
   if (requiredPin && !hasGalleryAccessFromRequest(req, gallery.id)) {
     return NextResponse.json({ error: "PIN required." }, { status: 401 });
   }
-  const accessMode = requiredPin ? getGalleryAccessModeFromRequest(req, gallery.id) ?? "guest" : "full";
 
   const ip = getClientIp(req) ?? "unknown";
   const bulkDownloadLimit = await checkIpThrottle({
@@ -192,18 +190,7 @@ export async function GET(req: NextRequest) {
   const allPhotos = gallery.photos;
   let targetPhotos = allPhotos;
 
-  if (accessMode === "guest") {
-    if (!clientKey) {
-      return NextResponse.json({ error: "clientKey is required for guest downloads." }, { status: 400 });
-    }
-    const matches = await prisma.faceMatch.findMany({
-      where: { galleryId: gallery.id, clientKey },
-      select: { photoId: true },
-      take: 1000,
-    });
-    const matchedIds = new Set(matches.map((match) => match.photoId));
-    targetPhotos = allPhotos.filter((photo) => matchedIds.has(photo.id));
-  } else if (scope === "favorites") {
+  if (scope === "favorites") {
     if (!clientKey) {
       return NextResponse.json({ error: "clientKey is required for favorites download." }, { status: 400 });
     }

@@ -8,6 +8,8 @@ import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
 import { withApiHandler } from "@/lib/withApiHandler";
 import { withRateLimit } from "@/lib/rate-limit";
+import { ensureCanAddPhoto } from "@/lib/billing";
+import { captureProductEvent } from "@/lib/product-analytics";
 
 const MAX_URL_LENGTH = 6_000_000;
 const MAX_PAGE_SIZE = 120;
@@ -155,6 +157,14 @@ export const POST = withApiHandler(
     }
 
     try {
+      const planCheck = await ensureCanAddPhoto(user.id, 1);
+      if (!planCheck.ok) {
+        return NextResponse.json(
+          { error: planCheck.message, code: "PLAN_LIMIT_REACHED", billing: planCheck.billing },
+          { status: 402 }
+        );
+      }
+
       let finalUrl = url;
       if (url.startsWith(DATA_URL_PREFIX)) {
         if (!isCloudinaryConfigured()) {
@@ -174,6 +184,8 @@ export const POST = withApiHandler(
           galleryId: gallery.id,
         },
       });
+
+      void captureProductEvent("photo_uploaded", user.id, { galleryId: gallery.id, photoId: photo.id, plan: planCheck.billing.plan });
 
       return NextResponse.json(photo);
     } catch (error) {

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { Camera, Images, Sparkles, Zap } from "lucide-react";
+import { Images, ShieldCheck, Zap } from "lucide-react";
 
 import { getGalleryPublicAccess } from "@/lib/gallery-public-access";
 import prisma from "@/lib/prisma";
@@ -45,21 +45,21 @@ export default async function GetPhotosPage({ params }: GetPhotosPageProps) {
       <section className="mx-auto grid w-full max-w-6xl gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
         <div className="rounded-3xl border border-[#eadccf] bg-[#fffaf4] p-6 shadow-[0_18px_60px_rgba(73,39,20,0.08)] sm:p-8">
           <div className="inline-flex items-center gap-2 rounded-full border border-[#ead7c5] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#7a3f13]">
-            <Sparkles className="h-3.5 w-3.5" />
-            AI-powered
+            <ShieldCheck className="h-3.5 w-3.5" />
+            Secure access
           </div>
           <p className="mt-8 text-sm font-semibold uppercase tracking-[0.18em] text-[#7a3f13]">{gallery.name}</p>
           <h1 className="font-display mt-3 text-4xl font-bold tracking-tight text-[#2a170d] sm:text-5xl">
             Get your photos
           </h1>
           <p className="mt-4 text-sm leading-6 text-[#7a6a55]">
-            Add your details and capture one clear selfie. Pixora will use this intake to prepare face-search matching for this event gallery.
+            Add your details to continue into this event gallery and keep your selections connected to you.
           </p>
 
           <div className="mt-8 grid gap-3 text-sm text-[#5b3a23]">
             {[
               { icon: Images, label: "Open Event" },
-              { icon: Camera, label: "Capture Selfie" },
+              { icon: ShieldCheck, label: "Confirm Details" },
               { icon: Zap, label: "Get Photos" },
             ].map((item, index) => {
               const Icon = item.icon;

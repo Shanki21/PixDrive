@@ -73,7 +73,7 @@ function normalizeSocialAccounts(value: unknown) {
   return normalized;
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withApiHandler(async (req: NextRequest) => {
   const email = await getSessionEmailFromRequestAsync(req);
   if (!email) return NextResponse.json({ ok: false, authenticated: false }, { status: 401 });
 
@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ ok: false, message: "User not found" }, { status: 404 });
 
   return NextResponse.json({ ok: true, profile: user.profile ?? null });
-}
+});
 
 export const PATCH = withApiHandler(
   withRateLimit(async (req: NextRequest) => {

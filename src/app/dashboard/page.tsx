@@ -321,7 +321,7 @@ export default function DashboardPage() {
             </div>
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#b9783b]">Step 2</p>
             <p className="mt-2 text-base font-semibold text-[#2a170d]">Publish and Organize</p>
-            <p className="mt-1 text-sm text-[#7a6a55]">Use My Event filters for published, unpublished, expired, and photo selling events.</p>
+            <p className="mt-1 text-sm text-[#7a6a55]">Use My Event filters for published, unpublished, and expired events.</p>
             <Link href="/dashboard/drive" className="mt-3 inline-block text-sm font-semibold text-[#7a3f13]">
               Open My Event <span aria-hidden="true">-&gt;</span>
             </Link>

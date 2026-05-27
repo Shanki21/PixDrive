@@ -4,6 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import Container from "@/components/ui/Container";
 import { buttonClasses } from "@/components/ui/Button";
+import { ENTERPRISE_PLAN, PHOTO_OVERAGE_COPY } from "@/lib/billing-plans";
 
 type BillingCycle = "monthly" | "yearly";
 
@@ -13,6 +14,7 @@ type Plan = {
   monthlyPrice: string;
   yearlyPrice: string;
   yearlySave: string;
+  usdPrice: string;
   audience: string;
   highlight?: string;
   note?: string;
@@ -27,23 +29,24 @@ const plans: Plan[] = [
   {
     id: "starter",
     name: "Starter",
-    monthlyPrice: "699",
-    yearlyPrice: "6,699",
-    yearlySave: "1,689",
-    audience: "For beginners and freelancers",
-    note: "No website included (intentional to push upgrade).",
+    monthlyPrice: "499",
+    yearlyPrice: "4,999",
+    yearlySave: "989",
+    usdPrice: "$9/mo",
+    audience: "For solo shoots and early studio delivery",
+    note: "Pixora link only. Custom domains start on Studio.",
     sections: [
       {
         title: "Gallery",
-        items: ["100GB storage", "Unlimited galleries", "Share via link", "Basic download option"],
+        items: ["10 GB storage", "5 active events", "Share via Pixora link", "Basic download option"],
       },
       {
-        title: "CRM",
-        items: ["Up to 100 clients", "Basic lead tracking", "Manual status updates"],
+        title: "Delivery",
+        items: ["Client favorites", "Download tracking", "Basic client delivery controls"],
       },
       {
         title: "Other",
-        items: ["Platform branding", "Standard support"],
+        items: ["Standard support", "Upgrade path for overages"],
       },
     ],
     cta: "Start With Starter",
@@ -51,77 +54,102 @@ const plans: Plan[] = [
   {
     id: "studio",
     name: "Studio",
-    monthlyPrice: "1,999",
-    yearlyPrice: "18,999",
-    yearlySave: "4,989",
+    monthlyPrice: "1,499",
+    yearlyPrice: "14,999",
+    yearlySave: "2,989",
+    usdPrice: "$29/mo",
     audience: "Best for serious photographers and studios",
     highlight: "Most Popular",
     sections: [
       {
         title: "Gallery (Premium)",
         items: [
-          "500GB storage",
-          "Ultra-fast galleries",
+          "50 GB storage",
+          "25 active events",
           "Client favorites and comments",
           "Password protection",
           "Expiry control",
           "Bulk download control",
-          "Watermark control",
+          "1 custom domain",
         ],
       },
       {
-        title: "CRM (Full System)",
+        title: "Client Delivery",
         items: [
-          "Unlimited clients",
-          "Full pipeline (Inquiry to Booking to Delivery)",
-          "Automated follow-ups",
-          "Payment tracking",
-          "Client tagging",
+          "Client favorites and approvals",
+          "Guest registration tracking",
+          "Download activity",
+          "Review moderation",
         ],
       },
       {
         title: "Website",
-        items: ["Custom domain", "Advanced customization", "Portfolio and blog"],
+        items: ["Own gallery domain", "Pixora link fallback"],
       },
       {
         title: "Analytics and Premium",
-        items: ["Gallery views", "Client activity", "Download tracking", "No watermark", "Priority support"],
+        items: ["Gallery views", "Client activity", "Download tracking", "No Pixora lock-in"],
       },
     ],
     cta: "Choose Studio",
   },
   {
     id: "elite",
-    name: "Elite",
-    monthlyPrice: "3,999",
-    yearlyPrice: "37,999",
-    yearlySave: "9,989",
-    audience: "For agencies and high-volume studios",
+    name: "Pro Studio",
+    monthlyPrice: "2,999",
+    yearlyPrice: "29,999",
+    yearlySave: "5,989",
+    usdPrice: "$59/mo",
+    audience: "For busy wedding and event studios",
     sections: [
       {
-        title: "Everything In Studio + Scale",
+        title: "Everything In Studio + Volume",
         items: [
           "Priority infrastructure allocation",
-          "Advanced team operations",
-          "Higher-volume delivery readiness",
+          "150 GB storage",
+          "75 active events",
+          "3 custom domains",
           "Premium support lane",
         ],
       },
     ],
-    cta: "Go Elite",
+    cta: "Choose Pro Studio",
+  },
+  {
+    id: "scale",
+    name: "Scale",
+    monthlyPrice: "6,999",
+    yearlyPrice: "69,999",
+    yearlySave: "13,989",
+    usdPrice: "$129/mo",
+    audience: "For agencies and high-volume delivery teams",
+    sections: [
+      {
+        title: "High-Volume Delivery",
+        items: [
+          "500 GB storage",
+          "200 active events",
+          "10 custom domains",
+          "Priority support",
+          "Heavy usage review",
+        ],
+      },
+    ],
+    cta: "Choose Scale",
   },
 ];
 
 const addOns = [
-  { label: "+100GB Storage", price: "199/month" },
-  { label: "AI Photo Sharing", price: "499/month" },
-  { label: "Extra Website", price: "199/month" },
+  { label: "Extra 10 GB storage", price: "Rs 199/month" },
+  { label: "Extra custom domain", price: "Rs 299/month" },
+  { label: "Extra 10 active events", price: "Rs 299/month" },
+  { label: ENTERPRISE_PLAN.name + " / Enterprise", price: "Rs 14,999+/month" },
 ];
 
 const referralRows = [
   { plan: "Starter", userDiscount: "10% off first billing", referrerReward: "+7 days" },
   { plan: "Studio", userDiscount: "15% off first billing", referrerReward: "+15 days" },
-  { plan: "Elite", userDiscount: "20% off first billing", referrerReward: "+30 days" },
+  { plan: "Pro Studio", userDiscount: "20% off first billing", referrerReward: "+30 days" },
 ];
 
 export default function Pricing() {
@@ -139,20 +167,22 @@ export default function Pricing() {
         >
           <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[#7a3f13]">Pricing</p>
           <h2 className="font-display mt-3 text-[38px] font-semibold leading-tight text-[#2a170d]">
-            Built To Convert From Starter To Studio
+            Priced Around Real Photo Delivery Costs
           </h2>
           <p className="mx-auto mt-4 max-w-[780px] text-[16px] text-[#7a6a55]">
-            Yearly is selected by default to highlight long-term savings. Studio is positioned as the most logical
-            choice for serious creators.
+            Storage-based plans keep Pixora affordable for photographers while protecting delivery margins.
           </p>
           <div className="mt-6 inline-flex items-center gap-3 rounded-full border border-[#ead7c5] bg-white px-5 py-2 text-sm font-medium text-[#5b3a23]">
             <span className={yearlyDefault === "yearly" ? "font-semibold text-[#7a3f13]" : ""}>Yearly (Default)</span>
             <span className="h-1 w-1 rounded-full bg-[#9bb7ad]" />
             <span>2 months free on yearly plans</span>
           </div>
+          <p className="mt-4 text-sm font-semibold text-[#45675d]">
+            Free trial includes 1 event, 2 GB storage, and Pixora link delivery.
+          </p>
         </motion.div>
 
-        <div className="mt-12 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="mt-12 grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-4">
           {plans.map((plan) => {
             const featured = plan.id === "studio";
             return (
@@ -176,9 +206,12 @@ export default function Pricing() {
                 <p className="mt-2 text-sm text-[#647970]">{plan.audience}</p>
 
                 <div className="mt-5 rounded-2xl border border-[#e3ede9] bg-[#fffaf4] p-4">
-                  <p className="text-[32px] font-semibold leading-none text-[#2a170d]">₹{plan.monthlyPrice}/month</p>
+                  <p className="text-[32px] font-semibold leading-none text-[#2a170d]">Rs {plan.monthlyPrice}/month</p>
                   <p className="mt-2 text-sm text-[#45675d]">
-                    or ₹{plan.yearlyPrice}/year <span className="font-semibold text-[#7a3f13]">(Save ₹{plan.yearlySave})</span>
+                    or Rs {plan.yearlyPrice}/year <span className="font-semibold text-[#7a3f13]">(Save Rs {plan.yearlySave})</span>
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-[#6b7f78]">
+                    Global price starts at {plan.usdPrice}
                   </p>
                 </div>
 
@@ -203,7 +236,7 @@ export default function Pricing() {
 
                 {plan.id === "starter" ? (
                   <p className="mt-5 rounded-xl border border-[#eadccf] bg-[#f6eadb] px-3 py-2 text-sm font-semibold text-[#7a3f13]">
-                    Upgrade to get your own professional website.
+                    Upgrade to Studio for your own custom gallery domain.
                   </p>
                 ) : null}
 
@@ -237,7 +270,7 @@ export default function Pricing() {
                   className="flex items-center justify-between rounded-xl border border-[#f0e4d7] bg-[#fffdf8] px-4 py-3"
                 >
                   <span className="text-sm font-medium text-[#3a2112]">{item.label}</span>
-                  <span className="text-sm font-semibold text-[#7a3f13]">₹{item.price}</span>
+                  <span className="text-sm font-semibold text-[#7a3f13]">{item.price}</span>
                 </div>
               ))}
             </div>
@@ -261,15 +294,10 @@ export default function Pricing() {
                 </div>
               ))}
             </div>
-            <p className="mt-4 text-sm font-medium text-[#7a3f13]">
-              Invite friends and get free subscription days. Your friend gets up to 20% OFF.
-            </p>
+            <p className="mt-4 text-sm font-medium text-[#7a3f13]">{PHOTO_OVERAGE_COPY}</p>
           </article>
         </motion.div>
       </Container>
     </section>
   );
 }
-
-
-

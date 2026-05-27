@@ -16,7 +16,6 @@ import {
   MoreVertical,
   BadgeCheck,
   BadgeMinus,
-  Store,
   Archive,
   Search,
   LayoutGrid,
@@ -35,7 +34,7 @@ type SortField =
 
 type SortOrder = "asc" | "desc";
 
-type EventFilter = "all" | "published" | "unpublished" | "expired" | "photoSelling";
+type EventFilter = "all" | "published" | "unpublished" | "expired";
 
 function formatDate(value?: string | null) {
   if (!value) return "No date";
@@ -72,7 +71,6 @@ export default function DriveTable({
   onOpenQr,
   onPinToggle,
   onPublishToggle,
-  onPhotoSellingToggle,
   onDuplicate,
   onDelete,
   onReorder,
@@ -86,7 +84,6 @@ export default function DriveTable({
   onOpenQr: (gallery: MinimalGallery) => void;
   onPinToggle: (gallery: MinimalGallery) => void;
   onPublishToggle: (gallery: MinimalGallery) => void;
-  onPhotoSellingToggle: (gallery: MinimalGallery) => void;
   onDuplicate: (gallery: MinimalGallery) => void;
   onDelete: (gallery: MinimalGallery) => void;
   onReorder: (draggedId: string, targetId: string) => void;
@@ -136,7 +133,6 @@ export default function DriveTable({
       if (activeFilter === "published") return gallery.published ?? true;
       if (activeFilter === "unpublished") return !(gallery.published ?? true);
       if (activeFilter === "expired") return isExpired(gallery);
-      if (activeFilter === "photoSelling") return Boolean(gallery.photoSellingEnabled);
       return true;
     });
 
@@ -177,7 +173,6 @@ export default function DriveTable({
       published: galleries.filter((gallery) => gallery.published ?? true).length,
       unpublished: galleries.filter((gallery) => !(gallery.published ?? true)).length,
       expired: galleries.filter((gallery) => isExpired(gallery)).length,
-      photoSelling: galleries.filter((gallery) => Boolean(gallery.photoSellingEnabled)).length,
     };
   }, [galleries]);
 
@@ -246,7 +241,6 @@ export default function DriveTable({
             { key: "published", label: "Published", count: counters.published },
             { key: "unpublished", label: "Unpublished", count: counters.unpublished },
             { key: "expired", label: "Expired", count: counters.expired },
-            { key: "photoSelling", label: "Photo Selling", count: counters.photoSelling },
           ].map((item) => {
             const active = activeFilter === item.key;
             return (
@@ -355,11 +349,6 @@ export default function DriveTable({
                   >
                     {cardStatus}
                   </span>
-                  {gallery.photoSellingEnabled ? (
-                    <span className="rounded-full bg-[#fff6eb] px-3 py-1 text-xs font-semibold text-[#aa5b12]">
-                      photo selling
-                    </span>
-                  ) : null}
                 </div>
 
                 {gallery.pinned ? (
@@ -493,18 +482,6 @@ export default function DriveTable({
                         >
                           {isPublished ? <BadgeMinus className="h-4 w-4" /> : <BadgeCheck className="h-4 w-4" />}
                           {isPublished ? "Move to Unpublished" : "Publish Event"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
-                            e.stopPropagation();
-                            setOpenMenuFor(null);
-                            onPhotoSellingToggle(gallery);
-                          }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[#5b3a23] hover:bg-[#fff7ee]"
-                        >
-                          <Store className="h-4 w-4" />
-                          {gallery.photoSellingEnabled ? "Disable Photo Selling" : "Enable Photo Selling"}
                         </button>
                         <button
                           type="button"

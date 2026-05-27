@@ -21,9 +21,7 @@ export type GalleryEventSettings = {
   eventLocation?: string | null;
   description?: string | null;
   published?: boolean;
-  photoSellingEnabled?: boolean;
   reelitAiEnabled?: boolean;
-  brandingEnabled?: boolean;
   expiryDate?: string | null;
   fullAccessPin?: string | null;
   guestPin?: string | null;
@@ -39,7 +37,6 @@ export type GalleryEventSettings = {
   oneQrRequirePin?: boolean;
   oneQrAccessLevel?: "full" | "guest";
   galleryAppEnabled?: boolean;
-  livenessDetectionEnabled?: boolean;
 };
 
 export type GalleryMetaConfig = {
@@ -149,9 +146,7 @@ export function normalizeEventSettings(value: unknown): GalleryEventSettings | n
     eventLocation: asNullableString(record.eventLocation, MAX_EVENT_FIELD_LENGTH),
     description: asNullableString(record.description, MAX_DESCRIPTION_LENGTH),
     published: asBoolean(record.published, true),
-    photoSellingEnabled: asBoolean(record.photoSellingEnabled, false),
     reelitAiEnabled: asBoolean(record.reelitAiEnabled, false),
-    brandingEnabled: asBoolean(record.brandingEnabled, false),
     expiryDate: asNullableString(record.expiryDate, MAX_DATE_LENGTH),
     fullAccessPin: asNullableString(record.fullAccessPin, MAX_PIN_LENGTH),
     guestPin: asNullableString(record.guestPin, MAX_PIN_LENGTH),
@@ -167,7 +162,6 @@ export function normalizeEventSettings(value: unknown): GalleryEventSettings | n
     oneQrRequirePin: asBoolean(record.oneQrRequirePin, false),
     oneQrAccessLevel,
     galleryAppEnabled: asBoolean(record.galleryAppEnabled, true),
-    livenessDetectionEnabled: asBoolean(record.livenessDetectionEnabled, false),
   };
 }
 
@@ -214,11 +208,7 @@ export function mergeEventSettings(
   if ("eventLocation" in record) next.eventLocation = asNullableString(record.eventLocation, MAX_EVENT_FIELD_LENGTH);
   if ("description" in record) next.description = asNullableString(record.description, MAX_DESCRIPTION_LENGTH);
   if ("published" in record) next.published = asBoolean(record.published, base.published ?? true);
-  if ("photoSellingEnabled" in record) {
-    next.photoSellingEnabled = asBoolean(record.photoSellingEnabled, base.photoSellingEnabled ?? false);
-  }
   if ("reelitAiEnabled" in record) next.reelitAiEnabled = asBoolean(record.reelitAiEnabled, base.reelitAiEnabled ?? false);
-  if ("brandingEnabled" in record) next.brandingEnabled = asBoolean(record.brandingEnabled, base.brandingEnabled ?? false);
   if ("expiryDate" in record) next.expiryDate = asNullableString(record.expiryDate, MAX_DATE_LENGTH);
   if ("fullAccessPin" in record) next.fullAccessPin = asNullableString(record.fullAccessPin, MAX_PIN_LENGTH);
   if ("guestPin" in record) next.guestPin = asNullableString(record.guestPin, MAX_PIN_LENGTH);
@@ -244,9 +234,6 @@ export function mergeEventSettings(
   }
   if ("galleryAppEnabled" in record) {
     next.galleryAppEnabled = asBoolean(record.galleryAppEnabled, base.galleryAppEnabled ?? true);
-  }
-  if ("livenessDetectionEnabled" in record) {
-    next.livenessDetectionEnabled = asBoolean(record.livenessDetectionEnabled, base.livenessDetectionEnabled ?? false);
   }
 
   const merged = { ...base, ...next };

@@ -7,6 +7,7 @@ import { setSessionCookie } from "@/lib/session";
 import * as userService from "./service";
 import { getPrismaUnavailableMessage, isPrismaUnavailableError } from "@/lib/prisma-errors";
 import { withApiHandler } from "@/lib/withApiHandler";
+import { captureProductEvent } from "@/lib/product-analytics";
 
 export async function handleVerifyOtp(req: NextRequest) {
   let emailForFallback = "";
@@ -93,6 +94,7 @@ export async function handleVerifyOtp(req: NextRequest) {
         { status: 500 }
       );
     }
+    void captureProductEvent("otp_verified", email, { intent });
     return response;
   } catch (error) {
     if (isPrismaUnavailableError(error)) {

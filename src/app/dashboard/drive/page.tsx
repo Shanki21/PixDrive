@@ -153,26 +153,6 @@ export default function DrivePage() {
               // Ignore toggle failures.
             }
           }}
-          onPhotoSellingToggle={async (gallery) => {
-            const nextPhotoSelling = !(gallery.photoSellingEnabled ?? false);
-            const payload: GalleryEventSettings = { photoSellingEnabled: nextPhotoSelling };
-            try {
-              const dedupe = `galleries:patch:photoSelling:${gallery.id}`;
-              const res = await fetchWithRetry(`/api/galleries/${encodeURIComponent(gallery.id)}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ settings: payload }),
-              }, { dedupeKey: dedupe, idempotencyKey: `${dedupe}:${Date.now()}` });
-              if (!res.ok) return;
-              setGalleries((prev) =>
-                prev.map((item) =>
-                  item.id === gallery.id ? { ...item, photoSellingEnabled: nextPhotoSelling } : item
-                )
-              );
-            } catch {
-              // Ignore toggle failures.
-            }
-          }}
           onDuplicate={(gallery) => {
             const copy: MinimalGallery = {
               ...gallery,

@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { FormEvent, Suspense, useEffect, useState } from "react";
+import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
 import fetchWithRetry from "@/lib/fetchWithRetry";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -40,6 +40,7 @@ function LoginContent() {
   const [step, setStep] = useState<"email" | "otp">("email");
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(0);
+  const verifyRequestIdRef = useRef(0);
 
   const showAuthError = (message: string) => {
     setError(message);
@@ -107,6 +108,9 @@ function LoginContent() {
 
   const onOtpSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+    const requestId = verifyRequestIdRef.current + 1;
+    verifyRequestIdRef.current = requestId;
     setLoading(true);
     setError("");
     try {
@@ -117,6 +121,7 @@ function LoginContent() {
         body: JSON.stringify({ email, code: otp, intent: "login" }),
       }, { dedupeKey: dedupe, idempotencyKey: `${dedupe}` });
       const verifyData = await parseJsonSafe(verifyRes);
+      if (requestId !== verifyRequestIdRef.current) return;
       if (!verifyRes.ok || !verifyData?.ok) {
         showAuthError(verifyData?.message ?? "Invalid or expired OTP");
         return;
@@ -128,9 +133,12 @@ function LoginContent() {
       });
       router.push(searchParams.get("next") || "/dashboard");
     } catch {
+      if (requestId !== verifyRequestIdRef.current) return;
       showAuthError("Network error. Please try again.");
     } finally {
-      setLoading(false);
+      if (requestId === verifyRequestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -190,7 +198,7 @@ function LoginContent() {
           <motion.p initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="text-base leading-relaxed text-[#666666]">
             Access code sent to <strong className="text-[#111111]">{email}</strong>.
           </motion.p>
-          <OtpCodeInput value={otp} onChange={setOtp} />
+          <OtpCodeInput value={otp} onChange={setOtp} disabled={loading} />
           <div className="flex items-center justify-between gap-3 text-sm">
             <span className="text-[#666666]">
               {resendIn > 0 ? `Resend available in ${resendIn}s` : "Did not receive the code?"}

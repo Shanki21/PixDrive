@@ -6,9 +6,10 @@ import { motion } from "framer-motion";
 type OtpCodeInputProps = {
   value: string;
   onChange: (next: string) => void;
+  disabled?: boolean;
 };
 
-export default function OtpCodeInput({ value, onChange }: OtpCodeInputProps) {
+export default function OtpCodeInput({ value, onChange, disabled }: OtpCodeInputProps) {
   const chars = Array.from({ length: 6 }, (_, i) => value[i] ?? "");
   const refs = useRef<Array<HTMLInputElement | null>>([]);
 
@@ -25,6 +26,9 @@ export default function OtpCodeInput({ value, onChange }: OtpCodeInputProps) {
             refs.current[idx] = el;
           }}
           inputMode="numeric"
+          autoComplete={idx === 0 ? "one-time-code" : "off"}
+          aria-label={`OTP digit ${idx + 1}`}
+          disabled={disabled}
           maxLength={1}
           value={char}
           onChange={(e) => {
@@ -57,7 +61,7 @@ export default function OtpCodeInput({ value, onChange }: OtpCodeInputProps) {
             const focusIndex = Math.min(pasted.length, chars.length - 1);
             refs.current[focusIndex]?.focus();
           }}
-          className="h-14 w-11 rounded-full border border-[#E5E5E5] bg-white text-center text-xl font-semibold text-[#111111] outline-none transition focus:border-[#7a3f13] focus:shadow-[0_0_0_4px_rgba(122,63,19,0.15)]"
+          className="h-14 w-11 rounded-full border border-[#E5E5E5] bg-white text-center text-xl font-semibold text-[#111111] outline-none transition focus:border-[#7a3f13] focus:shadow-[0_0_0_4px_rgba(122,63,19,0.15)] disabled:cursor-not-allowed disabled:opacity-50"
         />
       ))}
     </div>

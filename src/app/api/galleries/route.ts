@@ -17,6 +17,8 @@ import { NextRequest, NextResponse } from "next/server";
 import slugify from "slugify";
 import { withApiHandler } from "@/lib/withApiHandler";
 import { withRateLimit } from "@/lib/rate-limit";
+import { ensureCanCreateGallery } from "@/lib/billing";
+import { captureProductEvent } from "@/lib/product-analytics";
 
 const MAX_GALLERY_NAME_LENGTH = 160;
 
@@ -77,7 +79,6 @@ function serializeGalleryRow(
     eventLocation: parsedSettings.eventLocation ?? null,
     description: parsedSettings.description ?? null,
     published: parsedSettings.published ?? true,
-    photoSellingEnabled: parsedSettings.photoSellingEnabled ?? false,
     allowSingleDownload: parsedSettings.allowSingleDownload ?? true,
     allowBulkDownload: parsedSettings.allowBulkDownload ?? false,
     oneQrEnabled: parsedSettings.oneQrEnabled ?? true,
@@ -207,6 +208,14 @@ export const POST = withApiHandler(
         create: { email },
       });
 
+      const planCheck = await ensureCanCreateGallery(user.id);
+      if (!planCheck.ok) {
+        return NextResponse.json(
+          { error: planCheck.message, code: "PLAN_LIMIT_REACHED", billing: planCheck.billing },
+          { status: 402 }
+        );
+      }
+
       const name = normalizeSingleLine(body?.name, MAX_GALLERY_NAME_LENGTH);
       const safeName = name || "Untitled gallery";
       const settings = normalizeEventSettings(body?.settings) ?? {};
@@ -222,6 +231,8 @@ export const POST = withApiHandler(
           meta: meta ?? Prisma.JsonNull,
         },
       });
+
+      void captureProductEvent("gallery_created", user.id, { galleryId: gallery.id, plan: planCheck.billing.plan });
 
       return NextResponse.json({
         ...gallery,
