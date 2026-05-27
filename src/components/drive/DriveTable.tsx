@@ -295,7 +295,7 @@ export default function DriveTable({
           return (
             <article
               key={gallery.id}
-              className={`group cursor-pointer overflow-visible rounded-[28px] border bg-white shadow-[0_18px_45px_rgba(73,39,20,0.10)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(73,39,20,0.16)] ${
+              className={`pixora-virtual-card group cursor-pointer overflow-visible rounded-[28px] border bg-white transition hover:border-[#7a3f13] ${
                 dragOverId === gallery.id ? "border-[#7a3f13]" : "border-[#eadccf]"
               }`}
               onClick={() => onOpen?.(gallery)}
@@ -321,8 +321,6 @@ export default function DriveTable({
               <div className="relative h-72 overflow-hidden rounded-t-[28px] border-b border-[#f0e4d7] bg-[#2a170d]">
                 {cover ? (
                   <>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={cover} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-35 blur-2xl" />
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(255,250,244,0.28),transparent_34%),linear-gradient(160deg,rgba(42,23,13,0.42),rgba(122,63,19,0.10)_42%,rgba(255,250,244,0.12))]" />
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img

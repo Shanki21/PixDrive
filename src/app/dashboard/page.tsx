@@ -57,19 +57,32 @@ export default function DashboardPage() {
   const [galleries, setGalleries] = useState<DashboardGallery[]>(
     () => readCachedGalleries<DashboardGallery>() ?? []
   );
-  const [visitMap, setVisitMap] = useState<Record<string, number>>({});
-  const [downloadMap, setDownloadMap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState("Creator");
 
   useEffect(() => {
     let active = true;
 
+    const refreshMetrics = async () => {
+      const payload = await loadGalleriesList<DashboardGallery>({
+        dedupeKey: `client:galleries:list:metrics`,
+        forceRefresh: true,
+        includeMetrics: true,
+      });
+      if (active) setGalleries(payload);
+    };
+
     const loadGalleries = async () => {
       try {
-        const payload = await loadGalleriesList<DashboardGallery>({ dedupeKey: `client:galleries:list` });
+        const payload = await loadGalleriesList<DashboardGallery>({ dedupeKey: `client:galleries:list:fast` });
         if (!active) return;
         setGalleries(payload);
+        const schedule = () => void refreshMetrics().catch(() => undefined);
+        if ("requestIdleCallback" in window) {
+          window.requestIdleCallback(schedule, { timeout: 2500 });
+        } else {
+          globalThis.setTimeout(schedule, 500);
+        }
       } catch {
         if (active) setGalleries([]);
       } finally {
@@ -106,28 +119,11 @@ export default function DashboardPage() {
     };
   }, []);
 
-  useEffect(() => {
-    const nextVisits: Record<string, number> = {};
-    const nextDownloads: Record<string, number> = {};
-    galleries.forEach((gallery) => {
-      nextVisits[gallery.id] = gallery.visitors ?? 0;
-      nextDownloads[gallery.id] = gallery.downloads ?? 0;
-    });
-    setVisitMap(nextVisits);
-    setDownloadMap(nextDownloads);
-  }, [galleries]);
-
   const totals = useMemo(() => {
     const totalEvents = galleries.length;
     const totalPhotos = galleries.reduce((sum, gallery) => sum + (gallery.filesCount ?? 0), 0);
-    const totalVisitors = galleries.reduce(
-      (sum, gallery) => sum + (visitMap[gallery.id] ?? gallery.visitors ?? 0),
-      0
-    );
-    const totalDownloads = galleries.reduce(
-      (sum, gallery) => sum + (downloadMap[gallery.id] ?? gallery.downloads ?? 0),
-      0
-    );
+    const totalVisitors = galleries.reduce((sum, gallery) => sum + (gallery.visitors ?? 0), 0);
+    const totalDownloads = galleries.reduce((sum, gallery) => sum + (gallery.downloads ?? 0), 0);
     const engagementRate =
       totalVisitors > 0 ? clamp(Math.round((totalDownloads / totalVisitors) * 100), 0, 100) : 0;
 
@@ -138,13 +134,13 @@ export default function DashboardPage() {
       totalDownloads,
       engagementRate,
     };
-  }, [downloadMap, galleries, visitMap]);
+  }, [galleries]);
 
   const recentEvents = useMemo(() => {
     return galleries.slice(0, 4).map((gallery, index) => {
       const files = gallery.filesCount ?? 0;
-      const visitors = visitMap[gallery.id] ?? gallery.visitors ?? 0;
-      const downloads = downloadMap[gallery.id] ?? gallery.downloads ?? 0;
+      const visitors = gallery.visitors ?? 0;
+      const downloads = gallery.downloads ?? 0;
       const progress = files === 0 ? 18 : clamp(38 + files * 6 + Math.min(visitors, 25), 25, 96);
       const status = visitors > 0 ? "active" : index % 2 === 0 ? "upcoming" : "planning";
 
@@ -161,7 +157,7 @@ export default function DashboardPage() {
         cover: gallery.coverUrl ?? gallery.firstPhotoUrl ?? null,
       };
     });
-  }, [downloadMap, galleries, visitMap]);
+  }, [galleries]);
 
   const tasks = useMemo<TaskItem[]>(() => {
     if (galleries.length === 0) {
@@ -186,7 +182,7 @@ export default function DashboardPage() {
       });
     }
 
-    const galleryWithoutVisits = galleries.find((gallery) => (visitMap[gallery.id] ?? 0) === 0);
+    const galleryWithoutVisits = galleries.find((gallery) => (gallery.visitors ?? 0) === 0);
     if (galleryWithoutVisits) {
       items.push({
         id: "share-link",
@@ -204,7 +200,7 @@ export default function DashboardPage() {
     });
 
     return items.slice(0, 4);
-  }, [galleries, visitMap]);
+  }, [galleries]);
 
   const statCards = [
     {

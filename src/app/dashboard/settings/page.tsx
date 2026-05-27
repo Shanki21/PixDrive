@@ -409,7 +409,7 @@ export default function SettingsPage() {
         const [profileRes, meRes, galleriesRes, domainsRes, billingRes] = await Promise.all([
           fetchWithRetry("/api/auth/profile", { cache: "no-store" }, { dedupeKey: "settings:profile" }),
           fetchWithRetry("/api/auth/me", { cache: "no-store" }, { dedupeKey: "settings:me" }),
-          fetchWithRetry("/api/galleries", { cache: "no-store" }, { dedupeKey: "settings:galleries" }),
+          fetchWithRetry("/api/galleries?metrics=0", { cache: "no-store" }, { dedupeKey: "settings:galleries:fast" }),
           fetchWithRetry("/api/custom-domains", { cache: "no-store" }, { dedupeKey: "settings:custom-domains" }),
           fetchWithRetry("/api/billing/status", { cache: "no-store" }, { dedupeKey: "settings:billing" }),
         ]);

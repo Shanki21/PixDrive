@@ -62,7 +62,7 @@ export async function GET(
   }
   const requiredPin = getRequiredGalleryPin(gallery.settings);
   if (requiredPin && !hasGalleryAccessFromRequest(req, gallery.id)) {
-    return NextResponse.json({ error: "PIN required." }, { status: 401 });
+    return NextResponse.json({ error: "PIN required." }, { status: 401, headers: { "Cache-Control": "no-store" } });
   }
   const photoWhere = {
     galleryId: gallery.id,
@@ -141,8 +141,15 @@ export async function GET(
 
   const nextCursor = photos.length === take ? photos[photos.length - 1]?.id ?? null : null;
 
-  return NextResponse.json({
-    items: photos,
-    nextCursor,
-  });
+  return NextResponse.json(
+    {
+      items: photos,
+      nextCursor,
+    },
+    {
+      headers: {
+        "Cache-Control": "public, s-maxage=30, stale-while-revalidate=300",
+      },
+    }
+  );
 }

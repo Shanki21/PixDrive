@@ -59,7 +59,7 @@ export default function Sidebar() {
         <Link
           href="/dashboard"
           aria-label="Pixora dashboard"
-          className="group relative flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[#7a3f13] shadow-[0_10px_24px_rgba(73,39,20,0.08)] transition hover:bg-[#f4e5d3]"
+          className="group relative flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[#7a3f13] transition hover:bg-[#f4e5d3]"
         >
           <Sparkles className="h-5 w-5" />
           <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-xl border border-[#eadccf] bg-white px-3 py-2 text-sm font-semibold text-[#3a2112] opacity-0 shadow-[0_14px_30px_rgba(73,39,20,0.14)] transition group-hover:opacity-100 group-focus-visible:opacity-100">
@@ -84,8 +84,8 @@ export default function Sidebar() {
                   title={item.label}
                   className={`group relative flex h-14 w-14 items-center justify-center rounded-2xl transition ${
                     active
-                      ? "bg-[linear-gradient(135deg,#7a3f13_0%,#5b2b0c_100%)] text-white shadow-[0_16px_28px_rgba(122,63,19,0.24)]"
-                      : "text-[#5f3b22] hover:bg-white/90 hover:text-[#2a170d] hover:shadow-[0_8px_24px_rgba(73,39,20,0.08)]"
+                      ? "bg-[#5b2b0c] text-white"
+                      : "text-[#5f3b22] hover:bg-white/90 hover:text-[#2a170d]"
                   }`}
                 >
                   <span

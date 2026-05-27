@@ -80,7 +80,7 @@ export default function ReviewsPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetchWithRetry("/api/galleries", {}, { dedupeKey: `client:galleries:list` });
+        const res = await fetchWithRetry("/api/galleries?metrics=0", {}, { dedupeKey: `client:galleries:list:fast` });
         const contentType = res.headers.get("content-type") ?? "";
         if (!res.ok || !contentType.includes("application/json")) return;
         const rows = (await res.json()) as MinimalGallery[];

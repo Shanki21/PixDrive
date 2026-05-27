@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import fetchWithRetry from "@/lib/fetchWithRetry";
 
 const DEV_FALLBACK_SESSION_SECRET = "pixora-dev-session-secret-not-for-production";
 const PUBLIC_EXACT_PATHS = new Set(["/", "/favicon.ico", "/robots.txt"]);
@@ -124,35 +123,6 @@ async function isValidSessionToken(token: string | undefined) {
   }
 }
 
-async function maybeRedirectEmptyDrive(req: NextRequest) {
-  const pathname = req.nextUrl.pathname;
-  if (pathname !== "/dashboard" && pathname !== "/dashboard/drive") {
-    return null;
-  }
-
-  try {
-    const res = await fetchWithRetry(new URL("/api/galleries", req.url).toString(), {
-      cache: "no-store",
-      headers: {
-        cookie: req.headers.get("cookie") ?? "",
-      },
-    }, { dedupeKey: "proxy:galleries" });
-
-    if (!res.ok) {
-      return null;
-    }
-
-    const galleries = await res.json();
-    if (pathname === "/dashboard/drive" && (!Array.isArray(galleries) || galleries.length === 0)) {
-      return NextResponse.redirect(new URL("/dashboard", req.url));
-    }
-  } catch (error) {
-    console.error("Dashboard proxy check failed:", error);
-  }
-
-  return null;
-}
-
 function isCustomDomainBypassPath(pathname: string) {
   return (
     pathname.startsWith("/api/") ||
@@ -164,17 +134,45 @@ function isCustomDomainBypassPath(pathname: string) {
   );
 }
 
+function normalizeHost(host: string) {
+  return host.split(":")[0]?.trim().toLowerCase() ?? "";
+}
+
+function isPlatformHost(host: string) {
+  const normalized = normalizeHost(host);
+  if (!normalized) return true;
+  if (normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1") return true;
+  if (normalized.endsWith(".localhost")) return true;
+
+  const configuredHosts = [
+    process.env.NEXTAUTH_URL,
+    process.env.NEXT_PUBLIC_CLIENT_GALLERY_BASE_URL,
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+  ]
+    .map((value) => {
+      try {
+        return value ? normalizeHost(new URL(value).host) : "";
+      } catch {
+        return "";
+      }
+    })
+    .filter(Boolean);
+
+  return configuredHosts.includes(normalized);
+}
+
 async function maybeRewriteCustomDomain(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (isCustomDomainBypassPath(pathname)) return null;
 
   const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
   if (!host) return null;
+  if (isPlatformHost(host)) return null;
 
   try {
     const url = new URL("/api/custom-domains/resolve", req.url);
     url.searchParams.set("host", host);
-    const res = await fetchWithRetry(url.toString(), { cache: "no-store" }, { dedupeKey: `proxy:custom-domain:${host}` });
+    const res = await fetch(url.toString(), { cache: "no-store" });
     if (!res.ok) return null;
     const data = (await res.json()) as { ok?: boolean; userId?: string };
     if (!data.ok || !data.userId) return null;
@@ -213,8 +211,7 @@ export async function proxy(req: NextRequest) {
   const token = req.cookies.get("wf_session")?.value;
   const ok = await isValidSessionToken(token);
   if (ok) {
-    const dashboardRedirect = await maybeRedirectEmptyDrive(req);
-    return applySecurityHeaders(dashboardRedirect ?? NextResponse.next(), req);
+    return applySecurityHeaders(NextResponse.next(), req);
   }
 
   if (pathname.startsWith("/api/")) {

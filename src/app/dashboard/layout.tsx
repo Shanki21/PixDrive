@@ -3,7 +3,6 @@
 import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
 import MobileNav from "@/components/layout/MobileNav";
-import PixoraAtmosphere from "@/components/layout/PixoraAtmosphere";
 import { getSessionEmailFromCookieStore } from "@/lib/session";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -21,7 +20,6 @@ export default async function DashboardLayout({
 
   return (
     <div className="pixora-shell relative min-h-screen overflow-x-hidden text-[#2a170d] font-['Avenir_Next','Segoe_UI',system-ui,-apple-system,sans-serif]">
-      <PixoraAtmosphere />
       <Sidebar />
       <MobileNav />
 

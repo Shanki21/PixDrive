@@ -361,18 +361,34 @@ export const POST = withApiHandler(
       await prisma.$transaction(writeOps);
     }
 
-    await Promise.all(
-      photoIds.map(async (photoId) => {
-        const [favoriteCount, downloadCount] = await Promise.all([
-          prisma.clientPhotoAction.count({ where: { galleryId: id, photoId, action: "favorite" } }),
-          prisma.clientPhotoAction.count({ where: { galleryId: id, photoId, action: "download" } }),
-        ]);
-        await prisma.photo.update({
-          where: { id: photoId },
-          data: { favoriteCount, downloadCount },
-        });
-      })
-    );
+    if (photoIds.length > 0) {
+      const [favoriteCounts, downloadCounts] = await Promise.all([
+        prisma.clientPhotoAction.groupBy({
+          by: ["photoId"],
+          _count: { _all: true },
+          where: { galleryId: id, photoId: { in: photoIds }, action: "favorite" },
+        }),
+        prisma.clientPhotoAction.groupBy({
+          by: ["photoId"],
+          _count: { _all: true },
+          where: { galleryId: id, photoId: { in: photoIds }, action: "download" },
+        }),
+      ]);
+      const favoritesByPhoto = new Map(favoriteCounts.map((row) => [row.photoId, row._count._all]));
+      const downloadsByPhoto = new Map(downloadCounts.map((row) => [row.photoId, row._count._all]));
+
+      await prisma.$transaction(
+        photoIds.map((photoId) =>
+          prisma.photo.update({
+            where: { id: photoId },
+            data: {
+              favoriteCount: favoritesByPhoto.get(photoId) ?? 0,
+              downloadCount: downloadsByPhoto.get(photoId) ?? 0,
+            },
+          })
+        )
+      );
+    }
 
     return NextResponse.json({ ok: true });
   }, { keyPrefix: "gallery:client-actions", limit: 1000, windowMs: 15 * 60 * 1000 })

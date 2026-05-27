@@ -76,14 +76,12 @@ export default function Topbar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 border-b border-[#ead7c5] bg-[#fffaf4]/92 px-4 py-4 backdrop-blur md:px-8 md:py-5">
+    <header className="sticky top-0 z-30 border-b border-[#ead7c5] bg-[#fffaf4] px-4 py-4 md:px-8 md:py-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <label className="relative block min-w-55 flex-1 md:max-w-155"/>
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a3f13]" />
         <label className="relative block min-w-55 flex-1 md:max-w-140">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5f7a71]" />
           <input
-            className="h-12 w-full rounded-2xl border border-[#ead7c5] bg-[#fffdf8] pl-11 pr-4 text-sm text-[#3a2112] shadow-sm placeholder:text-[#a0866e] focus:border-[#7a3f13] focus:outline-none focus:shadow-[0_0_0_4px_rgba(122,63,19,0.1)]"
+            className="h-12 w-full rounded-2xl border border-[#ead7c5] bg-[#fffdf8] pl-11 pr-4 text-sm text-[#3a2112] placeholder:text-[#a0866e] focus:border-[#7a3f13] focus:outline-none"
             placeholder="Search events, documents, guests..."
           />
         </label>
@@ -95,14 +93,14 @@ export default function Topbar() {
           </div>
           <Link
             href="/dashboard/create-events"
-            className="inline-flex h-12 items-center gap-2 rounded-2xl bg-[#5b2b0c] px-5 text-sm font-semibold text-white shadow-[0_14px_24px_rgba(91,43,12,0.22)] transition hover:bg-[#7a3f13]"
+            className="inline-flex h-12 items-center gap-2 rounded-2xl bg-[#5b2b0c] px-5 text-sm font-semibold text-white transition hover:bg-[#7a3f13]"
           >
             <Plus className="h-4 w-4" />
             Create Event
           </Link>
           <button
             type="button"
-            className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[#ead7c5] bg-[#fffdf8] text-[#5b3a23] shadow-sm hover:bg-[#f4e5d3]"
+            className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[#ead7c5] bg-[#fffdf8] text-[#5b3a23] hover:bg-[#f4e5d3]"
             aria-label="Notifications"
           >
             <Bell className="h-4 w-4" />
@@ -111,7 +109,7 @@ export default function Topbar() {
             <button
               type="button"
               onClick={() => setMenuOpen((prev) => !prev)}
-              className="inline-flex h-12 items-center gap-2 rounded-2xl border border-[#ead7c5] bg-[#fffdf8] px-2.5 text-[#5b3a23] shadow-sm hover:bg-[#f4e5d3]"
+              className="inline-flex h-12 items-center gap-2 rounded-2xl border border-[#ead7c5] bg-[#fffdf8] px-2.5 text-[#5b3a23] hover:bg-[#f4e5d3]"
               aria-label="Account menu"
             >
               <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#d8b895] bg-[#f4e5d3] text-xs font-semibold">

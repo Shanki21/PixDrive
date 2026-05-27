@@ -46,7 +46,7 @@ export default function QrCodePage() {
           setRefreshing(true);
         }
         const payload = await loadGalleriesList<GalleryWithSlug>({
-          dedupeKey: isRefresh ? `client:galleries:list:refresh` : `client:galleries:list`,
+          dedupeKey: isRefresh ? `client:galleries:list:refresh:fast` : `client:galleries:list:fast`,
           forceRefresh: isRefresh,
         });
         if (!active) return;
@@ -250,7 +250,7 @@ export default function QrCodePage() {
               setRefreshing(true);
               void (async () => {
                 try {
-                  const response = await fetchWithRetry("/api/galleries", { cache: "no-store" }, { dedupeKey: `client:galleries:list:refresh` });
+                  const response = await fetchWithRetry("/api/galleries?metrics=0", { cache: "no-store" }, { dedupeKey: `client:galleries:list:refresh:fast` });
                   const contentType = response.headers.get("content-type") ?? "";
                   if (!response.ok || !contentType.includes("application/json")) {
                     return;

@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "env:check": "node scripts/check-env.mjs",
+    "readiness:prod": "node scripts/check-production-readiness.mjs",
+    "load:test": "node scripts/load-test.mjs",
     "test:unit": "node -e \"require('fs').rmSync('.tmp-tests',{recursive:true,force:true})\" && npx tsc --pretty false --module commonjs --target es2020 --outDir .tmp-tests tests/run-unit-tests.ts src/lib/gallery-public-access.ts src/lib/qr.ts && node .tmp-tests/tests/run-unit-tests.js && node -e \"require('fs').rmSync('.tmp-tests',{recursive:true,force:true})\"",
     "start": "next start",
     "lint": "eslint",
