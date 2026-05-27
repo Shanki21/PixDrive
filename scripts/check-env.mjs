@@ -54,6 +54,19 @@ function validateRequired(name, errors) {
   }
 }
 
+function validateNextAuthUrl(errors, warnings) {
+  const nextAuthUrl = readEnv("NEXTAUTH_URL");
+  if (isConfigured(nextAuthUrl)) return;
+
+  const vercelUrl = readEnv("VERCEL_URL");
+  if (isConfigured(vercelUrl)) {
+    warnings.push("NEXTAUTH_URL is not set; using VERCEL_URL as the hosted deployment URL fallback.");
+    return;
+  }
+
+  errors.push("NEXTAUTH_URL is missing or still set to a placeholder.");
+}
+
 function validateOneOf(names, errors) {
   const hasAny = names.some((name) => isConfigured(readEnv(name)));
   if (!hasAny) {
@@ -180,7 +193,7 @@ function main() {
     );
   }
   validateRequired("NEXT_PUBLIC_CLIENT_GALLERY_BASE_URL", errors);
-  validateRequired("NEXTAUTH_URL", errors);
+  validateNextAuthUrl(errors, warnings);
   validateOneOf(["NEXTAUTH_SECRET", "AUTH_SECRET"], errors);
   validateEmailProvider(errors);
   validateRateLimitProvider(warnings);
