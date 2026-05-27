@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pixora_ci?schema=public
+      NEXTAUTH_URL: http://localhost:3000
       NEXTAUTH_SECRET: ci-secret-value
       NEXT_PUBLIC_CLIENT_GALLERY_BASE_URL: http://localhost:3000
       RESEND_API_KEY: ci-resend-key
