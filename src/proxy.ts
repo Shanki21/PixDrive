@@ -13,6 +13,8 @@ const PUBLIC_PREFIXES = [
   "/api/auth",
   "/api/custom-domains/resolve",
   "/api/disk",
+  "/api/monitoring/database-check",
+  "/api/monitoring/sentry-test",
   "/api/qr",
   "/api/reviews/metadata",
 ];
