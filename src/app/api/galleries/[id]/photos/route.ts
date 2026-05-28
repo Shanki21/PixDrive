@@ -1,8 +1,8 @@
-import { isCloudinaryConfigured, uploadImageDataUrl } from "@/lib/cloudinary";
 import { normalizeSingleLine } from "@/lib/input-security";
 import prisma from "@/lib/prisma";
 import { rejectCrossOriginWrite } from "@/lib/request-security";
 import { getSessionEmailFromRequestAsync } from "@/lib/session";
+import { isStorageConfigured, uploadGalleryImageDataUrl } from "@/lib/storage";
 import { normalizePublicUrl } from "@/lib/url-security";
 import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
@@ -167,13 +167,13 @@ export const POST = withApiHandler(
 
       let finalUrl = url;
       if (url.startsWith(DATA_URL_PREFIX)) {
-        if (!isCloudinaryConfigured()) {
+        if (!isStorageConfigured()) {
           return NextResponse.json(
-            { error: "Cloudinary is not configured. Configure media environment variables." },
+            { error: "Media storage is not configured. Configure storage environment variables." },
             { status: 500 }
           );
         }
-        const uploaded = await uploadImageDataUrl(url);
+        const uploaded = await uploadGalleryImageDataUrl(url);
         finalUrl = uploaded.url;
       }
 

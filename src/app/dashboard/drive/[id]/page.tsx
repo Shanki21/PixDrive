@@ -92,6 +92,23 @@ const MAX_UPLOAD_DATA_URL_LENGTH = 5_500_000;
 const MAX_UPLOAD_DIMENSION = 2400;
 const JPEG_QUALITY_STEPS = [0.9, 0.82, 0.74, 0.66, 0.58];
 
+type SignedUploadResponse = {
+  ok?: boolean;
+  upload?: {
+    provider: "cloudinary" | "r2";
+    method: "POST" | "PUT";
+    uploadUrl: string;
+    publicUrl?: string | null;
+    fields?: Record<string, string | number>;
+    headers?: Record<string, string>;
+  };
+};
+
+type CloudinaryUploadResponse = {
+  secure_url?: string;
+  url?: string;
+};
+
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -141,6 +158,52 @@ async function preparePhotoUpload(file: File) {
   }
 
   throw new Error(`${file.name} is too large to upload. Try a smaller image or compress it first.`);
+}
+
+async function uploadFileDirectly(file: File) {
+  const signedRes = await fetchWithRetry(
+    "/api/storage/signed-upload",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fileName: file.name, contentType: file.type || "image/jpeg" }),
+    },
+    { dedupeKey: `storage:signed-upload:${file.name}:${file.size}` }
+  );
+  if (!signedRes.ok) return null;
+
+  const payload = (await signedRes.json().catch(() => null)) as SignedUploadResponse | null;
+  const upload = payload?.upload;
+  if (!payload?.ok || !upload) return null;
+
+  if (upload.provider === "r2") {
+    const uploadRes = await fetch(upload.uploadUrl, {
+      method: "PUT",
+      headers: upload.headers ?? { "Content-Type": file.type || "application/octet-stream" },
+      body: file,
+    });
+    if (!uploadRes.ok) {
+      throw new Error(`Unable to upload ${file.name}`);
+    }
+    return upload.publicUrl ?? null;
+  }
+
+  const formData = new FormData();
+  Object.entries(upload.fields ?? {}).forEach(([key, value]) => {
+    formData.append(key, String(value));
+  });
+  formData.append("file", file);
+
+  const uploadRes = await fetch(upload.uploadUrl, {
+    method: "POST",
+    body: formData,
+  });
+  if (!uploadRes.ok) {
+    throw new Error(`Unable to upload ${file.name}`);
+  }
+
+  const uploaded = (await uploadRes.json()) as CloudinaryUploadResponse;
+  return uploaded.secure_url ?? uploaded.url ?? null;
 }
 
 function formatDate(value?: string | null) {
@@ -696,12 +759,18 @@ export default function DriveDetailPage() {
     setError(null);
     try {
       for (const file of files) {
-        const dataUrl = await preparePhotoUpload(file);
+        let uploadedUrl: string | null = null;
+        try {
+          uploadedUrl = await uploadFileDirectly(file);
+        } catch {
+          uploadedUrl = null;
+        }
+        const finalUrl = uploadedUrl ?? (await preparePhotoUpload(file));
 
         const res = await fetchWithRetry(`/api/galleries/${galleryId}/photos`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: file.name, url: dataUrl }),
+          body: JSON.stringify({ name: file.name, url: finalUrl }),
         }, { dedupeKey: `drive:upload:${galleryId}:${file.name}`, idempotencyKey: `drive:upload:${galleryId}:${file.name}:${Date.now()}` });
 
         if (!res.ok) {

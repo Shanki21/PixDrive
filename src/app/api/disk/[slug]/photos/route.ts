@@ -4,6 +4,7 @@ import { normalizePublicUrl } from "@/lib/url-security";
 import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import fetchWithRetry from "@/lib/fetchWithRetry";
+import { withApiHandler } from "@/lib/withApiHandler";
 
 const MAX_PAGE_SIZE = 120;
 const MAX_SINGLE_DOWNLOAD_BYTES = 25 * 1024 * 1024;
@@ -34,10 +35,10 @@ function isAllowedImageContentType(contentType: string) {
   return ALLOWED_IMAGE_CONTENT_TYPES.some((allowed) => lower.includes(allowed));
 }
 
-export async function GET(
+export const GET = withApiHandler(async (
   req: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
-) {
+) => {
   const { slug } = await params;
   const { searchParams } = new URL(req.url);
   const rawTake = Number(searchParams.get("take") ?? "60");
@@ -152,4 +153,4 @@ export async function GET(
       },
     }
   );
-}
+});

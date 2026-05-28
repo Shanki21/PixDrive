@@ -16,6 +16,5 @@ export const GET = withApiHandler(async (req: NextRequest) => {
     ok: true,
     domain: domain.domain,
     userId: domain.userId,
-    ownerEmail: domain.user.email,
   });
 });

@@ -1,8 +1,8 @@
-import { destroyCloudinaryAssetByUrl } from "@/lib/cloudinary";
 import { normalizeSingleLine } from "@/lib/input-security";
 import prisma from "@/lib/prisma";
 import { rejectCrossOriginWrite } from "@/lib/request-security";
 import { getSessionEmailFromRequestAsync } from "@/lib/session";
+import { deleteStoredImageByUrl } from "@/lib/storage";
 import { NextRequest, NextResponse } from "next/server";
 import { withApiHandler } from "@/lib/withApiHandler";
 import { withRateLimit } from "@/lib/rate-limit";
@@ -88,7 +88,7 @@ export const DELETE = withApiHandler(
     ]);
 
     try {
-      await destroyCloudinaryAssetByUrl(result.photo.url);
+      await deleteStoredImageByUrl(result.photo.url);
     } catch {
       // Ignore media cleanup failures to keep delete action resilient.
     }

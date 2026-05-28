@@ -24,10 +24,12 @@ Authentication:
 
 Media:
 
+- `STORAGE_PROVIDER` (`cloudinary` for launch)
 - `CLOUDINARY_CLOUD_NAME`
 - `CLOUDINARY_API_KEY`
 - `CLOUDINARY_API_SECRET`
 - `CLOUDINARY_URL`
+- Future R2 path: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_BASE_URL`
 
 Email:
 
@@ -61,7 +63,7 @@ Observability:
 - Staging `DATABASE_URL` points to a hosted staging PostgreSQL instance.
 - `NEXTAUTH_URL` matches the staging app URL.
 - `NEXT_PUBLIC_CLIENT_GALLERY_BASE_URL` matches the staging gallery base URL.
-- Cloudinary staging credentials are configured.
+- Media storage staging credentials are configured.
 - Email provider is configured and can send OTP emails.
 - Razorpay test keys, webhook secret, and plan IDs are configured for staging.
 - Sentry and PostHog staging projects receive events.
@@ -87,7 +89,7 @@ Observability:
 - Production `DATABASE_URL` is set in the hosting platform.
 - Production `NEXTAUTH_URL` matches the live domain.
 - Production `NEXT_PUBLIC_CLIENT_GALLERY_BASE_URL` matches the live gallery URL.
-- Production Cloudinary credentials are configured.
+- Production media storage credentials are configured.
 - Production email provider credentials are configured.
 - Production Razorpay live keys, webhook secret, and subscription plan IDs are configured.
 - Production Stripe live keys are configured only if the account is approved and global billing is enabled.

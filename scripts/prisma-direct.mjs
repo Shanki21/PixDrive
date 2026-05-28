@@ -11,7 +11,7 @@ function parseEnvValue(value) {
   return trimmed;
 }
 
-function loadEnvFile(path) {
+function loadEnvFile(path, { override = false } = {}) {
   if (!existsSync(path)) return;
 
   const raw = readFileSync(path, "utf8");
@@ -20,14 +20,14 @@ function loadEnvFile(path) {
     if (!match) continue;
 
     const [, key, value] = match;
-    if (!process.env[key]) {
+    if (override || !process.env[key]) {
       process.env[key] = parseEnvValue(value);
     }
   }
 }
 
 loadEnvFile(resolve(process.cwd(), ".env"));
-loadEnvFile(resolve(process.cwd(), ".env.local"));
+loadEnvFile(resolve(process.cwd(), ".env.local"), { override: true });
 
 function withRequiredSupabaseSsl(value) {
   try {
