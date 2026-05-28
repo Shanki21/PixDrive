@@ -43,6 +43,15 @@ curl -X POST https://your-domain.com/api/monitoring/sentry-test \
 
 Expected result: `{ "ok": true, "eventId": "..." }`, followed by a `Pixora Sentry smoke test` issue in Sentry.
 
+PostHog smoke test after deploy:
+
+```bash
+curl -X POST https://your-domain.com/api/monitoring/posthog-test \
+  -H "x-sentry-test-token: your-token"
+```
+
+Expected result: `{ "ok": true }`, followed by a `pixora_posthog_smoke_test` event in PostHog.
+
 ## 4. Load Test
 Run local smoke:
 
