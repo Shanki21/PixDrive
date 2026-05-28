@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import prisma from "@/lib/prisma";
 import { getSessionEmailFromRequestAsync } from "@/lib/session";
+import { withApiHandler } from "@/lib/withApiHandler";
 
 export const runtime = "nodejs";
 
@@ -23,7 +24,7 @@ function lastSixMonthKeys() {
   });
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withApiHandler(async (req: NextRequest) => {
   const email = await getSessionEmailFromRequestAsync(req);
   if (!email) {
     return NextResponse.json({ ok: false, authenticated: false }, { status: 401 });
@@ -169,4 +170,4 @@ export async function GET(req: NextRequest) {
     events,
     registrations: registrationRows,
   });
-}
+});

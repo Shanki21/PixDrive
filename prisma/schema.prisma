@@ -167,6 +167,17 @@ model Subscription {
   @@index([status])
 }
 
+model WebhookEvent {
+  id String @id @default(cuid())
+  provider String
+  eventId String
+  eventType String?
+  receivedAt DateTime @default(now())
+
+  @@unique([provider, eventId])
+  @@index([provider, receivedAt])
+}
+
 model GalleryVisit {
   id String @id @default(cuid())
   galleryId String

@@ -46,6 +46,31 @@ export async function uploadImageDataUrl(dataUrl: string) {
   };
 }
 
+export function createCloudinaryUploadSignature(options: {
+  folder: string;
+  timestamp: number;
+}) {
+  if (!ensureConfigured()) {
+    throw new Error("Cloudinary is not configured.");
+  }
+
+  const signature = cloudinary.utils.api_sign_request(
+    {
+      folder: options.folder,
+      timestamp: options.timestamp,
+    },
+    process.env.CLOUDINARY_API_SECRET?.trim() ?? ""
+  );
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim() ?? "";
+  const apiKey = process.env.CLOUDINARY_API_KEY?.trim() ?? "";
+
+  return {
+    cloudName,
+    apiKey,
+    signature,
+  };
+}
+
 export function extractCloudinaryPublicId(url: string) {
   if (!url.includes("res.cloudinary.com")) return null;
   const match = url.match(/\/upload\/(?:v\d+\/)?([^?#]+?)(?:\.[a-z0-9]+)?(?:[?#].*)?$/i);
@@ -60,4 +85,3 @@ export async function destroyCloudinaryAssetByUrl(url: string) {
   await cloudinary.uploader.destroy(publicId, { resource_type: "image", invalidate: true });
   return true;
 }
-

@@ -71,28 +71,8 @@ export function withRateLimit(
         idempStore.set(idempKey, now + dedupeMs);
       }
 
-      // Lazy-load session utility
-      let principalKey: string | null = null;
-
-      try {
-        const { getSessionEmailFromRequest } =
-          await import("@/lib/session");
-
-        const email =
-          getSessionEmailFromRequest(req);
-
-        if (email) {
-          principalKey = `user:${email}`;
-        }
-      } catch {
-        // fallback to IP
-      }
-
       const ip = getClientIp(req) ?? "unknown";
-
-      const keyPrincipal = principalKey
-        ? `${prefix}:${principalKey}`
-        : `${prefix}:ip:${ip}`;
+      const keyPrincipal = `${prefix}:ip:${ip}`;
 
       const throttle = await checkIpThrottle({
         key: keyPrincipal,

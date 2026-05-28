@@ -19,9 +19,9 @@ import { withRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 const DOWNLOAD_FETCH_TIMEOUT_MS = 12000;
-const MAX_SOURCE_FILE_BYTES = 30 * 1024 * 1024;
-const MAX_BULK_DOWNLOAD_FILES = 400;
-const MAX_BULK_DOWNLOAD_BYTES = 500 * 1024 * 1024;
+const MAX_SOURCE_FILE_BYTES = 20 * 1024 * 1024;
+const MAX_BULK_DOWNLOAD_FILES = 120;
+const MAX_BULK_DOWNLOAD_BYTES = 150 * 1024 * 1024;
 const ALLOWED_IMAGE_CONTENT_TYPES = [
   "image/jpeg",
   "image/png",
@@ -139,7 +139,7 @@ export const POST = withApiHandler(
   }, { keyPrefix: "gallery:unlock", limit: 12, windowMs: 15 * 60 * 1000 })
 );
 
-export async function GET(req: NextRequest) {
+export const GET = withApiHandler(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const action = String(searchParams.get("action") ?? "").trim();
   if (action !== "download") {
@@ -305,4 +305,4 @@ export async function GET(req: NextRequest) {
       "Cache-Control": "no-store",
     },
   });
-}
+});

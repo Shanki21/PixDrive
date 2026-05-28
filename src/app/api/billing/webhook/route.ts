@@ -2,6 +2,7 @@ import { getPlanForPriceId, isBillingPlan } from "@/lib/billing";
 import prisma from "@/lib/prisma";
 import { captureProductEvent } from "@/lib/product-analytics";
 import { getStripe } from "@/lib/stripe";
+import { markWebhookEventReceived } from "@/lib/webhook-events";
 import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
 
@@ -147,6 +148,15 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const eventRecord = await markWebhookEventReceived({
+      provider: "stripe",
+      eventId: event.id,
+      eventType: event.type,
+    });
+    if (eventRecord.duplicate) {
+      return NextResponse.json({ ok: true, duplicate: true });
+    }
+
     switch (event.type) {
       case "checkout.session.completed":
         await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);

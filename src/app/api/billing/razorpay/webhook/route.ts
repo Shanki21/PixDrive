@@ -2,6 +2,7 @@ import { getRazorpayPlanIdForPlan, isBillingPlan, type BillingInterval, type Bil
 import prisma from "@/lib/prisma";
 import { captureProductEvent } from "@/lib/product-analytics";
 import { verifyRazorpayWebhook } from "@/lib/razorpay";
+import { markWebhookEventReceived } from "@/lib/webhook-events";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -16,6 +17,7 @@ type RazorpaySubscriptionEntity = {
 };
 
 type RazorpayWebhookPayload = {
+  id?: string;
   event?: string;
   payload?: {
     subscription?: {
@@ -83,6 +85,19 @@ export async function POST(req: NextRequest) {
   const subscription = event.payload?.subscription?.entity;
   const payment = event.payload?.payment?.entity;
   const subscriptionId = subscription?.id ?? payment?.subscription_id ?? null;
+  const eventId =
+    req.headers.get("x-razorpay-event-id")?.trim() ||
+    event.id ||
+    `${event.event ?? "unknown"}:${subscriptionId ?? "none"}:${payment?.id ?? "none"}:${subscription?.status ?? "none"}`;
+  const eventRecord = await markWebhookEventReceived({
+    provider: "razorpay",
+    eventId,
+    eventType: event.event ?? null,
+  });
+  if (eventRecord.duplicate) {
+    return NextResponse.json({ ok: true, duplicate: true });
+  }
+
   if (!subscriptionId) {
     return NextResponse.json({ ok: true, ignored: true });
   }

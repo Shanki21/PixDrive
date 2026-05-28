@@ -71,3 +71,11 @@ Do not onboard paid beta users until all are true:
 - WAF rules are active.
 - Sentry receives staging errors.
 - A 60 second load test has zero 5xx failures.
+
+## 6. Media Storage Path
+- Launch storage provider remains `STORAGE_PROVIDER=cloudinary`.
+- All app code should call `src/lib/storage.ts` instead of calling Cloudinary directly.
+- Owner uploads should use `/api/storage/signed-upload` for direct browser-to-provider upload before storing metadata.
+- R2 signed PUT uploads are available behind the same endpoint when `STORAGE_PROVIDER=r2`.
+- Do not switch production to `STORAGE_PROVIDER=r2` until CORS, public bucket/domain access, delete handling, thumbnail generation, and a migration script are tested in staging.
+- R2 bucket CORS must allow `PUT` from the Pixora app domain and expose public reads through `R2_PUBLIC_BASE_URL`.
