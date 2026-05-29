@@ -21,7 +21,7 @@ import {
   Zap,
   Trash2,
 } from "lucide-react";
-import { showPixoraAlert, showPixoraToast } from "@/lib/pixora-alerts";
+import { confirmPixoraAction, showPixoraAlert, showPixoraToast } from "@/lib/pixora-alerts";
 import {
   ENTERPRISE_PLAN,
   PAID_BILLING_PLAN_CARDS,
@@ -572,6 +572,15 @@ export default function SettingsPage() {
 
   const deleteCustomDomain = useCallback(async (id: string) => {
     if (domainBusy) return;
+    const confirmed = await confirmPixoraAction({
+      title: "Remove custom domain?",
+      text: "Visitors using this domain may stop reaching your Pixora galleries until DNS is updated again.",
+      confirmText: "Remove domain",
+      cancelText: "Keep domain",
+      icon: "warning",
+    });
+    if (!confirmed) return;
+
     setDomainBusy(true);
     try {
       const response = await fetchWithRetry("/api/custom-domains", {

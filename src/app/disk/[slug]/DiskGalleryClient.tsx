@@ -449,11 +449,20 @@ export default function DiskGalleryClient({
   }, [clientKey, galleryId, isLocked, persistLikes]);
   useEffect(() => {
     if (selectionLimit !== null && likedCount > selectionLimit) {
+      const selectedIds = Object.keys(liked).filter((id) => liked[id]);
+      const allowedIds = new Set(selectedIds.slice(0, selectionLimit));
+      const trimmedLiked = Object.fromEntries(
+        Object.entries(liked).map(([id, value]) => [id, value && allowedIds.has(id)])
+      ) as Record<string, boolean>;
+      setLiked(trimmedLiked);
+      if (clientProfile) {
+        persistLikes(trimmedLiked, clientProfile);
+      }
       setFavoritesLimitMessage(`You can only select ${selectionLimit} photo${selectionLimit === 1 ? "" : "s"} in this gallery.`);
     } else if ((selectionLimit === null || likedCount < selectionLimit) && favoritesLimitMessage) {
       setFavoritesLimitMessage(null);
     }
-  }, [likedCount, selectionLimit, favoritesLimitMessage]);
+  }, [clientProfile, liked, likedCount, persistLikes, selectionLimit, favoritesLimitMessage]);
 
   useEffect(() => {
     if (isLocked) return;
@@ -1057,7 +1066,7 @@ export default function DiskGalleryClient({
       <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-8 sm:py-10">
         {hasPhotos ? (
           <>
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,380px),1fr))] gap-2 sm:gap-3">
+            <div className="columns-1 gap-3 sm:columns-2 lg:columns-3 xl:columns-4">
                 {visiblePhotos.map((photo, idx) => {
                   const isLiked = Boolean(liked[photo.id]);
                   const disableLike = !isLiked && selectionLimit !== null && likedCount >= selectionLimit;
@@ -1065,7 +1074,7 @@ export default function DiskGalleryClient({
                   return (
                     <figure
                       key={photo.id}
-                      className="group relative w-full overflow-hidden rounded-sm border border-white bg-[#e7ebe7] shadow-[0_10px_24px_rgba(122,63,19,0.12)] transition duration-300 hover:z-10 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(122,63,19,0.2)]"
+                      className="group relative mb-3 w-full break-inside-avoid overflow-hidden rounded-sm border border-white bg-[#e7ebe7] [contain-intrinsic-size:420px] [content-visibility:auto]"
                     >
                     <button
                       type="button"
@@ -1077,14 +1086,14 @@ export default function DiskGalleryClient({
                       <img
                         src={photo.url}
                         alt={photo.name}
-                        className="h-auto w-full object-contain transition-transform duration-500 group-hover:scale-[1.01]"
+                        className="h-auto w-full object-contain"
                         loading="lazy"
                         decoding="async"
                       />
                     </button>
-                    <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-[#0f241e]/45 via-transparent to-transparent opacity-70 transition group-hover:opacity-90" />
+                    <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-[#0f241e]/40 via-transparent to-transparent opacity-70" />
                     <div className="absolute bottom-3 left-3 max-w-[70%]">
-                      <p className="truncate rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-semibold text-white/95 backdrop-blur">
+                      <p className="truncate rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold text-white/95">
                         {photo.name}
                       </p>
                     </div>
@@ -1189,7 +1198,10 @@ export default function DiskGalleryClient({
               {favoritesEnabled ? (
                 <button
                   type="button"
-                  disabled={savingFavoriteIds.has(activePhoto.id)}
+                  disabled={
+                    savingFavoriteIds.has(activePhoto.id) ||
+                    (!liked[activePhoto.id] && selectionLimit !== null && likedCount >= selectionLimit)
+                  }
                   onClick={() => void toggleLike(activePhoto.id)}
                   className={`${liked[activePhoto.id] ? "text-rose-400" : "text-white"} ${
                     !liked[activePhoto.id] && selectionLimit !== null && likedCount >= selectionLimit

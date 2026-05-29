@@ -390,29 +390,24 @@ export default function DashboardPage() {
         ) : (
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             {recentEvents.map((event) => (
-              <article key={event.id} className="overflow-hidden rounded-3xl border border-[#eadccf] bg-white shadow-[0_14px_36px_rgba(73,39,20,0.06)]">
-                <div
-                  className="relative h-40 border-b border-[#f0e4d7]"
-                  style={
-                    event.cover
-                      ? {
-                          backgroundImage: `linear-gradient(160deg, rgba(122,63,19,0.16), rgba(185,120,59,0.18)), url(${event.cover})`,
-                          backgroundSize: "cover",
-                          backgroundPosition: "center",
-                        }
-                      : {
-                          background:
-                            "linear-gradient(145deg, rgba(122,63,19,0.15), rgba(185,120,59,0.12))",
-                        }
-                  }
-                >
-                  {!event.cover ? (
-                    <div className="flex h-full items-center justify-center">
+              <article key={event.id} className="overflow-hidden rounded-3xl border border-[#eadccf] bg-white shadow-[0_14px_36px_rgba(73,39,20,0.06)] transition hover:-translate-y-0.5 hover:border-[#7a3f13] hover:shadow-[0_18px_38px_rgba(73,39,20,0.10)]">
+                <div className="relative aspect-[16/9] overflow-hidden border-b border-[#f0e4d7]">
+                  {event.cover ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={event.cover}
+                      alt={event.name}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center bg-[linear-gradient(145deg,rgba(122,63,19,0.15),rgba(185,120,59,0.12))]">
                       <span className="rounded-full bg-white/75 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#6d4426]">
                         Event Cover
                       </span>
                     </div>
-                  ) : null}
+                  )}
                   <span className="absolute right-4 top-4 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#6d4426]">
                     {event.status}
                   </span>

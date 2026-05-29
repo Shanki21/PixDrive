@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   Download,
@@ -129,7 +129,7 @@ function MetricCard({
   helper: string;
 }) {
   return (
-    <article className="rounded-2xl border border-[#eadccf] bg-white p-5 shadow-[0_10px_30px_rgba(73,39,20,0.06)]">
+    <article className="rounded-2xl border border-[#eadccf] bg-white p-5">
       <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#f4e5d3] text-[#7a3f13]">
         <Icon className="h-5 w-5" />
       </span>
@@ -144,6 +144,7 @@ export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("analytics");
   const [payload, setPayload] = useState<AnalyticsPayload>(emptyPayload);
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -167,22 +168,26 @@ export default function AnalyticsPage() {
   }, []);
 
   const filteredRegistrations = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const query = deferredSearch.trim().toLowerCase();
     if (!query) return payload.registrations;
     return payload.registrations.filter((row) =>
       [row.eventName, row.name, row.email, row.mobile].some((value) => value.toLowerCase().includes(query))
     );
-  }, [payload.registrations, search]);
+  }, [payload.registrations, deferredSearch]);
 
   const maxActivity = Math.max(...payload.activity.map((row) => Math.max(row.visits, row.downloads)), 1);
-  const topEvents = payload.events
-    .slice()
-    .sort((a, b) => b.visits + b.downloads * 2 + b.registrations - (a.visits + a.downloads * 2 + a.registrations))
-    .slice(0, 6);
+  const topEvents = useMemo(
+    () =>
+      payload.events
+        .slice()
+        .sort((a, b) => b.visits + b.downloads * 2 + b.registrations - (a.visits + a.downloads * 2 + a.registrations))
+        .slice(0, 6),
+    [payload.events]
+  );
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
-      <section className="rounded-[28px] border border-[#eadccf] bg-white p-6 shadow-[0_20px_55px_rgba(73,39,20,0.08)] md:p-8">
+      <section className="rounded-[28px] border border-[#eadccf] bg-white p-6 md:p-8">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7a3f13]">Pixora analytics</p>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -203,7 +208,7 @@ export default function AnalyticsPage() {
         </div>
       </section>
 
-      <section className="rounded-3xl border border-[#eadccf] bg-white shadow-[0_10px_30px_rgba(73,39,20,0.06)]">
+      <section className="rounded-3xl border border-[#eadccf] bg-white">
         <div className="flex flex-wrap gap-1 border-b border-[#eadccf] px-4 pt-4">
           {tabs.map((tab) => {
             const Icon = tab.icon;

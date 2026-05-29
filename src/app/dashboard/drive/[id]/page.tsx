@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import fetchWithRetry from "@/lib/fetchWithRetry";
@@ -10,6 +10,7 @@ import type { GalleryMetaConfig } from "@/lib/gallery-config";
 import { MinimalGallery } from "@/types/DriveTableTypes";
 import {
   ArrowDownToLine,
+  CheckSquare,
   ChevronLeft,
   ChevronRight,
   Heart,
@@ -20,8 +21,10 @@ import {
   Search,
   Settings,
   SlidersHorizontal,
+  Square,
   Star,
   Trash2,
+  X,
   UploadCloud,
   HeartMinusIcon,
 } from "lucide-react";
@@ -364,6 +367,8 @@ export default function DriveDetailPage() {
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ total: 0, done: 0, current: "" });
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<"gallery" | "favorites">("gallery");
@@ -384,6 +389,7 @@ export default function DriveDetailPage() {
   const [clientSelections, setClientSelections] = useState<ClientFavoritesSelection[]>([]);
   const [favoriteFolderMeta, setFavoriteFolderMeta] = useState<Record<string, FavoriteFolderMeta>>({});
   const [selectedFavoriteFolderKey, setSelectedFavoriteFolderKey] = useState<string | null>(null);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string>>(new Set());
   const [showFavoriteFolderModal, setShowFavoriteFolderModal] = useState(false);
   const [pendingFavoriteFolderKey, setPendingFavoriteFolderKey] = useState<string | null>(null);
   const [favoriteFolderName, setFavoriteFolderName] = useState("");
@@ -394,6 +400,9 @@ export default function DriveDetailPage() {
   const [coverCropOpen, setCoverCropOpen] = useState(false);
   const [coverPosition, setCoverPosition] = useState({ x: 50, y: 50 });
   const [photoSearch, setPhotoSearch] = useState("");
+  const deferredPhotoSearch = useDeferredValue(photoSearch);
+  const [photoRenderLimit, setPhotoRenderLimit] = useState(80);
+  const [favoriteRenderLimit, setFavoriteRenderLimit] = useState(80);
   const [sortMode, setSortMode] = useState<"latest" | "name">("latest");
 
   const openOneQrTab = () => {
@@ -695,11 +704,16 @@ export default function DriveDetailPage() {
     return [...activeFavoritePhotos].sort((a, b) => a.name.localeCompare(b.name));
   }, [activeFavoritePhotos, sortMode]);
 
-  const visibleFavoritePhotos = useMemo(() => {
-    const query = photoSearch.trim().toLowerCase();
+  const filteredFavoritePhotos = useMemo(() => {
+    const query = deferredPhotoSearch.trim().toLowerCase();
     if (!query) return sortedFavoritePhotos;
     return sortedFavoritePhotos.filter((photo) => photo.name.toLowerCase().includes(query));
-  }, [sortedFavoritePhotos, photoSearch]);
+  }, [sortedFavoritePhotos, deferredPhotoSearch]);
+
+  const visibleFavoritePhotos = useMemo(
+    () => filteredFavoritePhotos.slice(0, favoriteRenderLimit),
+    [filteredFavoritePhotos, favoriteRenderLimit]
+  );
 
   const selectedFolderDescription = useMemo(() => {
     if (selectedFolderId === "photos") return "";
@@ -746,19 +760,52 @@ export default function DriveDetailPage() {
     return [...activeFolderPhotos].sort((a, b) => a.name.localeCompare(b.name));
   }, [activeFolderPhotos, sortMode]);
 
-  const visibleFolderPhotos = useMemo(() => {
-    const query = photoSearch.trim().toLowerCase();
+  const filteredFolderPhotos = useMemo(() => {
+    const query = deferredPhotoSearch.trim().toLowerCase();
     if (!query) return sortedFolderPhotos;
     return sortedFolderPhotos.filter((photo) => photo.name.toLowerCase().includes(query));
-  }, [sortedFolderPhotos, photoSearch]);
+  }, [sortedFolderPhotos, deferredPhotoSearch]);
+
+  const visibleFolderPhotos = useMemo(
+    () => filteredFolderPhotos.slice(0, photoRenderLimit),
+    [filteredFolderPhotos, photoRenderLimit]
+  );
+  const selectedPhotos = useMemo(
+    () => photos.filter((photo) => selectedPhotoIds.has(photo.id)),
+    [photos, selectedPhotoIds]
+  );
+  const visibleFolderPhotoIds = useMemo(
+    () => visibleFolderPhotos.map((photo) => photo.id),
+    [visibleFolderPhotos]
+  );
+  const allVisibleFolderPhotosSelected = useMemo(
+    () => visibleFolderPhotoIds.length > 0 && visibleFolderPhotoIds.every((id) => selectedPhotoIds.has(id)),
+    [selectedPhotoIds, visibleFolderPhotoIds]
+  );
+
+  useEffect(() => {
+    setPhotoRenderLimit(80);
+    setFavoriteRenderLimit(80);
+    setSelectedPhotoIds(new Set());
+  }, [activeTab, deferredPhotoSearch, selectedFolderId, selectedFavoriteFolderKey, sortMode]);
+
+  useEffect(() => {
+    setSelectedPhotoIds((prev) => {
+      const validIds = new Set(photos.map((photo) => photo.id));
+      const next = new Set([...prev].filter((id) => validIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [photos]);
 
   const uploadFiles = async (files: File[]) => {
     if (!galleryId || files.length === 0) return;
 
     setUploading(true);
-    setError(null);
+    setUploadError(null);
+    setUploadProgress({ total: files.length, done: 0, current: files[0]?.name ?? "" });
     try {
-      for (const file of files) {
+      for (const [index, file] of files.entries()) {
+        setUploadProgress({ total: files.length, done: index, current: file.name });
         let uploadedUrl: string | null = null;
         try {
           uploadedUrl = await uploadFileDirectly(file);
@@ -794,11 +841,16 @@ export default function DriveDetailPage() {
             return next;
           });
         }
+        setUploadProgress({ total: files.length, done: index + 1, current: file.name });
       }
+      void showPixoraToast({
+        title: `${files.length} photo${files.length === 1 ? "" : "s"} uploaded`,
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to upload photos");
+      setUploadError(err instanceof Error ? err.message : "Unable to upload photos");
     } finally {
       setUploading(false);
+      setUploadProgress({ total: 0, done: 0, current: "" });
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -864,6 +916,14 @@ export default function DriveDetailPage() {
     }
   };
 
+  const downloadSelectedPhotos = async () => {
+    if (selectedPhotos.length === 0) return;
+    for (const photo of selectedPhotos) {
+      await downloadPhoto(photo);
+    }
+    void showPixoraToast({ title: `${selectedPhotos.length} photo${selectedPhotos.length === 1 ? "" : "s"} downloaded` });
+  };
+
   const setPhotoAsCover = async (photoId: string) => {
     if (!galleryId) return;
     try {
@@ -918,6 +978,38 @@ export default function DriveDetailPage() {
     setCoverCropOpen(false);
   };
 
+  const deletePhotoById = async (photoId: string) => {
+    const dedupe = `drive:photo:delete:${photoId}`;
+    const res = await fetchWithRetry(`/api/photos/${photoId}`, { method: "DELETE" }, { dedupeKey: dedupe, idempotencyKey: dedupe });
+    if (!res.ok) {
+      throw new Error("delete-failed");
+    }
+
+    setPhotos((prev) => prev.filter((item) => item.id !== photoId));
+    setFavoriteIds((prev) => {
+      const next = new Set(prev);
+      next.delete(photoId);
+      return next;
+    });
+    setSelectedPhotoIds((prev) => {
+      const next = new Set(prev);
+      next.delete(photoId);
+      return next;
+    });
+    setFolderPhotos((prev) => {
+      const next = Object.fromEntries(
+        Object.entries(prev).map(([folderId, ids]) => [folderId, ids.filter((id) => id !== photoId)])
+      );
+      if (galleryId) {
+        writeFolderPhotos(galleryId, next);
+      }
+      return next;
+    });
+    if (coverPhotoId === photoId) {
+      setCoverPhotoId(null);
+    }
+  };
+
   const deletePhoto = async (photoId: string) => {
     const confirmed = await confirmPixoraAction({
       title: "Delete this photo?",
@@ -929,35 +1021,7 @@ export default function DriveDetailPage() {
     if (!confirmed) return;
 
     try {
-      const dedupe = `drive:photo:delete:${photoId}`;
-      const res = await fetchWithRetry(`/api/photos/${photoId}`, { method: "DELETE" }, { dedupeKey: dedupe, idempotencyKey: dedupe });
-      if (!res.ok) {
-        void showPixoraAlert({
-          title: "Unable to delete photo",
-          text: "Please try again in a moment.",
-          icon: "error",
-        });
-        return;
-      }
-
-      setPhotos((prev) => prev.filter((item) => item.id !== photoId));
-      setFavoriteIds((prev) => {
-        const next = new Set(prev);
-        next.delete(photoId);
-        return next;
-      });
-      setFolderPhotos((prev) => {
-        const next = Object.fromEntries(
-          Object.entries(prev).map(([folderId, ids]) => [folderId, ids.filter((id) => id !== photoId)])
-        );
-        if (galleryId) {
-          writeFolderPhotos(galleryId, next);
-        }
-        return next;
-      });
-      if (coverPhotoId === photoId) {
-        setCoverPhotoId(null);
-      }
+      await deletePhotoById(photoId);
       void showPixoraToast({ title: "Photo deleted" });
     } catch {
       void showPixoraAlert({
@@ -966,6 +1030,56 @@ export default function DriveDetailPage() {
         icon: "error",
       });
     }
+  };
+
+  const deleteSelectedPhotos = async () => {
+    if (selectedPhotos.length === 0) return;
+    const count = selectedPhotos.length;
+    const confirmed = await confirmPixoraAction({
+      title: `Delete ${count} selected photo${count === 1 ? "" : "s"}?`,
+      text: "This removes the selected photos from this gallery.",
+      confirmText: `Delete ${count}`,
+      cancelText: "Keep photos",
+      icon: "warning",
+    });
+    if (!confirmed) return;
+
+    try {
+      for (const photo of selectedPhotos) {
+        await deletePhotoById(photo.id);
+      }
+      void showPixoraToast({ title: `${count} photo${count === 1 ? "" : "s"} deleted` });
+    } catch {
+      void showPixoraAlert({
+        title: "Unable to delete selected photos",
+        text: "Some photos may not have been removed. Please refresh and try again.",
+        icon: "error",
+      });
+    }
+  };
+
+  const togglePhotoSelection = (photoId: string) => {
+    setSelectedPhotoIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(photoId)) {
+        next.delete(photoId);
+      } else {
+        next.add(photoId);
+      }
+      return next;
+    });
+  };
+
+  const toggleVisiblePhotoSelection = () => {
+    setSelectedPhotoIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleFolderPhotosSelected) {
+        visibleFolderPhotoIds.forEach((id) => next.delete(id));
+      } else {
+        visibleFolderPhotoIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
   };
 
   const startEditFolder = (folderId: string) => {
@@ -1000,8 +1114,17 @@ export default function DriveDetailPage() {
     writeFolderOrder(galleryId, next);
   };
 
-  const deleteFolder = (folderId: string) => {
+  const deleteFolder = async (folderId: string) => {
     if (!galleryId) return;
+    const confirmed = await confirmPixoraAction({
+      title: "Delete this folder?",
+      text: "Photos will stay in the gallery, but this folder grouping will be removed.",
+      confirmText: "Delete folder",
+      cancelText: "Keep folder",
+      icon: "warning",
+    });
+    if (!confirmed) return;
+
     const nextFolders = folders.filter((folder) => folder.id !== folderId);
     setFolders(nextFolders);
     writeFolders(galleryId, nextFolders);
@@ -1019,6 +1142,7 @@ export default function DriveDetailPage() {
     if (selectedFolderId === folderId) {
       setSelectedFolderId("photos");
     }
+    void showPixoraToast({ title: "Folder deleted" });
   };
 
   const removeFavoritePhoto = (selection: ClientFavoritesSelection, photoId: string) => {
@@ -1195,7 +1319,7 @@ export default function DriveDetailPage() {
       : {
         label: "Delete Folder",
         icon: Trash2,
-        onClick: () => deleteFolder(folderId),
+        onClick: () => void deleteFolder(folderId),
       };
 
     return { items, destructive };
@@ -1239,8 +1363,14 @@ export default function DriveDetailPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-6xl px-6 py-16 text-center text-[#8a7f73]">
-        Loading gallery...
+      <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-center px-6 py-24 text-center text-[#8a7f73]">
+        <div className="relative mb-5 h-14 w-14">
+          <div className="absolute inset-0 rounded-full border-4 border-[#ead7c5]" />
+          <div className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-[#7a3f13]" />
+          <div className="absolute inset-3 animate-pulse rounded-full bg-[#f4e5d3]" />
+        </div>
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#7a3f13]">Opening gallery</p>
+        <p className="mt-2 text-sm text-[#7a6a55]">Preparing photos, folders, and client selections...</p>
       </div>
     );
   }
@@ -1316,6 +1446,46 @@ export default function DriveDetailPage() {
           </div>
         </div>
       </section>
+
+      {(uploading || uploadError) ? (
+        <section className="mt-4 rounded-2xl border border-[#ead7c5] bg-white px-4 py-3 shadow-[0_10px_24px_rgba(73,39,20,0.06)]">
+          {uploading ? (
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span className="font-semibold text-[#2a170d]">
+                  Uploading {uploadProgress.done + 1 > uploadProgress.total ? uploadProgress.total : uploadProgress.done + 1} of {uploadProgress.total}
+                </span>
+                <span className="max-w-[min(360px,80vw)] truncate text-xs font-medium text-[#7a6a55]">
+                  {uploadProgress.current}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-[#f2e4d6]">
+                <div
+                  className="h-full rounded-full bg-linear-to-r from-[#7a3f13] to-[#b9783b] transition-all duration-300"
+                  style={{
+                    width: `${Math.max(
+                      6,
+                      Math.min(100, Math.round((uploadProgress.done / Math.max(uploadProgress.total, 1)) * 100))
+                    )}%`,
+                  }}
+                />
+              </div>
+              <p className="text-xs text-[#8a735f]">Keep this tab open while Pixora adds your photos.</p>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-[#b42343]">{uploadError}</p>
+              <button
+                type="button"
+                onClick={() => setUploadError(null)}
+                className="text-xs font-semibold text-[#7a3f13] hover:text-[#5b2b0c]"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <div className="mt-6 flex flex-wrap gap-2 rounded-2xl border border-[#eadccf] bg-white p-2">
         {[
@@ -1460,7 +1630,7 @@ export default function DriveDetailPage() {
               <div>
                 <p className="text-sm font-semibold text-[#2a170d]">
                   {selectedFolderId === "photos" ? "All Photos" : folders.find((folder) => folder.id === selectedFolderId)?.name ?? "Folder"}
-                  <span className="ml-2 text-[#67857c]">{visibleFolderPhotos.length} shown / {activeFolderPhotos.length} files</span>
+                  <span className="ml-2 text-[#67857c]">{visibleFolderPhotos.length} shown / {filteredFolderPhotos.length} files</span>
                 </p>
                 {selectedFolderDescription ? (
                   <p className="mt-1 text-sm text-[#7a6a55]">{selectedFolderDescription}</p>
@@ -1493,6 +1663,48 @@ export default function DriveDetailPage() {
                 </label>
               </div>
             </div>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[#f0e4d7] pt-4">
+              <button
+                type="button"
+                onClick={toggleVisiblePhotoSelection}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#ead7c5] bg-[#fffdf8] px-3 text-sm font-semibold text-[#5b3a23] transition hover:border-[#7a3f13] hover:text-[#7a3f13]"
+              >
+                {allVisibleFolderPhotosSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                {allVisibleFolderPhotosSelected ? "Unselect photos" : "Select photos"}
+              </button>
+
+              {selectedPhotoIds.size > 0 ? (
+                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[#ead7c5] bg-[#fffaf4] p-1.5">
+                  <span className="px-2 text-sm font-semibold text-[#5b3a23]">
+                    {selectedPhotoIds.size} selected
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPhotoIds(new Set())}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-[#7a6a55] hover:bg-white"
+                    title="Clear selection"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={downloadSelectedPhotos}
+                    className="inline-flex h-9 items-center gap-2 rounded-xl bg-white px-3 text-sm font-semibold text-[#5b3a23] transition hover:text-[#7a3f13]"
+                  >
+                    <ArrowDownToLine className="h-4 w-4" />
+                    Download
+                  </button>
+                  <button
+                    type="button"
+                    onClick={deleteSelectedPhotos}
+                    className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#fff1f4] px-3 text-sm font-semibold text-[#cf224d] transition hover:bg-[#ffe6ec]"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </section>
 
           {visibleFolderPhotos.length === 0 ? (
@@ -1517,93 +1729,40 @@ export default function DriveDetailPage() {
               ) : null}
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
               {visibleFolderPhotos.map((photo) => {
                 const isDownloaded = downloadedIds.has(photo.id);
                 const isLiked = favoriteIds.has(photo.id);
                 const isCover = coverPhotoId === photo.id;
+                const isSelected = selectedPhotoIds.has(photo.id);
                 return (
                   <article
                     key={photo.id}
-                    className="group overflow-hidden rounded-2xl border border-[#eadccf] bg-white p-2 shadow-[0_10px_26px_rgba(73,39,20,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(73,39,20,0.09)]"
+                    className={`group overflow-hidden   [contain-intrinsic-size:280px] [content-visibility:auto] ${
+                      isSelected ? "border-[#7a3f13] ring-2 ring-[#ead4bd]" : "border-[#e2d8cf]"
+                    }`}
                   >
-                    <div className="relative overflow-hidden rounded-xl">
+                    <div className="relative aspect-square overflow-hidden border-b border-[#f0e4d7] ">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={photo.url}
                         alt={photo.name}
-                        className="h-56 w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                        className="h-full w-full object-contain p-1"
+                        loading="lazy"
+                        decoding="async"
                       />
-
-                      <div className="absolute right-6 top-2 inline-flex w-auto max-w-[calc(100%-1rem)] flex-wrap items-center gap-2 rounded-xl bg-white/90 p-1.5 opacity-0 shadow-sm backdrop-blur transition group-hover:opacity-60">
-                        {[
-                          {
-                            label: isCover ? "Cover selected" : "Set cover",
-                            icon: Star,
-                            onClick: () => setPhotoAsCover(photo.id),
-                            active: isCover,
-                            danger: false,
-                          },
-                          ...(isCover
-                            ? [
-                                {
-                                  label: "Adjust cover crop",
-                                  icon: SlidersHorizontal,
-                                  onClick: () => openCoverCrop(photo.id),
-                                  active: false,
-                                  danger: false,
-                                },
-                              ]
-                            : []),
-                          {
-                            label: "Open in One QR",
-                            icon: LinkIcon,
-                            onClick: () => openPhotoInOneQr(photo.id),
-                            active: false,
-                            danger: false,
-                          },
-                          {
-                            label: "Rename",
-                            icon: PencilLine,
-                            onClick: () => renamePhoto(photo.id),
-                            active: false,
-                            danger: false,
-                          },
-                          {
-                            label: "Download",
-                            icon: ArrowDownToLine,
-                            onClick: () => downloadPhoto(photo),
-                            active: false,
-                            danger: false,
-                          },
-                          {
-                            label: "Delete",
-                            icon: Trash2,
-                            onClick: () => deletePhoto(photo.id),
-                            active: false,
-                            danger: true,
-                          },
-                        ].map((action) => {
-                          const Icon = action.icon;
-                          return (
-                            <button
-                              key={action.label}
-                              type="button"
-                              title={action.label}
-                              onClick={action.onClick}
-                              className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition ${
-                                action.danger
-                                  ? "text-[#e11d48] hover:bg-[#fff0f4]"
-                                  : action.active
-                                    ? "text-[#7a3f13] hover:bg-[#e9f7f2]"
-                                    : "text-[#315a50] hover:bg-[#edf6f2]"
-                              }`}
-                            >
-                              <Icon className={`h-3.5 w-3.5 ${action.active ? "fill-current" : ""}`} />
-                            </button>
-                          );
-                        })}
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => togglePhotoSelection(photo.id)}
+                        className={`absolute left-2.5 top-2.5 inline-flex h-7 w-7 items-center justify-center rounded-full border shadow-sm transition ${
+                          isSelected
+                            ? "border-[#7a3f13] bg-[#7a3f13] text-white opacity-100"
+                            : "border-white/80 bg-white/85 text-[#6d5a47] opacity-0 hover:bg-white hover:text-[#7a3f13] group-hover:opacity-100"
+                        }`}
+                        title={isSelected ? "Unselect photo" : "Select photo"}
+                      >
+                        {isSelected ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
+                      </button>
 
                       {isCover ? (
                         <span className="absolute bottom-2 left-2 rounded-full bg-[#7a3f13] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white">
@@ -1612,9 +1771,12 @@ export default function DriveDetailPage() {
                       ) : null}
                     </div>
 
-                    <div className="px-1 pb-1 pt-3">
-                      <p className="truncate text-sm font-semibold text-[#18352e]">{photo.name}</p>
-                      <div className="mt-2 flex items-center gap-1.5">
+                    <div className="space-y-2 px-3.5 py-3">
+                      <div>
+                        <p className="truncate text-sm font-semibold text-center text-[#2a170d]">{photo.name}</p>
+                      </div>
+                      <div className="flex min-h-7 flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
                         {isDownloaded ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-[#edf6f2] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#2b6659]">
                             <ArrowDownToLine className="h-3 w-3" />
@@ -1627,6 +1789,76 @@ export default function DriveDetailPage() {
                             Liked
                           </span>
                         ) : null}
+                        </div>
+                        <div className="ml-auto flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+                          {[
+                            {
+                              label: isCover ? "Cover selected" : "Set cover",
+                              icon: Star,
+                              onClick: () => setPhotoAsCover(photo.id),
+                              active: isCover,
+                              danger: false,
+                            },
+                            ...(isCover
+                              ? [
+                                  {
+                                    label: "Adjust cover crop",
+                                    icon: SlidersHorizontal,
+                                    onClick: () => openCoverCrop(photo.id),
+                                    active: false,
+                                    danger: false,
+                                  },
+                                ]
+                              : []),
+                            {
+                              label: "Open in One QR",
+                              icon: LinkIcon,
+                              onClick: () => openPhotoInOneQr(photo.id),
+                              active: false,
+                              danger: false,
+                            },
+                            {
+                              label: "Rename",
+                              icon: PencilLine,
+                              onClick: () => renamePhoto(photo.id),
+                              active: false,
+                              danger: false,
+                            },
+                            {
+                              label: "Download",
+                              icon: ArrowDownToLine,
+                              onClick: () => downloadPhoto(photo),
+                              active: false,
+                              danger: false,
+                            },
+                            {
+                              label: "Delete",
+                              icon: Trash2,
+                              onClick: () => deletePhoto(photo.id),
+                              active: false,
+                              danger: true,
+                            },
+                          ].map((action) => {
+                            const Icon = action.icon;
+                            return (
+                              <button
+                                key={action.label}
+                                type="button"
+                                title={action.label}
+                                onClick={action.onClick}
+                                className={`inline-flex h-6 w-6 items-center justify-center transition ${
+                                  action.danger
+                                    ? "text-[#d91545] hover:text-[#9f1239]"
+                                    : action.active
+                                      ? "text-[#7a3f13]"
+                                      : "text-[#111827] hover:text-[#7a3f13]"
+                                }`}
+                              >
+                                <Icon className={`h-3.5 w-3.5 ${action.active ? "fill-current" : ""}`} />
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   </article>
@@ -1634,6 +1866,17 @@ export default function DriveDetailPage() {
               })}
             </div>
           )}
+          {visibleFolderPhotos.length < filteredFolderPhotos.length ? (
+            <div className="mt-5 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setPhotoRenderLimit((value) => value + 80)}
+                className="rounded-xl border border-[#ead7c5] bg-white px-4 py-2 text-sm font-semibold text-[#5b3a23] transition hover:border-[#7a3f13] hover:text-[#7a3f13]"
+              >
+                Show more photos
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
       {activeTab === "favorites" && (
@@ -1668,7 +1911,7 @@ export default function DriveDetailPage() {
               <div>
                 <p className="text-sm font-semibold text-[#2a170d]">
                   {activeFavoriteFolder ? activeFavoriteFolder.folderName : "All Favorites"}
-                  <span className="ml-2 text-[#67857c]">{visibleFavoritePhotos.length} shown / {activeFavoritePhotos.length} files</span>
+                  <span className="ml-2 text-[#67857c]">{visibleFavoritePhotos.length} shown / {filteredFavoritePhotos.length} files</span>
                 </p>
                 <p className="mt-1 text-sm text-[#7a6a55]">Favorites from client selections.</p>
               </div>
@@ -1709,7 +1952,7 @@ export default function DriveDetailPage() {
               </p>
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
               {visibleFavoritePhotos.map((photo) => {
                 const isDownloaded = downloadedIds.has(photo.id);
                 const isLiked = favoriteIds.has(photo.id);
@@ -1717,78 +1960,17 @@ export default function DriveDetailPage() {
                 return (
                   <article
                     key={photo.id}
-                    className="group overflow-hidden rounded-2xl border border-[#eadccf] bg-white p-2 shadow-[0_10px_26px_rgba(73,39,20,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(73,39,20,0.09)]"
+                    className="group overflow-hidden rounded-2xl border border-[#e2d8cf] bg-white shadow-[0_10px_22px_rgba(73,39,20,0.055)] transition hover:border-[#c9ad95] [contain-intrinsic-size:280px] [content-visibility:auto]"
                   >
-                    <div className="relative overflow-hidden rounded-xl">
+                    <div className="relative aspect-square overflow-hidden border-b border-[#f0e4d7] bg-[#f7f1e9]">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={photo.url}
                         alt={photo.name}
-                        className="h-56 w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                        className="h-full w-full object-contain p-1"
+                        loading="lazy"
+                        decoding="async"
                       />
-
-                      <div className="absolute right-12 top-2 inline-flex w-auto max-w-[calc(100%-1rem)] flex-wrap items-center gap-2 rounded-xl bg-white/90 p-1.5 opacity-0 shadow-sm backdrop-blur transition group-hover:opacity-60">
-                        {[
-                          {
-                            label: isCover ? "Cover selected" : "Set cover",
-                            icon: Star,
-                            onClick: () => setPhotoAsCover(photo.id),
-                            active: isCover,
-                            danger: false,
-                          },
-                          ...(isCover
-                            ? [
-                                {
-                                  label: "Adjust cover crop",
-                                  icon: SlidersHorizontal,
-                                  onClick: () => openCoverCrop(photo.id),
-                                  active: false,
-                                  danger: false,
-                                },
-                              ]
-                            : []),
-                          {
-                            label: "Open in One QR",
-                            icon: LinkIcon,
-                            onClick: () => openPhotoInOneQr(photo.id),
-                            active: false,
-                            danger: false,
-                          },
-                          {
-                            label: "Download",
-                            icon: ArrowDownToLine,
-                            onClick: () => downloadPhoto(photo),
-                            active: false,
-                            danger: false,
-                          },
-                          {
-                            label: "Remove from favorites",
-                            icon: HeartMinusIcon,
-                            onClick: () => activeFavoriteFolder && removeFavoritePhoto(activeFavoriteFolder, photo.id),
-                            active: true,
-                            danger: true,
-                          },
-                        ].map((action) => {
-                          const Icon = action.icon;
-                          return (
-                            <button
-                              key={action.label}
-                              type="button"
-                              title={action.label}
-                              onClick={action.onClick}
-                              className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition ${
-                                action.danger
-                                  ? "text-[#e11d48] hover:bg-[#fff0f4]"
-                                  : action.active
-                                    ? "text-[#7a3f13] hover:bg-[#e9f7f2]"
-                                    : "text-[#315a50] hover:bg-[#edf6f2]"
-                              }`}
-                            >
-                              <Icon className={`h-3.5 w-3.5 ${action.active ? "fill-current" : ""}`} />
-                            </button>
-                          );
-                        })}
-                      </div>
 
                       {isCover ? (
                         <span className="absolute bottom-2 left-2 rounded-full bg-[#7a3f13] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white">
@@ -1797,9 +1979,13 @@ export default function DriveDetailPage() {
                       ) : null}
                     </div>
 
-                    <div className="px-1 pb-1 pt-3">
-                      <p className="truncate text-sm font-semibold text-[#18352e]">{photo.name}</p>
-                      <div className="mt-2 flex items-center gap-1.5">
+                    <div className="space-y-2 px-3.5 py-3">
+                      <div>
+                        <p className="truncate text-sm font-semibold text-[#2a170d]">{photo.name}</p>
+                        <p className="mt-1 truncate text-xs text-[#a2adba]">{photo.name}</p>
+                      </div>
+                      <div className="flex min-h-7 flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
                         {isDownloaded ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-[#edf6f2] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#2b6659]">
                             <ArrowDownToLine className="h-3 w-3" />
@@ -1812,6 +1998,69 @@ export default function DriveDetailPage() {
                             Liked
                           </span>
                         ) : null}
+                        </div>
+                        <div className="ml-auto flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+                          {[
+                            {
+                              label: isCover ? "Cover selected" : "Set cover",
+                              icon: Star,
+                              onClick: () => setPhotoAsCover(photo.id),
+                              active: isCover,
+                              danger: false,
+                            },
+                            ...(isCover
+                              ? [
+                                  {
+                                    label: "Adjust cover crop",
+                                    icon: SlidersHorizontal,
+                                    onClick: () => openCoverCrop(photo.id),
+                                    active: false,
+                                    danger: false,
+                                  },
+                                ]
+                              : []),
+                            {
+                              label: "Open in One QR",
+                              icon: LinkIcon,
+                              onClick: () => openPhotoInOneQr(photo.id),
+                              active: false,
+                              danger: false,
+                            },
+                            {
+                              label: "Download",
+                              icon: ArrowDownToLine,
+                              onClick: () => downloadPhoto(photo),
+                              active: false,
+                              danger: false,
+                            },
+                            {
+                              label: "Remove from favorites",
+                              icon: HeartMinusIcon,
+                              onClick: () => activeFavoriteFolder && removeFavoritePhoto(activeFavoriteFolder, photo.id),
+                              active: true,
+                              danger: true,
+                            },
+                          ].map((action) => {
+                            const Icon = action.icon;
+                            return (
+                              <button
+                                key={action.label}
+                                type="button"
+                                title={action.label}
+                                onClick={action.onClick}
+                                className={`inline-flex h-6 w-6 items-center justify-center transition ${
+                                  action.danger
+                                    ? "text-[#d91545] hover:text-[#9f1239]"
+                                    : action.active
+                                      ? "text-[#7a3f13]"
+                                      : "text-[#111827] hover:text-[#7a3f13]"
+                                }`}
+                              >
+                                <Icon className={`h-3.5 w-3.5 ${action.active ? "fill-current" : ""}`} />
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   </article>
@@ -1819,6 +2068,17 @@ export default function DriveDetailPage() {
               })}
             </div>
           )}
+          {visibleFavoritePhotos.length < filteredFavoritePhotos.length ? (
+            <div className="mt-5 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setFavoriteRenderLimit((value) => value + 80)}
+                className="rounded-xl border border-[#ead7c5] bg-white px-4 py-2 text-sm font-semibold text-[#5b3a23] transition hover:border-[#7a3f13] hover:text-[#7a3f13]"
+              >
+                Show more selected photos
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
 
