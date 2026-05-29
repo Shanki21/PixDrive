@@ -2,11 +2,13 @@
 
 import Sidebar from "./Sidebar";
 import Header from "./Header";
+import DashboardNotifications from "./DashboardNotifications";
 import React from "react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="pixora-dashboard-bg min-h-screen">
+      <DashboardNotifications />
       <Sidebar />
       <Header />
       {/* main area: margin-left matches sidebar width (w-56), padding-top matches topbar height (h-16) */}

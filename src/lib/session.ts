@@ -121,6 +121,10 @@ export function getSessionEmailFromRequest(req: NextRequest) {
 
 export async function getSessionEmailFromRequestAsync(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE_NAME)?.value ?? "";
+  return getSessionEmailFromTokenAsync(token);
+}
+
+export async function getSessionEmailFromTokenAsync(token: string) {
   if (!token) return null;
   const payload = parseSessionToken(token);
   if (!payload) return null;
@@ -152,6 +156,12 @@ export function getSessionEmailFromCookieStore(cookieStore: {
   return session?.email ?? null;
 }
 
+export function getSessionTokenFromCookieStore(cookieStore: {
+  get: (name: string) => { value?: string } | undefined;
+}) {
+  return cookieStore.get(SESSION_COOKIE_NAME)?.value ?? "";
+}
+
 export function getClientIp(req: NextRequest) {
   const forwarded = req.headers.get("x-forwarded-for");
 
@@ -178,7 +188,7 @@ export async function setSessionCookie(response: NextResponse, email: string) {
       await sessionModel.create({ data: { token, email: email.trim().toLowerCase(), expiresAt } });
     }
   } catch {
-    // ignore DB write failures; still set cookie so signed token works as fallback
+    return false;
   }
 
   response.cookies.set({

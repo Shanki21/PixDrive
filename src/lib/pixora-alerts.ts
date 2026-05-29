@@ -83,3 +83,31 @@ export function showPixoraToast({
     },
   });
 }
+
+const QUEUED_TOAST_KEY = "pixora:queued-toast";
+
+export function queuePixoraToast(input: { title: string; icon?: SweetAlertIcon }) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(QUEUED_TOAST_KEY, JSON.stringify(input));
+  } catch {
+    // Ignore storage failures; the action itself already succeeded.
+  }
+}
+
+export function flushQueuedPixoraToast() {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = window.sessionStorage.getItem(QUEUED_TOAST_KEY);
+    if (!raw) return;
+    window.sessionStorage.removeItem(QUEUED_TOAST_KEY);
+    const payload = JSON.parse(raw) as { title?: unknown; icon?: unknown };
+    if (typeof payload.title !== "string" || !payload.title.trim()) return;
+    void showPixoraToast({
+      title: payload.title,
+      icon: payload.icon === "error" || payload.icon === "warning" || payload.icon === "info" ? payload.icon : "success",
+    });
+  } catch {
+    // Ignore malformed queued notifications.
+  }
+}

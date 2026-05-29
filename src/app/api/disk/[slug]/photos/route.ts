@@ -1,5 +1,6 @@
 import { getGalleryPublicAccess } from "@/lib/gallery-public-access";
 import { getRequiredGalleryPin, hasGalleryAccessFromRequest } from "@/lib/gallery-pin-access";
+import { getCustomDomainUserScope } from "@/lib/custom-domain-scope";
 import { normalizePublicUrl } from "@/lib/url-security";
 import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
@@ -45,10 +46,12 @@ export const GET = withApiHandler(async (
   const take = Number.isFinite(rawTake) ? Math.min(Math.max(rawTake, 1), MAX_PAGE_SIZE) : 60;
   const cursor = searchParams.get("cursor");
   const downloadId = String(searchParams.get("downloadId") ?? "").trim();
+  const customDomainScope = await getCustomDomainUserScope(req.headers);
 
   const gallery = await prisma.gallery.findFirst({
     where: {
       OR: [{ slug }, { id: slug }],
+      ...customDomainScope,
       deletedAt: null,
     },
     select: { id: true, settings: true, meta: true },

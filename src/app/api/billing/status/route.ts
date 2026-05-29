@@ -1,4 +1,4 @@
-import { getRazorpayBillingConfigStatus, getUserBillingState } from "@/lib/billing";
+import { getRazorpayBillingConfigStatus, getUserBillingState, toPublicBillingState } from "@/lib/billing";
 import prisma from "@/lib/prisma";
 import { getSessionEmailFromRequestAsync } from "@/lib/session";
 import { withApiHandler } from "@/lib/withApiHandler";
@@ -16,5 +16,9 @@ export const GET = withApiHandler(async (req: NextRequest) => {
   }
 
   const billing = await getUserBillingState(user.id);
-  return NextResponse.json({ ok: true, billing, billingConfig: { razorpay: getRazorpayBillingConfigStatus() } });
+  return NextResponse.json({
+    ok: true,
+    billing: toPublicBillingState(billing),
+    billingConfig: { razorpay: getRazorpayBillingConfigStatus() },
+  });
 });

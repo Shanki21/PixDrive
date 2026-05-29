@@ -10,30 +10,24 @@ export async function POST(req: NextRequest) {
 
   const configuredToken = process.env.SENTRY_TEST_TOKEN?.trim();
   const providedToken = req.headers.get("x-sentry-test-token")?.trim();
-  const tokenDebug = {
-    configured: Boolean(configuredToken),
-    provided: Boolean(providedToken),
-    configuredLength: configuredToken?.length ?? 0,
-    providedLength: providedToken?.length ?? 0,
-  };
 
   if (!configuredToken) {
     return NextResponse.json(
-      { ok: false, message: "SENTRY_TEST_TOKEN is not configured.", tokenDebug },
+      { ok: false, message: "SENTRY_TEST_TOKEN is not configured." },
       { status: 503, headers: { "Cache-Control": "no-store" } }
     );
   }
 
   if (!providedToken || providedToken !== configuredToken) {
     return NextResponse.json(
-      { ok: false, message: "Unauthorized.", tokenDebug },
+      { ok: false, message: "Unauthorized." },
       { status: 401, headers: { "Cache-Control": "no-store" } }
     );
   }
 
   if (!process.env.SENTRY_DSN?.trim()) {
     return NextResponse.json(
-      { ok: false, message: "SENTRY_DSN is not configured.", tokenDebug },
+      { ok: false, message: "SENTRY_DSN is not configured." },
       { status: 503, headers: { "Cache-Control": "no-store" } }
     );
   }
@@ -44,7 +38,7 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json(
-    { ok: true, eventId: eventId ?? null, tokenDebug },
+    { ok: true, eventId: eventId ?? null },
     { headers: { "Cache-Control": "no-store" } }
   );
 }

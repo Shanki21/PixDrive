@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import fetchWithRetry from "@/lib/fetchWithRetry";
+import { getApiErrorMessage, readApiErrorPayload } from "@/lib/api-response";
 import { getClientGalleryBasePathForDisplay } from "@/lib/client-gallery-url";
 import { showPixoraAlert, showPixoraToast } from "@/lib/pixora-alerts";
 import { MinimalGallery } from "@/types/DriveTableTypes";
@@ -212,10 +213,12 @@ export default function AddGalleryModal({
             }
 
             if (!res.ok) {
+                const payload = await readApiErrorPayload(res);
+                const isPlanLimit = res.status === 402 || payload.code === "PLAN_LIMIT_REACHED";
                 void showPixoraAlert({
-                    title: "Unable to create event",
-                    text: "Please check your connection and try again.",
-                    icon: "error",
+                    title: isPlanLimit ? "Free Trial limit reached" : "Unable to create event",
+                    text: getApiErrorMessage(payload, "Please check your connection and try again."),
+                    icon: isPlanLimit ? "warning" : "error",
                 });
                 return;
             }

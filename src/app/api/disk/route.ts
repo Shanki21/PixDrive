@@ -1,6 +1,7 @@
 import JSZip from "jszip";
 import { getGalleryPublicAccess } from "@/lib/gallery-public-access";
 import { checkIpThrottle } from "@/lib/ip-throttle";
+import { getCustomDomainUserScope } from "@/lib/custom-domain-scope";
 import { normalizeClientKey, normalizeSingleLine } from "@/lib/input-security";
 import { getClientIp } from "@/lib/request-ip";
 import { rejectCrossOriginWrite } from "@/lib/request-security";
@@ -57,9 +58,9 @@ function isAllowedImageContentType(contentType: string) {
   return ALLOWED_IMAGE_CONTENT_TYPES.some((allowed) => lower.includes(allowed));
 }
 
-async function resolveGalleryBySlug(slug: string) {
+async function resolveGalleryBySlug(slug: string, userScope: { userId?: string } = {}) {
   return prisma.gallery.findFirst({
-    where: { OR: [{ slug }, { id: slug }], deletedAt: null },
+    where: { OR: [{ slug }, { id: slug }], ...userScope, deletedAt: null },
     select: {
       id: true,
       name: true,
@@ -93,7 +94,7 @@ export const POST = withApiHandler(
       return NextResponse.json({ ok: false, error: "slug and pin are required." }, { status: 400 });
     }
 
-    const gallery = await resolveGalleryBySlug(slug);
+    const gallery = await resolveGalleryBySlug(slug, await getCustomDomainUserScope(req.headers));
     if (!gallery) {
       return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
     }
@@ -153,7 +154,7 @@ export const GET = withApiHandler(async (req: NextRequest) => {
     return NextResponse.json({ error: "slug is required." }, { status: 400 });
   }
 
-  const gallery = await resolveGalleryBySlug(slug);
+  const gallery = await resolveGalleryBySlug(slug, await getCustomDomainUserScope(req.headers));
   if (!gallery) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

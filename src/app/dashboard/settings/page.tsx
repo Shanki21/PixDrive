@@ -96,9 +96,9 @@ type BillingState = {
     customDomainLimit: number;
     prioritySupport: boolean;
   };
-  stripeCustomerId: string | null;
-  razorpayCustomerId: string | null;
-  razorpaySubscriptionId: string | null;
+  hasStripeCustomer: boolean;
+  hasRazorpayCustomer: boolean;
+  hasRazorpaySubscription: boolean;
 };
 
 type BillingConfig = {
@@ -741,7 +741,7 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={() => void openBillingPortal()}
-                disabled={billingBusy === "portal" || !billing?.stripeCustomerId}
+                disabled={billingBusy === "portal" || !billing?.hasStripeCustomer}
                 className="inline-flex h-11 items-center gap-2 rounded-full bg-[#e9e9e9] px-5 text-sm font-semibold text-[#35413d] transition hover:bg-[#dedede] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {billingBusy === "portal" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
@@ -869,7 +869,7 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={() => void openBillingPortal()}
-                  disabled={billingBusy === "portal" || !billing?.stripeCustomerId}
+                  disabled={billingBusy === "portal" || !billing?.hasStripeCustomer}
                   className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#ffc33d] px-6 text-sm font-semibold text-[#2a170d] transition hover:bg-[#ffd46d] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Zap className="h-4 w-4" />
@@ -1076,7 +1076,7 @@ export default function SettingsPage() {
           <button
             type="button"
             onClick={() => void openBillingPortal()}
-            disabled={billingBusy === "portal" || !billing?.stripeCustomerId}
+            disabled={billingBusy === "portal" || !billing?.hasStripeCustomer}
             className="inline-flex h-11 items-center gap-2 rounded-full bg-[#2d333b] px-5 text-sm font-semibold text-white transition hover:bg-[#17211d] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {billingBusy === "portal" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
