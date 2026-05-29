@@ -3,6 +3,7 @@
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import fetchWithRetry from "@/lib/fetchWithRetry";
 import { getApiErrorMessage, readApiErrorPayload } from "@/lib/api-response";
+import { readCachedGalleries } from "@/lib/client-galleries-cache";
 import { queuePixoraToast } from "@/lib/pixora-alerts";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -17,6 +18,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import type { GalleryEventSettings, GalleryMetaConfig } from "@/lib/gallery-config";
+import type { MinimalGallery } from "@/types/DriveTableTypes";
 
 const EVENT_TYPES = [
   "Wedding",
@@ -206,6 +208,32 @@ function CreateEventsPageContent() {
       setPublished(settings?.published ?? false);
       setAdvancedOpen(true);
     };
+
+    const cachedGallery = readCachedGalleries<MinimalGallery>()?.find((gallery) => gallery.id === editGalleryId);
+    if (cachedGallery) {
+      applyGalleryData({
+        id: cachedGallery.id,
+        name: cachedGallery.name,
+        createdAt: cachedGallery.createdAt,
+        settings: {
+          startDate: cachedGallery.startDate ?? undefined,
+          endDate: cachedGallery.endDate ?? undefined,
+          eventType: cachedGallery.eventType ?? undefined,
+          eventLocation: cachedGallery.eventLocation ?? undefined,
+          description: cachedGallery.description ?? undefined,
+          published: cachedGallery.published ?? true,
+          allowSingleDownload: cachedGallery.allowSingleDownload ?? true,
+          allowBulkDownload: cachedGallery.allowBulkDownload ?? false,
+          oneQrEnabled: cachedGallery.oneQrEnabled ?? true,
+        },
+        meta: {
+          expiresAt: cachedGallery.expiresAt ?? undefined,
+          favoritesEnabled: cachedGallery.favoritesEnabled ?? true,
+          favoritesLimitSelected: cachedGallery.favoritesLimitSelected ?? false,
+          favoritesMaxSelected: cachedGallery.favoritesMaxSelected ?? null,
+        },
+      });
+    }
     setLoadingEditData(true);
 
         const loadForEdit = async () => {
@@ -310,10 +338,16 @@ function CreateEventsPageContent() {
           }),
         }, { dedupeKey: `galleries:patch:${editGalleryId}`, idempotencyKey: `galleries:patch:${editGalleryId}:${Date.now()}` });
         const contentType = response.headers.get("content-type") ?? "";
-        if (!response.ok || !contentType.includes("application/json")) {
+        if (!response.ok) {
+          const payload = await readApiErrorPayload(response);
+          throw new Error(getApiErrorMessage(payload, response.status === 404 ? "Gallery not found. Refresh the dashboard and try again." : "Unable to save event changes."));
+        }
+
+        if (!contentType.includes("application/json")) {
           throw new Error("Unable to save event changes.");
         }
 
+        queuePixoraToast({ title: "Event settings saved" });
         router.push("/dashboard/drive");
         return;
       }

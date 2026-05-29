@@ -10,7 +10,7 @@ import { checkIpThrottle } from "@/lib/ip-throttle";
 import prisma from "@/lib/prisma";
 import { getClientIp } from "@/lib/request-ip";
 import { rejectCrossOriginWrite } from "@/lib/request-security";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { getSessionEmailFromRequestAsync } from "@/lib/session";
 import { NextRequest, NextResponse } from "next/server";
 import { withApiHandler } from "@/lib/withApiHandler";
@@ -337,28 +337,62 @@ export const POST = withApiHandler(
       }
     }
 
-    const writeOps: Prisma.PrismaPromise<unknown>[] = [];
-    if (favoriteCreates.length > 0) {
-      writeOps.push(prisma.clientPhotoAction.createMany({ data: favoriteCreates, skipDuplicates: true }));
-    }
-    if (downloadCreates.length > 0) {
-      writeOps.push(prisma.clientPhotoAction.createMany({ data: downloadCreates, skipDuplicates: true }));
-    }
-    favoriteDeletes.forEach((item) => {
-      writeOps.push(
-        prisma.clientPhotoAction.deleteMany({
-          where: {
-            galleryId: id,
-            photoId: item.photoId,
-            clientKey: item.clientKey,
-            action: "favorite",
-          },
-        })
-      );
-    });
+    if (favoriteCreates.length > 0 || downloadCreates.length > 0 || favoriteDeletes.length > 0) {
+      try {
+        await prisma.$transaction(
+          async (tx) => {
+            for (const item of favoriteDeletes) {
+              await tx.clientPhotoAction.deleteMany({
+                where: {
+                  galleryId: id,
+                  photoId: item.photoId,
+                  clientKey: item.clientKey,
+                  action: "favorite",
+                },
+              });
+            }
 
-    if (writeOps.length > 0) {
-      await prisma.$transaction(writeOps);
+            for (const item of favoriteCreates) {
+              const existing = await tx.clientPhotoAction.findFirst({
+                where: {
+                  galleryId: id,
+                  photoId: item.photoId,
+                  clientKey: item.clientKey,
+                  action: "favorite",
+                },
+                select: { id: true },
+              });
+              if (existing) continue;
+
+              if (favoriteLimit !== null) {
+                const currentCount = await tx.clientPhotoAction.count({
+                  where: { galleryId: id, clientKey: item.clientKey, action: "favorite" },
+                });
+                if (currentCount >= favoriteLimit) {
+                  throw new Error(`SELECTION_LIMIT:${favoriteLimit}`);
+                }
+              }
+
+              await tx.clientPhotoAction.create({ data: item });
+            }
+
+            if (downloadCreates.length > 0) {
+              await tx.clientPhotoAction.createMany({ data: downloadCreates, skipDuplicates: true });
+            }
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (message.startsWith("SELECTION_LIMIT:")) {
+          const max = Number(message.split(":")[1] ?? favoriteLimit ?? 1);
+          return NextResponse.json(
+            { error: `Selection limit exceeded. Maximum ${max} photos can be selected.` },
+            { status: 409 }
+          );
+        }
+        throw error;
+      }
     }
 
     if (photoIds.length > 0) {

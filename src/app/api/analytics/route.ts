@@ -61,12 +61,25 @@ export const GET = withApiHandler(async (req: NextRequest) => {
     });
   }
 
-  const [visitRows, downloadRows, clientDownloadRows, registrationCount, registrations] = await Promise.all([
-    prisma.galleryVisit.findMany({
+  const monthKeys = lastSixMonthKeys();
+  const firstActivityMonth = (() => {
+    const [year, month] = monthKeys[0].split("-").map(Number);
+    return new Date(year, (month ?? 1) - 1, 1);
+  })();
+
+  const [visitCount, visitRowsByGallery, recentVisitRows, downloadRows, clientDownloadRows, registrationCount, registrations] = await Promise.all([
+    prisma.galleryVisit.count({
       where: { galleryId: { in: galleryIds } },
-      select: { galleryId: true, visitedAt: true },
+    }),
+    prisma.galleryVisit.groupBy({
+      by: ["galleryId"],
+      _count: { _all: true },
+      where: { galleryId: { in: galleryIds } },
+    }),
+    prisma.galleryVisit.findMany({
+      where: { galleryId: { in: galleryIds }, visitedAt: { gte: firstActivityMonth } },
+      select: { visitedAt: true },
       orderBy: { visitedAt: "desc" },
-      take: 5000,
     }),
     prisma.photo.groupBy({
       by: ["galleryId"],
@@ -104,8 +117,8 @@ export const GET = withApiHandler(async (req: NextRequest) => {
   ]);
 
   const visitsByGallery = new Map<string, number>();
-  visitRows.forEach((row) => {
-    visitsByGallery.set(row.galleryId, (visitsByGallery.get(row.galleryId) ?? 0) + 1);
+  visitRowsByGallery.forEach((row) => {
+    visitsByGallery.set(row.galleryId, row._count._all ?? 0);
   });
 
   const downloadsByGallery = new Map<string, number>();
@@ -118,10 +131,9 @@ export const GET = withApiHandler(async (req: NextRequest) => {
     downloadsByClient.set(`${row.galleryId}:${row.clientKey}`, row._count._all ?? 0);
   });
 
-  const monthKeys = lastSixMonthKeys();
   const activity = monthKeys.map((key) => ({ key, label: monthLabel(key), visits: 0, downloads: 0 }));
   const activityByKey = new Map(activity.map((row) => [row.key, row]));
-  visitRows.forEach((row) => {
+  recentVisitRows.forEach((row) => {
     const bucket = activityByKey.get(monthKey(row.visitedAt));
     if (bucket) bucket.visits += 1;
   });
@@ -161,7 +173,7 @@ export const GET = withApiHandler(async (req: NextRequest) => {
     ok: true,
     totals: {
       registrations: registrationCount,
-      visits: visitRows.length,
+      visits: visitCount,
       imageViews: 0,
       downloads: events.reduce((sum, row) => sum + row.downloads, 0),
       photos: galleries.reduce((sum, row) => sum + row._count.photos, 0),

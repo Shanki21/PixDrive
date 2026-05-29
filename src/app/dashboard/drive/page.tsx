@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import fetchWithRetry from "@/lib/fetchWithRetry";
 import { getApiErrorMessage, readApiErrorPayload } from "@/lib/api-response";
-import { showPixoraAlert, showPixoraToast } from "@/lib/pixora-alerts";
+import { confirmPixoraAction, showPixoraAlert, showPixoraToast } from "@/lib/pixora-alerts";
 import { useRouter } from "next/navigation";
 import DriveHeader from "@/components/drive/DriveHeader";
 import DriveTable from "@/components/drive/DriveTable";
@@ -18,6 +18,14 @@ import {
   writeCachedGalleries,
 } from "@/lib/client-galleries-cache";
 
+function isRealGallery(gallery: MinimalGallery) {
+  return !gallery.id.includes("-copy-");
+}
+
+function onlyRealGalleries(list: MinimalGallery[]) {
+  return list.filter(isRealGallery);
+}
+
 function insertAfterPinned(list: MinimalGallery[], item: MinimalGallery) {
   const pinnedCount = list.filter((g) => g.pinned).length;
   return [...list.slice(0, pinnedCount), item, ...list.slice(pinnedCount)];
@@ -25,7 +33,7 @@ function insertAfterPinned(list: MinimalGallery[], item: MinimalGallery) {
 
 export default function DrivePage() {
   const router = useRouter();
-  const [galleries, setGalleries] = useState<MinimalGallery[]>(() => readCachedGalleries<MinimalGallery>() ?? []);
+  const [galleries, setGalleries] = useState<MinimalGallery[]>(() => onlyRealGalleries(readCachedGalleries<MinimalGallery>() ?? []));
   const [trash, setTrash] = useState<MinimalGallery[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"galleries" | "trash">("galleries");
@@ -38,14 +46,15 @@ export default function DrivePage() {
       });
 
       if (!active) return;
-      setGalleries(rows);
+      const realRows = onlyRealGalleries(rows);
+      setGalleries(realRows);
       setLoading(false);
       const loadTrash = async () => {
         const trashRes = await fetchWithRetry("/api/galleries?trash=1&metrics=0", { cache: "no-store" }, { dedupeKey: "client:galleries:trash" });
         if (!active) return;
         if (trashRes.ok) {
           const trashRows = (await trashRes.json()) as MinimalGallery[];
-          setTrash(Array.isArray(trashRows) ? trashRows : []);
+          setTrash(Array.isArray(trashRows) ? onlyRealGalleries(trashRows) : []);
         }
       };
       if ("requestIdleCallback" in window) {
@@ -62,22 +71,6 @@ export default function DrivePage() {
       active = false;
     };
   }, []);
-
-  useEffect(() => {
-    const prefetch = () => {
-      galleries.slice(0, 4).forEach((gallery) => {
-        router.prefetch(`/dashboard/drive/${gallery.id}`);
-      });
-    };
-
-    if ("requestIdleCallback" in window) {
-      const id = window.requestIdleCallback(prefetch);
-      return () => window.cancelIdleCallback(id);
-    }
-
-    const timeoutId = setTimeout(prefetch, 300);
-    return () => clearTimeout(timeoutId);
-  }, [galleries, router]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -100,8 +93,14 @@ export default function DrivePage() {
 
   if (loading && galleries.length === 0) {
     return (
-      <div className="mx-auto w-full max-w-6xl px-6 py-20 text-center text-[#5f7e9a]">
-        Loading your events...
+      <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-center px-6 py-24 text-center text-[#5f7e9a]">
+        <div className="relative mb-5 h-14 w-14">
+          <div className="absolute inset-0 rounded-full border-4 border-[#ead7c5]" />
+          <div className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-[#7a3f13]" />
+          <div className="absolute inset-3 animate-pulse rounded-full bg-[#f4e5d3]" />
+        </div>
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#7a3f13]">Preparing events</p>
+        <p className="mt-2 text-sm text-[#7a6a55]">Loading your gallery workspace...</p>
       </div>
     );
   }
@@ -195,18 +194,16 @@ export default function DrivePage() {
               });
             }
           }}
-          onDuplicate={(gallery) => {
-            const copy: MinimalGallery = {
-              ...gallery,
-              id: `${gallery.id}-copy-${Date.now()}`,
-              name: `${gallery.name} (Copy)`,
-              pinned: false,
-              createdAt: new Date().toISOString(),
-            };
-
-            setGalleries((prev) => insertAfterPinned(prev, copy));
-          }}
           onDelete={async (gallery) => {
+            const confirmed = await confirmPixoraAction({
+              title: "Move event to bin?",
+              text: "The event will leave your active dashboard and can be restored from the bin for a limited time.",
+              confirmText: "Move to bin",
+              cancelText: "Keep event",
+              icon: "warning",
+            });
+            if (!confirmed) return;
+
             try {
               const dedupe = `galleries:delete:${gallery.id}`;
               const res = await fetchWithRetry(`/api/galleries/${encodeURIComponent(gallery.id)}`, {
@@ -296,6 +293,15 @@ export default function DrivePage() {
               void showPixoraToast({ title: "Event restored" });
             }}
             onPermanentDelete={async (gallery) => {
+              const confirmed = await confirmPixoraAction({
+                title: "Permanently delete event?",
+                text: "This removes the event and its related activity from Pixora. This action cannot be undone.",
+                confirmText: "Delete forever",
+                cancelText: "Keep event",
+                icon: "warning",
+              });
+              if (!confirmed) return;
+
               const dedupe = `galleries:delete:permanent:${gallery.id}`;
               const res = await fetchWithRetry(`/api/galleries/${encodeURIComponent(gallery.id)}?permanent=1`, {
                 method: "DELETE",

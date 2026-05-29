@@ -120,13 +120,13 @@ function GalleryRow({
 
       <div className="w-4 h-4 rounded-full border border-gray-400" />
 
-      <div className="w-14 h-14 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
+      <div className="w-14 h-14 bg-[#f7f1e9] rounded-lg overflow-hidden flex items-center justify-center border border-[#eadccf]">
         {gallery.coverUrl || gallery.firstPhotoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={gallery.coverUrl ?? gallery.firstPhotoUrl ?? ""}
             alt={gallery.name}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-contain"
             loading="lazy"
           />
         ) : (

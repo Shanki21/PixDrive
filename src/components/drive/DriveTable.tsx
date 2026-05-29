@@ -12,7 +12,6 @@ import {
   Upload,
   UserRoundPlus,
   Pin,
-  Copy,
   MoreVertical,
   BadgeCheck,
   BadgeMinus,
@@ -71,7 +70,6 @@ export default function DriveTable({
   onOpenQr,
   onPinToggle,
   onPublishToggle,
-  onDuplicate,
   onDelete,
   onReorder,
   onOpen,
@@ -84,7 +82,6 @@ export default function DriveTable({
   onOpenQr: (gallery: MinimalGallery) => void;
   onPinToggle: (gallery: MinimalGallery) => void;
   onPublishToggle: (gallery: MinimalGallery) => void;
-  onDuplicate: (gallery: MinimalGallery) => void;
   onDelete: (gallery: MinimalGallery) => void;
   onReorder: (draggedId: string, targetId: string) => void;
   onOpen?: (gallery: MinimalGallery) => void;
@@ -284,7 +281,7 @@ export default function DriveTable({
         {filteredAndSorted.map((gallery) => {
           const progress = getProgress(gallery);
           const isPublished = gallery.published ?? true;
-          const cover = gallery.coverUrl ?? gallery.firstPhotoUrl ?? null;
+          const cover = filteredAndSorted.length > 24 ? null : gallery.coverUrl ?? gallery.firstPhotoUrl ?? null;
           const eventDate = gallery.startDate ?? gallery.createdAt;
           const cardStatus = isExpired(gallery)
             ? "expired"
@@ -295,8 +292,8 @@ export default function DriveTable({
           return (
             <article
               key={gallery.id}
-              className={`pixora-virtual-card group cursor-pointer overflow-visible rounded-[28px] border bg-white transition hover:border-[#7a3f13] ${
-                dragOverId === gallery.id ? "border-[#7a3f13]" : "border-[#eadccf]"
+              className={`pixora-virtual-card group cursor-pointer overflow-visible rounded-[26px] border bg-white transition hover:-translate-y-0.5 hover:border-[#7a3f13] hover:shadow-[0_18px_36px_rgba(73,39,20,0.10)] ${
+                dragOverId === gallery.id ? "border-[#7a3f13] shadow-[0_18px_36px_rgba(73,39,20,0.12)]" : "border-[#eadccf] shadow-[0_12px_28px_rgba(73,39,20,0.06)]"
               }`}
               onClick={() => onOpen?.(gallery)}
               draggable
@@ -318,34 +315,48 @@ export default function DriveTable({
                 }
               }}
             >
-              <div className="relative h-72 overflow-hidden rounded-t-[28px] border-b border-[#f0e4d7] bg-[#2a170d]">
+              <div className="relative overflow-hidden rounded-t-[26px]">
+                <div className="relative aspect-[16/10] overflow-hidden">
                 {cover ? (
                   <>
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(255,250,244,0.28),transparent_34%),linear-gradient(160deg,rgba(42,23,13,0.42),rgba(122,63,19,0.10)_42%,rgba(255,250,244,0.12))]" />
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={cover}
                       alt={gallery.name}
-                      className="relative z-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+                      className="h-full w-full object-cover"
                       loading="lazy"
                       decoding="async"
                     />
                   </>
                 ) : (
-                  <div className="absolute inset-0 bg-[linear-gradient(140deg,#2a170d_0%,#7a3f13_48%,#ead4bd_100%)]" />
+                  <div className="flex h-full items-center justify-center bg-[linear-gradient(140deg,#fff7ee_0%,#ead4bd_100%)]">
+                    <span className="rounded-full bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#7a3f13]">
+                      Event Cover
+                    </span>
+                  </div>
                 )}
-                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_top,rgba(42,23,13,0.50),transparent_48%)]" />
-                <div className="absolute left-4 top-4 flex items-center gap-2">
+                </div>
+                <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/35 to-transparent" />
+                <div className="absolute left-6 top-5 flex items-center gap-2">
                   <span
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    className={`inline-flex items-center gap-1.5 rounded-full bg-white/92 px-3 py-1 text-xs font-semibold shadow-sm ${
                       cardStatus === "published"
-                        ? "bg-[#f4e5d3] text-[#7a3f13]"
+                        ? "text-[#126b4b]"
                         : cardStatus === "expired"
-                          ? "bg-[#fff0f3] text-[#c6234a]"
-                          : "bg-[#f3f5f8] text-[#4a5f74]"
+                          ? "text-[#c6234a]"
+                          : "text-[#9b5a0f]"
                     }`}
                   >
-                    {cardStatus}
+                    <span
+                      className={`h-2.5 w-2.5 rounded-full ${
+                        cardStatus === "published"
+                          ? "bg-[#14a870]"
+                          : cardStatus === "expired"
+                            ? "bg-[#e11d48]"
+                            : "bg-[#f3a51d]"
+                      }`}
+                    />
+                    {cardStatus === "published" ? "Published" : cardStatus === "expired" ? "Expired" : "Unpublished"}
                   </span>
                 </div>
 
@@ -356,7 +367,7 @@ export default function DriveTable({
                        e.stopPropagation();
                        onPinToggle(gallery);
                      }}
-                    className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-[#7a3f13]"
+                    className="absolute right-5 top-5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/92 text-[#7a3f13] shadow-sm"
                     title="Unpin event"
                   >
                     <Pin className="h-4 w-4" />
@@ -368,7 +379,7 @@ export default function DriveTable({
                        e.stopPropagation();
                        onPinToggle(gallery);
                      }}
-                    className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/30 text-white"
+                    className="absolute right-5 top-5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/92 text-[#7a3f13] shadow-sm"
                     title="Pin event"
                   >
                     <Pin className="h-4 w-4" />
@@ -376,22 +387,22 @@ export default function DriveTable({
                 )}
               </div>
 
-              <div className="space-y-4 p-5">
+              <div className="space-y-5 bg-white p-6 pt-7">
                 <div>
-                  <h3 className="font-display text-[2rem] font-bold leading-none text-[#2a170d]">{gallery.name}</h3>
-                  <p className="mt-2 text-sm text-[#7a6a55]">{formatDate(eventDate)}</p>
+                  <h3 className="truncate font-display text-3xl font-bold leading-tight text-[#2a170d]">{gallery.name}</h3>
+                  <p className="mt-1.5 text-sm font-medium text-[#6b5a48]">{formatDate(eventDate)}</p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="inline-flex items-center gap-1 rounded-md bg-[#fff1df] px-2 py-1 font-semibold text-[#7a3f13]">
+                  <span className="inline-flex items-center gap-1 rounded-md bg-[#31476a] px-2 py-1 font-semibold text-white">
                     <Upload className="h-3.5 w-3.5" />
                     {gallery.filesCount ?? 0}
                   </span>
-                  <span className="inline-flex items-center gap-1 rounded-md bg-[#f7ecdd] px-2 py-1 font-semibold text-[#9b5a24]">
+                  <span className="inline-flex items-center gap-1 rounded-md bg-[#31476a] px-2 py-1 font-semibold text-white">
                     <Eye className="h-3.5 w-3.5" />
                     {gallery.downloads ?? 0}
                   </span>
-                  <span className="inline-flex items-center gap-1 rounded-md bg-[#f5eadb] px-2 py-1 font-semibold text-[#7a4a23]">
+                  <span className="inline-flex items-center gap-1 rounded-md bg-[#31476a] px-2 py-1 font-semibold text-white">
                     <UserRoundPlus className="h-3.5 w-3.5" />
                     {gallery.visitors ?? 0}
                   </span>
@@ -410,14 +421,14 @@ export default function DriveTable({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-[minmax(0,1fr)_repeat(4,40px)] items-center gap-2">
+                <div className="grid grid-cols-[minmax(0,1fr)_repeat(4,42px)] items-center gap-2 pt-1">
                   <button
                     type="button"
                     onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
                       e.stopPropagation();
                       onOpenQr(gallery);
                     }}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#ead7c5] bg-white px-4 py-2 text-sm font-semibold text-[#5b3a23] transition hover:border-[#7a3f13] hover:text-[#7a3f13]"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#ead7c5] bg-[#fffaf4] px-4 py-2.5 text-sm font-semibold text-[#5b3a23] transition hover:border-[#7a3f13] hover:text-[#7a3f13]"
                   >
                     <QrCode className="h-4 w-4" />
                     Open One QR
@@ -428,7 +439,7 @@ export default function DriveTable({
                       e.stopPropagation();
                       onOpenQr(gallery);
                     }}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#eadccf] bg-white text-[#6d4426] hover:border-[#7a3f13] hover:text-[#7a3f13]"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#eadccf] bg-[#fffdf8] text-[#6d4426] hover:border-[#7a3f13] hover:text-[#7a3f13]"
                     title="Open in One QR"
                   >
                     <QrCode className="h-4 w-4" />
@@ -439,7 +450,7 @@ export default function DriveTable({
                       e.stopPropagation();
                       onSettings(gallery);
                     }}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#eadccf] bg-white text-[#6d4426] hover:border-[#7a3f13] hover:text-[#7a3f13]"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#eadccf] bg-[#fffdf8] text-[#6d4426] hover:border-[#7a3f13] hover:text-[#7a3f13]"
                     title="Edit event"
                   >
                     <Settings className="h-4 w-4" />
@@ -462,7 +473,7 @@ export default function DriveTable({
                           e.stopPropagation();
                           setOpenMenuFor((current) => (current === gallery.id ? null : gallery.id));
                         }}
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#eadccf] bg-white text-[#6d4426] hover:border-[#7a3f13] hover:text-[#7a3f13]"
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#eadccf] bg-[#fffdf8] text-[#6d4426] hover:border-[#7a3f13] hover:text-[#7a3f13]"
                       title="More actions"
                     >
                       <MoreVertical className="h-4 w-4" />
@@ -492,18 +503,6 @@ export default function DriveTable({
                         >
                           <Pin className="h-4 w-4" />
                           {gallery.pinned ? "Unpin Event" : "Pin Event"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
-                            e.stopPropagation();
-                            setOpenMenuFor(null);
-                            onDuplicate(gallery);
-                          }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[#5b3a23] hover:bg-[#fff7ee]"
-                        >
-                          <Copy className="h-4 w-4" />
-                          Duplicate Event
                         </button>
                         <button
                           type="button"

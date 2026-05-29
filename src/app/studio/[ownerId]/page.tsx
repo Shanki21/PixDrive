@@ -128,14 +128,13 @@ export default async function StudioEventSelectorPage({ params }: StudioPageProp
                     Show Gallery
                   </Link>
                 </div>
-                <div className="aspect-[16/10] overflow-hidden rounded-2xl border border-[#eadccf] bg-[#fffdf8] shadow-[0_14px_35px_rgba(73,39,20,0.07)]">
+                <div className="aspect-[16/10] overflow-hidden rounded-2xl border border-[#eadccf] shadow-[0_10px_24px_rgba(73,39,20,0.06)]">
                   {event.coverUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={event.coverUrl}
                       alt={event.name}
                       className="h-full w-full object-cover"
-                      style={{ objectPosition: event.coverPosition }}
                     />
                   ) : null}
                 </div>
