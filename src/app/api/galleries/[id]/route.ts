@@ -178,7 +178,7 @@ export const PATCH = withApiHandler(
     meta: normalizeGalleryMeta(gallery.meta),
     deletedAt: gallery.deletedAt?.toISOString() ?? null,
   });
-}, { keyPrefix: "gallery:update", limit: 10, windowMs: 60 * 60 * 1000 })
+}, { keyPrefix: "gallery:update", limit: 120, windowMs: 60 * 60 * 1000 })
 );
 
 export const DELETE = withApiHandler(

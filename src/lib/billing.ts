@@ -138,13 +138,56 @@ export async function getUserBillingState(userId: string) {
   };
 }
 
+export type PublicBillingState = Omit<
+  Awaited<ReturnType<typeof getUserBillingState>>,
+  | "stripeCustomerId"
+  | "stripeSubscriptionId"
+  | "stripePriceId"
+  | "razorpayCustomerId"
+  | "razorpaySubscriptionId"
+  | "razorpayPlanId"
+  | "razorpayPaymentId"
+> & {
+  hasStripeCustomer: boolean;
+  hasRazorpayCustomer: boolean;
+  hasRazorpaySubscription: boolean;
+};
+
+export function toPublicBillingState(
+  billing: Awaited<ReturnType<typeof getUserBillingState>>
+): PublicBillingState {
+  const {
+    stripeCustomerId,
+    stripeSubscriptionId,
+    stripePriceId,
+    razorpayCustomerId,
+    razorpaySubscriptionId,
+    razorpayPlanId,
+    razorpayPaymentId,
+    ...publicBilling
+  } = billing;
+
+  void stripeSubscriptionId;
+  void stripePriceId;
+  void razorpayPlanId;
+  void razorpayPaymentId;
+
+  return {
+    ...publicBilling,
+    hasStripeCustomer: Boolean(stripeCustomerId),
+    hasRazorpayCustomer: Boolean(razorpayCustomerId),
+    hasRazorpaySubscription: Boolean(razorpaySubscriptionId),
+  };
+}
+
 export async function ensureCanCreateGallery(userId: string) {
   const billing = await getUserBillingState(userId);
   if (billing.usage.galleries >= billing.limits.galleryLimit) {
+    const galleryLabel = billing.limits.galleryLimit === 1 ? "active gallery" : "active galleries";
     return {
       ok: false as const,
       billing,
-      message: `Your ${billing.planLabel} plan allows ${billing.limits.galleryLimit} active galleries. Upgrade to create more.`,
+      message: `Your ${billing.planLabel} plan allows ${billing.limits.galleryLimit} ${galleryLabel}. Upgrade to create more.`,
     };
   }
 

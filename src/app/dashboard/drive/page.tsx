@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import fetchWithRetry from "@/lib/fetchWithRetry";
+import { getApiErrorMessage, readApiErrorPayload } from "@/lib/api-response";
+import { showPixoraAlert, showPixoraToast } from "@/lib/pixora-alerts";
 import { useRouter } from "next/navigation";
 import DriveHeader from "@/components/drive/DriveHeader";
 import DriveTable from "@/components/drive/DriveTable";
@@ -160,12 +162,37 @@ export default function DrivePage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ settings: payload }),
               }, { dedupeKey: dedupe, idempotencyKey: `${dedupe}:${Date.now()}` });
-              if (!res.ok) return;
+              if (!res.ok) {
+                const errorPayload = await readApiErrorPayload(res);
+                void showPixoraAlert({
+                  title: "Unable to update publish status",
+                  text: getApiErrorMessage(errorPayload, "Please try again in a moment."),
+                  icon: "error",
+                });
+                return;
+              }
+              const data = (await res.json().catch(() => ({}))) as {
+                settings?: { published?: boolean | null } | null;
+              };
+              const confirmedPublished = data.settings?.published ?? nextPublished;
               setGalleries((prev) =>
-                prev.map((item) => (item.id === gallery.id ? { ...item, published: nextPublished } : item))
+                prev.map((item) => (item.id === gallery.id ? { ...item, published: confirmedPublished } : item))
               );
+              try {
+                clearCachedGalleries();
+              } catch {
+                // Ignore cache cleanup failures.
+              }
+              void showPixoraToast({
+                title: confirmedPublished ? "Event published for clients" : "Event moved to unpublished",
+                icon: confirmedPublished ? "success" : "info",
+              });
             } catch {
-              // Ignore toggle failures.
+              void showPixoraAlert({
+                title: "Unable to update publish status",
+                text: "Please check your connection and try again.",
+                icon: "error",
+              });
             }
           }}
           onDuplicate={(gallery) => {
@@ -185,7 +212,15 @@ export default function DrivePage() {
               const res = await fetchWithRetry(`/api/galleries/${encodeURIComponent(gallery.id)}`, {
                 method: "DELETE",
               }, { dedupeKey: dedupe, idempotencyKey: dedupe });
-              if (!res.ok) return;
+              if (!res.ok) {
+                const errorPayload = await readApiErrorPayload(res);
+                void showPixoraAlert({
+                  title: "Unable to delete event",
+                  text: getApiErrorMessage(errorPayload, "Please try again in a moment."),
+                  icon: "error",
+                });
+                return;
+              }
               const payload = (await res.json().catch(() => ({}))) as { deletedAt?: string };
 
               const deleted: MinimalGallery = {
@@ -200,8 +235,13 @@ export default function DrivePage() {
               } catch {
                 // Ignore cache cleanup failures.
               }
+              void showPixoraToast({ title: "Event moved to bin", icon: "success" });
             } catch {
-              // Ignore delete failures to keep dashboard responsive.
+              void showPixoraAlert({
+                title: "Unable to delete event",
+                text: "Please check your connection and try again.",
+                icon: "error",
+              });
             }
           }}
           onReorder={(draggedId, targetId) => {
@@ -241,18 +281,36 @@ export default function DrivePage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ deletedAt: null }),
               }, { dedupeKey: dedupe, idempotencyKey: dedupe });
-              if (!res.ok) return;
+              if (!res.ok) {
+                const errorPayload = await readApiErrorPayload(res);
+                void showPixoraAlert({
+                  title: "Unable to restore event",
+                  text: getApiErrorMessage(errorPayload, "Please try again in a moment."),
+                  icon: "error",
+                });
+                return;
+              }
               setTrash((prev) => prev.filter((g) => g.id !== gallery.id));
               setGalleries((prev) => insertAfterPinned(prev, { ...gallery, deletedAt: null }));
               setTab("galleries");
+              void showPixoraToast({ title: "Event restored" });
             }}
             onPermanentDelete={async (gallery) => {
               const dedupe = `galleries:delete:permanent:${gallery.id}`;
               const res = await fetchWithRetry(`/api/galleries/${encodeURIComponent(gallery.id)}?permanent=1`, {
                 method: "DELETE",
               }, { dedupeKey: dedupe, idempotencyKey: dedupe });
-              if (!res.ok) return;
+              if (!res.ok) {
+                const errorPayload = await readApiErrorPayload(res);
+                void showPixoraAlert({
+                  title: "Unable to permanently delete event",
+                  text: getApiErrorMessage(errorPayload, "Please try again in a moment."),
+                  icon: "error",
+                });
+                return;
+              }
               setTrash((prev) => prev.filter((g) => g.id !== gallery.id));
+              void showPixoraToast({ title: "Event permanently deleted" });
             }}
           />
         </div>

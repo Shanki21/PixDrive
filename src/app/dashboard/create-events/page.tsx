@@ -2,6 +2,8 @@
 
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import fetchWithRetry from "@/lib/fetchWithRetry";
+import { getApiErrorMessage, readApiErrorPayload } from "@/lib/api-response";
+import { queuePixoraToast } from "@/lib/pixora-alerts";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   BadgeCheck,
@@ -331,12 +333,18 @@ function CreateEventsPageContent() {
         return;
       }
 
-      if (!response.ok || !contentType.includes("application/json")) {
+      if (!response.ok) {
+        const payload = await readApiErrorPayload(response);
+        throw new Error(getApiErrorMessage(payload, "Unable to create event."));
+      }
+
+      if (!contentType.includes("application/json")) {
         throw new Error("Unable to create event.");
       }
 
       const gallery = (await response.json()) as { id: string };
 
+      queuePixoraToast({ title: "Event created" });
       router.push(`/dashboard/drive/${gallery.id}`);
     } catch (error) {
       const fallback = isEditMode

@@ -90,7 +90,7 @@ export async function handleVerifyOtp(req: NextRequest) {
     const cookieSet = await setSessionCookie(response, email);
     if (!cookieSet) {
       return NextResponse.json(
-        { ok: false, message: "Session secret is missing. Set NEXTAUTH_SECRET or AUTH_SECRET." },
+        { ok: false, message: "Unable to create a secure session. Please try again." },
         { status: 500 }
       );
     }
@@ -109,7 +109,7 @@ export async function handleVerifyOtp(req: NextRequest) {
         const cookieSet = await setSessionCookie(response, emailForFallback);
         if (!cookieSet) {
           return NextResponse.json(
-            { ok: false, message: "Session secret is missing. Set NEXTAUTH_SECRET or AUTH_SECRET." },
+            { ok: false, message: "Unable to create a secure session. Please try again." },
             { status: 500 }
           );
         }

@@ -3,7 +3,8 @@
 import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
 import MobileNav from "@/components/layout/MobileNav";
-import { getSessionEmailFromCookieStore } from "@/lib/session";
+import DashboardNotifications from "@/components/layout/DashboardNotifications";
+import { getSessionEmailFromTokenAsync, getSessionTokenFromCookieStore } from "@/lib/session";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -13,13 +14,15 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const cookieStore = await cookies();
-  const email = getSessionEmailFromCookieStore(cookieStore);
+  const token = getSessionTokenFromCookieStore(cookieStore);
+  const email = await getSessionEmailFromTokenAsync(token);
   if (!email) {
     redirect("/login");
   }
 
   return (
     <div className="pixora-shell relative min-h-screen overflow-x-hidden text-[#2a170d] font-['Avenir_Next','Segoe_UI',system-ui,-apple-system,sans-serif]">
+      <DashboardNotifications />
       <Sidebar />
       <MobileNav />
 
