@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import fetchWithRetry from "@/lib/fetchWithRetry";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, CalendarClock, ChevronDown, LogOut, Plus, Search, Settings2 } from "lucide-react";
+import { CalendarClock, ChevronDown, LogOut, Plus, Settings2 } from "lucide-react";
 
 export default function Topbar() {
   const router = useRouter();
@@ -77,15 +77,7 @@ export default function Topbar() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-[#ead7c5] bg-[#fffaf4] px-4 py-4 md:px-8 md:py-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <label className="relative block min-w-55 flex-1 md:max-w-140">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5f7a71]" />
-          <input
-            className="h-12 w-full rounded-2xl border border-[#ead7c5] bg-[#fffdf8] pl-11 pr-4 text-sm text-[#3a2112] placeholder:text-[#a0866e] focus:border-[#7a3f13] focus:outline-none"
-            placeholder="Search events, documents, guests..."
-          />
-        </label>
-
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex items-center gap-2">
           <div className="hidden h-12 items-center gap-2 rounded-2xl border border-[#ead7c5] bg-[#fffdf8] px-4 text-xs font-semibold uppercase tracking-[0.12em] text-[#5b3a23] shadow-sm sm:inline-flex">
             <CalendarClock className="h-4 w-4" />
@@ -98,13 +90,6 @@ export default function Topbar() {
             <Plus className="h-4 w-4" />
             Create Event
           </Link>
-          <button
-            type="button"
-            className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[#ead7c5] bg-[#fffdf8] text-[#5b3a23] hover:bg-[#f4e5d3]"
-            aria-label="Notifications"
-          >
-            <Bell className="h-4 w-4" />
-          </button>
           <div className="relative" ref={menuRef}>
             <button
               type="button"

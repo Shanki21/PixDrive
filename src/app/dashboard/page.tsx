@@ -364,11 +364,11 @@ export default function DashboardPage() {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             {Array.from({ length: 4 }).map((_, index) => (
               <div
                 key={`skeleton-${index}`}
-                className="h-72 animate-pulse rounded-3xl border border-[#eadccf] bg-white"
+                className="h-60 animate-pulse rounded-2xl border border-[#eadccf] bg-white"
               />
             ))}
           </div>
@@ -388,10 +388,10 @@ export default function DashboardPage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             {recentEvents.map((event) => (
-              <article key={event.id} className="overflow-hidden rounded-3xl border border-[#eadccf] bg-white shadow-[0_14px_36px_rgba(73,39,20,0.06)] transition hover:-translate-y-0.5 hover:border-[#7a3f13] hover:shadow-[0_18px_38px_rgba(73,39,20,0.10)]">
-                <div className="relative aspect-[16/9] overflow-hidden border-b border-[#f0e4d7]">
+              <article key={event.id} className="grid overflow-hidden rounded-2xl border border-l-4 border-[#eadccf] border-l-[#7a3f13] bg-white shadow-[0_12px_28px_rgba(73,39,20,0.06)] transition hover:-translate-y-0.5 hover:border-[#7a3f13] hover:shadow-[0_16px_32px_rgba(73,39,20,0.10)] sm:grid-cols-[140px_minmax(0,1fr)]">
+                <div className="relative aspect-[16/7] overflow-hidden border-b border-[#f0e4d7] bg-[#f4ede5] sm:h-full sm:aspect-auto sm:border-b-0 sm:border-r">
                   {event.cover ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -408,13 +408,13 @@ export default function DashboardPage() {
                       </span>
                     </div>
                   )}
-                  <span className="absolute right-4 top-4 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#6d4426]">
+                  <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#6d4426] shadow-sm">
                     {event.status}
                   </span>
                 </div>
-                <div className="space-y-4 p-5">
+                <div className="space-y-3 p-4">
                   <div>
-                    <h3 className="text-lg font-semibold text-[#2a170d]">{event.name}</h3>
+                    <h3 className="truncate text-base font-semibold text-[#2a170d]">{event.name}</h3>
                     <p className="mt-1 text-xs text-[#8a735f]">
                       {event.createdAt} - {event.files} photos - {event.visitors} visits
                     </p>
@@ -425,7 +425,7 @@ export default function DashboardPage() {
                       <span>Progress</span>
                       <span>{event.progress}%</span>
                     </div>
-                    <div className="h-2 rounded-full bg-[#f2e4d6]">
+                    <div className="h-1.5 rounded-full bg-[#f2e4d6]">
                       <div
                         className="h-full rounded-full bg-linear-to-r from-[#7a3f13] to-[#b9783b]"
                         style={{ width: `${event.progress}%` }}
@@ -436,14 +436,14 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-2">
                     <Link
                       href={`/dashboard/drive/${event.id}`}
-                      className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#ead7c5] bg-white px-4 py-2 text-sm font-semibold text-[#5b3a23] transition hover:border-[#7a3f13] hover:text-[#7a3f13]"
+                      className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg bg-[#7a3f13] px-3 text-xs font-semibold text-white transition hover:bg-[#5b2b0c]"
                     >
                       <Eye className="h-4 w-4" />
                       View
                     </Link>
                     <Link
                       href="/dashboard/qr-code"
-                      className="inline-flex items-center justify-center rounded-xl border border-[#ead7c5] bg-white px-4 py-2 text-sm font-semibold text-[#5b3a23] transition hover:border-[#7a3f13] hover:text-[#7a3f13]"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#ead7c5] bg-white text-[#5b3a23] transition hover:border-[#7a3f13] hover:text-[#7a3f13]"
                       aria-label={`Generate QR for ${event.name}`}
                     >
                       <QrCode className="h-4 w-4" />

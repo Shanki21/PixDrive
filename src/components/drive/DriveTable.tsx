@@ -277,7 +277,7 @@ export default function DriveTable({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
         {filteredAndSorted.map((gallery) => {
           const progress = getProgress(gallery);
           const isPublished = gallery.published ?? true;
@@ -292,7 +292,7 @@ export default function DriveTable({
           return (
             <article
               key={gallery.id}
-              className={`pixora-virtual-card group cursor-pointer overflow-visible rounded-[26px] border bg-white transition hover:-translate-y-0.5 hover:border-[#7a3f13] hover:shadow-[0_18px_36px_rgba(73,39,20,0.10)] ${
+              className={`pixora-virtual-card group mx-auto w-full max-w-sm cursor-pointer overflow-visible rounded-[22px] border bg-white transition hover:-translate-y-1 hover:border-[#d5b89d] hover:shadow-[0_20px_42px_rgba(73,39,20,0.12)] ${
                 dragOverId === gallery.id ? "border-[#7a3f13] shadow-[0_18px_36px_rgba(73,39,20,0.12)]" : "border-[#eadccf] shadow-[0_12px_28px_rgba(73,39,20,0.06)]"
               }`}
               onClick={() => onOpen?.(gallery)}
@@ -315,8 +315,8 @@ export default function DriveTable({
                 }
               }}
             >
-              <div className="relative overflow-hidden rounded-t-[26px]">
-                <div className="relative aspect-[16/10] overflow-hidden">
+              <div className="relative overflow-hidden rounded-t-[21px]">
+                <div className="relative aspect-[16/10] overflow-hidden bg-[#f4ede5]">
                 {cover ? (
                   <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -336,10 +336,10 @@ export default function DriveTable({
                   </div>
                 )}
                 </div>
-                <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/35 to-transparent" />
-                <div className="absolute left-6 top-5 flex items-center gap-2">
+                <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/45 via-black/10 to-transparent" />
+                <div className="absolute left-3 top-3 flex items-center gap-2">
                   <span
-                    className={`inline-flex items-center gap-1.5 rounded-full bg-white/92 px-3 py-1 text-xs font-semibold shadow-sm ${
+                    className={`inline-flex items-center gap-1.5 rounded-full bg-white/92 px-2.5 py-1 text-[11px] font-semibold shadow-sm ${
                       cardStatus === "published"
                         ? "text-[#126b4b]"
                         : cardStatus === "expired"
@@ -367,7 +367,7 @@ export default function DriveTable({
                        e.stopPropagation();
                        onPinToggle(gallery);
                      }}
-                    className="absolute right-5 top-5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/92 text-[#7a3f13] shadow-sm"
+                    className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/92 text-[#7a3f13] shadow-sm"
                     title="Unpin event"
                   >
                     <Pin className="h-4 w-4" />
@@ -379,7 +379,7 @@ export default function DriveTable({
                        e.stopPropagation();
                        onPinToggle(gallery);
                      }}
-                    className="absolute right-5 top-5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/92 text-[#7a3f13] shadow-sm"
+                    className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/92 text-[#7a3f13] shadow-sm"
                     title="Pin event"
                   >
                     <Pin className="h-4 w-4" />
@@ -387,33 +387,35 @@ export default function DriveTable({
                 )}
               </div>
 
-              <div className="space-y-5 bg-white p-6 pt-7">
+              <div className="space-y-4 rounded-b-[21px] bg-white p-4">
                 <div>
-                  <h3 className="truncate font-display text-3xl font-bold leading-tight text-[#2a170d]">{gallery.name}</h3>
-                  <p className="mt-1.5 text-sm font-medium text-[#6b5a48]">{formatDate(eventDate)}</p>
+                  <h3 className="truncate font-display text-xl font-bold leading-tight text-[#2a170d]">{gallery.name}</h3>
+                  <p className="mt-1 text-xs font-medium text-[#8a735f]">{formatDate(eventDate)}</p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="inline-flex items-center gap-1 rounded-md bg-[#31476a] px-2 py-1 font-semibold text-white">
-                    <Upload className="h-3.5 w-3.5" />
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs font-semibold text-[#76543b]">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Upload className="h-3.5 w-3.5 text-[#a8642b]" />
                     {gallery.filesCount ?? 0}
                   </span>
-                  <span className="inline-flex items-center gap-1 rounded-md bg-[#31476a] px-2 py-1 font-semibold text-white">
-                    <Eye className="h-3.5 w-3.5" />
+                  <span className="h-3 w-px bg-[#e2cdb9]" />
+                  <span className="inline-flex items-center gap-1.5">
+                    <Eye className="h-3.5 w-3.5 text-[#a8642b]" />
                     {gallery.downloads ?? 0}
                   </span>
-                  <span className="inline-flex items-center gap-1 rounded-md bg-[#31476a] px-2 py-1 font-semibold text-white">
-                    <UserRoundPlus className="h-3.5 w-3.5" />
+                  <span className="h-3 w-px bg-[#e2cdb9]" />
+                  <span className="inline-flex items-center gap-1.5">
+                    <UserRoundPlus className="h-3.5 w-3.5 text-[#a8642b]" />
                     {gallery.visitors ?? 0}
                   </span>
                 </div>
 
-                <div>
+                <div className="rounded-xl bg-[#fffaf4] px-3 py-2.5">
                   <div className="mb-1.5 flex items-center justify-between text-xs text-[#7a6a55]">
                     <span>Progress</span>
                     <span>{progress}%</span>
                   </div>
-                  <div className="h-2 rounded-full bg-[#f2e4d6]">
+                  <div className="h-1.5 rounded-full bg-[#f2e4d6]">
                     <div
                       className="h-full rounded-full bg-gradient-to-r from-[#7a3f13] to-[#b9783b]"
                       style={{ width: `${progress}%` }}
@@ -421,17 +423,17 @@ export default function DriveTable({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-[minmax(0,1fr)_repeat(4,42px)] items-center gap-2 pt-1">
+                <div className="grid grid-cols-[minmax(0,1fr)_36px_36px] items-center gap-2">
                   <button
                     type="button"
                     onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
                       e.stopPropagation();
-                      onOpenQr(gallery);
+                      onOpen?.(gallery);
                     }}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#ead7c5] bg-[#fffaf4] px-4 py-2.5 text-sm font-semibold text-[#5b3a23] transition hover:border-[#7a3f13] hover:text-[#7a3f13]"
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#7a3f13] px-3 text-xs font-semibold text-white transition hover:bg-[#5b2b0c]"
                   >
-                    <QrCode className="h-4 w-4" />
-                    Open One QR
+                    <Eye className="h-4 w-4" />
+                    Open gallery
                   </button>
                   <button
                     type="button"
@@ -439,32 +441,10 @@ export default function DriveTable({
                       e.stopPropagation();
                       onOpenQr(gallery);
                     }}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#eadccf] bg-[#fffdf8] text-[#6d4426] hover:border-[#7a3f13] hover:text-[#7a3f13]"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#eadccf] bg-[#fffdf8] text-[#6d4426] hover:border-[#7a3f13] hover:text-[#7a3f13]"
                     title="Open in One QR"
                   >
                     <QrCode className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
-                      e.stopPropagation();
-                      onSettings(gallery);
-                    }}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#eadccf] bg-[#fffdf8] text-[#6d4426] hover:border-[#7a3f13] hover:text-[#7a3f13]"
-                    title="Edit event"
-                  >
-                    <Settings className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
-                      e.stopPropagation();
-                      onDelete(gallery);
-                    }}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#f1d9dc] bg-[#fff7f8] text-[#cf224d] hover:border-[#ea9fb0]"
-                    title="Delete event"
-                  >
-                    <Trash2 className="h-4 w-4" />
                   </button>
                   <div className="relative" data-event-menu>
                       <button
@@ -473,13 +453,25 @@ export default function DriveTable({
                           e.stopPropagation();
                           setOpenMenuFor((current) => (current === gallery.id ? null : gallery.id));
                         }}
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#eadccf] bg-[#fffdf8] text-[#6d4426] hover:border-[#7a3f13] hover:text-[#7a3f13]"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#eadccf] bg-[#fffdf8] text-[#6d4426] hover:border-[#7a3f13] hover:text-[#7a3f13]"
                       title="More actions"
                     >
                       <MoreVertical className="h-4 w-4" />
                     </button>
                     {openMenuFor === gallery.id ? (
                       <div className="absolute bottom-12 right-0 z-50 w-60 overflow-hidden rounded-2xl border border-[#ead7c5] bg-white shadow-[0_18px_45px_rgba(73,39,20,0.18)]">
+                        <button
+                          type="button"
+                          onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                            e.stopPropagation();
+                            setOpenMenuFor(null);
+                            onSettings(gallery);
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[#5b3a23] hover:bg-[#fff7ee]"
+                        >
+                          <Settings className="h-4 w-4" />
+                          Edit Event
+                        </button>
                         <button
                           type="button"
                           onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
