@@ -13,9 +13,6 @@ const REQUIRED = [
   "CLOUDINARY_API_SECRET",
   "UPSTASH_REDIS_REST_URL",
   "UPSTASH_REDIS_REST_TOKEN",
-];
-
-const RECOMMENDED = [
   "SENTRY_DSN",
   "NEXT_PUBLIC_SENTRY_DSN",
   "SENTRY_TEST_TOKEN",
@@ -24,6 +21,8 @@ const RECOMMENDED = [
   "CUSTOM_DOMAIN_CNAME_TARGET",
   "STORAGE_PROVIDER",
 ];
+
+const RECOMMENDED = [];
 
 const PLACEHOLDERS = new Set([
   "",
@@ -123,14 +122,16 @@ async function main() {
 
   console.log("[readiness] Pixora production readiness check");
   printList("Required services", REQUIRED, missingRequired);
-  printList("Recommended services", RECOMMENDED, missingRecommended);
+  if (RECOMMENDED.length > 0) {
+    printList("Recommended services", RECOMMENDED, missingRecommended);
+  }
 
   const upstash = await checkUpstash();
   console.log(`\n${upstash.ok ? "PASS" : "FAIL"} Redis probe: ${upstash.message}`);
 
   if (missingRecommended.length > 0) {
     console.warn(
-      `\n[readiness] Recommended before paid beta: ${missingRecommended.join(", ")}`
+      `\n[readiness] Recommended before launch: ${missingRecommended.join(", ")}`
     );
   }
 

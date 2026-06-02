@@ -1757,7 +1757,7 @@ export default function DriveDetailPage() {
                         className={`absolute left-2.5 top-2.5 inline-flex h-7 w-7 items-center justify-center rounded-full border shadow-sm transition ${
                           isSelected
                             ? "border-[#7a3f13] bg-[#7a3f13] text-white opacity-100"
-                            : "border-white/80 bg-white/85 text-[#6d5a47] opacity-0 hover:bg-white hover:text-[#7a3f13] group-hover:opacity-100"
+                            : "border-white/80 bg-white/85 text-[#6d5a47] opacity-100 hover:bg-white hover:text-[#7a3f13] md:opacity-0 md:group-hover:opacity-100"
                         }`}
                         title={isSelected ? "Unselect photo" : "Select photo"}
                       >
@@ -1790,7 +1790,7 @@ export default function DriveDetailPage() {
                           </span>
                         ) : null}
                         </div>
-                        <div className="ml-auto flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+                        <div className="ml-auto flex items-center gap-1 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
                           {[
                             {
                               label: isCover ? "Cover selected" : "Set cover",
@@ -1999,7 +1999,7 @@ export default function DriveDetailPage() {
                           </span>
                         ) : null}
                         </div>
-                        <div className="ml-auto flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+                        <div className="ml-auto flex items-center gap-1 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
                           {[
                             {
                               label: isCover ? "Cover selected" : "Set cover",

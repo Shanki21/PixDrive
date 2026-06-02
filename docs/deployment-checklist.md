@@ -2,6 +2,8 @@
 
 Use this checklist before every hosted deployment.
 
+For the final production sign-off, use `docs/production-pre-launch-checklist.md`. That checklist intentionally excludes Razorpay validation when payments are not part of the launch gate.
+
 ## 1. Database strategy
 
 - Keep PostgreSQL in local, staging, and production.
