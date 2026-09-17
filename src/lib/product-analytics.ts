@@ -27,7 +27,7 @@ export async function captureProductEvent(
         distinct_id: id,
         properties: {
           ...properties,
-          source: "pixora",
+          source: "Pixdrive",
         },
       }),
       keepalive: true,

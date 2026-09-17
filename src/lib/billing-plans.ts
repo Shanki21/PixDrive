@@ -46,7 +46,7 @@ export const PAID_BILLING_PLAN_CARDS: Array<{
     yearlyInr: "Rs 4,999/year + GST",
     monthlyUsd: "$9/mo",
     yearlyUsd: "$90/year",
-    description: "10 GB storage, 5 active events, Pixora link delivery.",
+    description: "10 GB storage, 5 active events, Pixdrive link delivery.",
   },
   {
     key: "studio",

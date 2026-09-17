@@ -1,7 +1,4 @@
-﻿"use client";
-
 import Link from "next/link";
-import { motion } from "framer-motion";
 import Container from "@/components/ui/Container";
 import { buttonClasses } from "@/components/ui/Button";
 import { ENTERPRISE_PLAN, PHOTO_OVERAGE_COPY } from "@/lib/billing-plans";
@@ -34,11 +31,11 @@ const plans: Plan[] = [
     yearlySave: "989",
     usdPrice: "$9/mo",
     audience: "For solo shoots and early studio delivery",
-    note: "Pixora link only. Custom domains start on Studio.",
+    note: "Pixdrive link only. Custom domains start on Studio.",
     sections: [
       {
         title: "Gallery",
-        items: ["10 GB storage", "5 active events", "Share via Pixora link", "Basic download option"],
+        items: ["10 GB storage", "5 active events", "Share via Pixdrive link", "Basic download option"],
       },
       {
         title: "Delivery",
@@ -84,11 +81,11 @@ const plans: Plan[] = [
       },
       {
         title: "Website",
-        items: ["Own gallery domain", "Pixora link fallback"],
+        items: ["Own gallery domain", "Pixdrive link fallback"],
       },
       {
         title: "Analytics and Premium",
-        items: ["Gallery views", "Client activity", "Download tracking", "No Pixora lock-in"],
+        items: ["Gallery views", "Client activity", "Download tracking", "No Pixdrive lock-in"],
       },
     ],
     cta: "Choose Studio",
@@ -158,19 +155,13 @@ export default function Pricing() {
   return (
     <section id="pricing" className="relative overflow-hidden border-y border-[#ead7c5] bg-[#fffaf4] py-24">
       <Container className="relative">
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.2 }}
-          transition={{ duration: 0.45 }}
-          className="text-center"
-        >
+        <div className="text-center">
           <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[#7a3f13]">Pricing</p>
           <h2 className="font-display mt-3 text-[38px] font-semibold leading-tight text-[#2a170d]">
             Priced Around Real Photo Delivery Costs
           </h2>
           <p className="mx-auto mt-4 max-w-[780px] text-[16px] text-[#7a6a55]">
-            Storage-based plans keep Pixora affordable for photographers while protecting delivery margins.
+            Storage-based plans keep Pixdrive affordable for photographers while protecting delivery margins.
           </p>
           <div className="mt-6 inline-flex items-center gap-3 rounded-full border border-[#ead7c5] bg-white px-5 py-2 text-sm font-medium text-[#5b3a23]">
             <span className={yearlyDefault === "yearly" ? "font-semibold text-[#7a3f13]" : ""}>Yearly (Default)</span>
@@ -178,20 +169,16 @@ export default function Pricing() {
             <span>2 months free on yearly plans</span>
           </div>
           <p className="mt-4 text-sm font-semibold text-[#45675d]">
-            Free trial includes 1 event, 2 GB storage, and Pixora link delivery.
+            Free trial includes 1 event, 2 GB storage, and Pixdrive link delivery.
           </p>
-        </motion.div>
+        </div>
 
         <div className="mt-12 grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-4">
           {plans.map((plan) => {
             const featured = plan.id === "studio";
             return (
-              <motion.article
+              <article
                 key={plan.id}
-                initial={{ opacity: 0, y: 22 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.2 }}
-                transition={{ duration: 0.4 }}
                 className={`relative rounded-3xl border bg-white p-6 shadow-[0_18px_42px_rgba(73,39,20,0.08)] ${
                   featured ? "border-[#7a3f13] ring-2 ring-[#7a3f13]/20" : "border-[#eadccf]"
                 }`}
@@ -248,18 +235,12 @@ export default function Pricing() {
                     {plan.cta}
                   </Link>
                 </div>
-              </motion.article>
+              </article>
             );
           })}
         </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.25 }}
-          transition={{ duration: 0.45 }}
-          className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2"
-        >
+        <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
           <article className="rounded-3xl border border-[#eadccf] bg-white p-6 shadow-[0_14px_34px_rgba(73,39,20,0.07)]">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#66857c]">Add-ons</p>
             <h3 className="mt-2 text-[26px] font-semibold text-[#111111]">Grow Without Changing Plans</h3>
@@ -296,7 +277,7 @@ export default function Pricing() {
             </div>
             <p className="mt-4 text-sm font-medium text-[#7a3f13]">{PHOTO_OVERAGE_COPY}</p>
           </article>
-        </motion.div>
+        </div>
       </Container>
     </section>
   );

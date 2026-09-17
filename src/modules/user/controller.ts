@@ -66,7 +66,7 @@ export async function handleVerifyOtp(req: NextRequest) {
       if (!result.ok) {
         if (result.code === "ACCOUNT_NOT_FOUND") {
           return NextResponse.json(
-            { ok: false, code: result.code, message: "No Pixora account exists for this email. Please sign up first." },
+            { ok: false, code: result.code, message: "No Pixdrive account exists for this email. Please sign up first." },
             { status: 404 }
           );
         }

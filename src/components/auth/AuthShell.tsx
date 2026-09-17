@@ -23,7 +23,7 @@ export default function AuthShell({ children, right, bottom }: AuthShellProps) {
             className="relative z-10 flex items-center justify-between px-9 pt-8"
           >
             <Link href="/" className="text-3xl font-semibold leading-none tracking-tight text-[#2a170d]">
-              Pixora
+              Pixdrive
             </Link>
             <Link href="/" className="rounded-full border border-[#ead7c5] bg-white/72 px-3 py-1 text-sm font-medium text-[#6b4c35] shadow-sm backdrop-blur transition hover:text-[#2a170d]">
               Home

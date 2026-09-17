@@ -115,7 +115,7 @@ export default function AddGalleryModal({
                     setCustomGalleryBaseUrl(`https://${verified.domain}/`);
                 }
             } catch {
-                // Keep the default Pixora gallery URL.
+                // Keep the default Pixdrive gallery URL.
             }
         };
         void loadCustomDomain();

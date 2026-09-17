@@ -1,7 +1,18 @@
 import "./globals.css";
 import "sweetalert2/dist/sweetalert2.min.css";
+import type { Metadata } from "next";
 import { ReactNode } from "react";
 import Script from "next/script";
+
+export const metadata: Metadata = {
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/favicon.ico",
+  },
+};
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

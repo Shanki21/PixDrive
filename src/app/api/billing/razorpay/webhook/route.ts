@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
   });
   const userId = existing?.userId ?? subscription?.notes?.pixoraUserId;
   if (!userId) {
-    console.warn("[razorpay:webhook] subscription event could not be mapped to a Pixora user", { subscriptionId });
+    console.warn("[razorpay:webhook] subscription event could not be mapped to a Pixdrive user", { subscriptionId });
     return NextResponse.json({ ok: true, unmapped: true });
   }
 

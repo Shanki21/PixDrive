@@ -85,7 +85,7 @@ export function createSignedGalleryImageUpload({
     };
   }
 
-  const folder = process.env.CLOUDINARY_GALLERY_FOLDER?.trim() || "pixora/gallery";
+  const folder = process.env.CLOUDINARY_GALLERY_FOLDER?.trim() || "pixdrive/gallery";
   const timestamp = Math.floor(Date.now() / 1000);
   const signed = createCloudinaryUploadSignature({ folder, timestamp });
 

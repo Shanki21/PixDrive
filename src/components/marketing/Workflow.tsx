@@ -1,31 +1,24 @@
-"use client";
-
-import { motion } from "framer-motion";
 import Card from "@/components/ui/Card";
 import Container from "@/components/ui/Container";
 import SectionHeading from "@/components/ui/SectionHeading";
-import { WORKFLOW_STEPS, fadeUp } from "./content";
+import { WORKFLOW_STEPS } from "./content";
 
 export default function Workflow() {
   return (
-    <motion.section
+    <section
       id="workflow"
       className="bg-white/70 py-20"
-      initial="hidden"
-      whileInView="show"
-      viewport={{ once: true, amount: 0.15 }}
-      variants={{ hidden: {}, show: { transition: { staggerChildren: 0.1 } } }}
     >
       <Container>
-        <motion.div variants={fadeUp} transition={{ duration: 0.5 }}>
+        <div>
           <SectionHeading
-            title="How Pixora Works"
+            title="How Pixdrive Works"
             description="Our workflow is built for event photographers who need speed and control: structure your project, share proofing access, and deliver final files without switching tools."
           />
-        </motion.div>
+        </div>
         <div className="mt-10 grid grid-cols-1 gap-6">
           {WORKFLOW_STEPS.map((step, index) => (
-            <motion.div key={step.label} variants={fadeUp} transition={{ duration: 0.5 }}>
+            <div key={step.label}>
               <Card className="p-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div className="flex items-start gap-4">
@@ -43,10 +36,10 @@ export default function Workflow() {
                   </span>
                 </div>
               </Card>
-            </motion.div>
+            </div>
           ))}
         </div>
       </Container>
-    </motion.section>
+    </section>
   );
 }

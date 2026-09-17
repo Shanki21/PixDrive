@@ -97,7 +97,7 @@ export const POST = withApiHandler(
 
     const existing = await prisma.customDomain.findUnique({ where: { domain }, select: { userId: true } });
     if (existing && existing.userId !== user.id) {
-      return NextResponse.json({ ok: false, message: "This domain is already connected to another Pixora account." }, { status: 409 });
+      return NextResponse.json({ ok: false, message: "This domain is already connected to another Pixdrive account." }, { status: 409 });
     }
 
     const customDomain = await prisma.customDomain.upsert({

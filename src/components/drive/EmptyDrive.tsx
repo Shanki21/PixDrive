@@ -33,11 +33,11 @@ export default function EmptyDrive({ onCreate }: Props) {
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-[#d8b895] bg-[#7a3f13] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#f8ead9]">
               <Sparkles className="h-3.5 w-3.5" />
-              Pixora Event Flow
+              Pixdrive Event Flow
             </div>
             <h2 className="font-display mt-5 text-4xl font-semibold leading-tight md:text-5xl">Launch your first event workflow</h2>
             <p className="mt-4 max-w-xl text-sm text-[#f8ead9] md:text-base">
-              Pixora is now event-first. Build a client-ready workspace with clear steps from upload to final handoff.
+              Pixdrive is now event-first. Build a client-ready workspace with clear steps from upload to final handoff.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <button

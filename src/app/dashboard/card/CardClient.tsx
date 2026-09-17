@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import fetchWithRetry from "@/lib/fetchWithRetry";
@@ -32,7 +32,7 @@ function getPublicLink(profile: DashboardProfile) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "")
     .slice(0, 18);
-  return `${seed || "yourname"}.pixora.pro/me`;
+  return `${seed || "yourname"}.pixdrive.pro/me`;
 }
 
 export default function CardClient() {
@@ -361,7 +361,7 @@ export default function CardClient() {
                     <span className="mb-2 block">Email</span>
                     <input
                       className="h-11 w-full rounded border border-slate-300 px-3"
-                      placeholder="e.g. hi@pixora.com"
+                      placeholder="e.g. hi@pixdrive.com"
                       value={draftEmail}
                       onChange={(e) => setDraftEmail(e.target.value)}
                     />

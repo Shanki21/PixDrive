@@ -36,7 +36,7 @@ export async function uploadImageDataUrl(dataUrl: string) {
     throw new Error("Cloudinary is not configured.");
   }
   const uploaded = await cloudinary.uploader.upload(dataUrl, {
-    folder: "pixora/gallery",
+    folder: "pixdrive/gallery",
     resource_type: "image",
     overwrite: false,
   });

@@ -188,7 +188,7 @@ export default function AnalyticsPage() {
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
       <section className="rounded-[28px] border border-[#eadccf] bg-white p-6 md:p-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7a3f13]">Pixora analytics</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7a3f13]">Pixdrive analytics</p>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="font-display text-3xl font-bold text-[#2a170d] sm:text-4xl">Analytics</h1>

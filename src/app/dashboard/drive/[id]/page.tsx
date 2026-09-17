@@ -1406,7 +1406,7 @@ export default function DriveDetailPage() {
               Back to My Events
             </button>
 
-            <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7a3f13]">Pixora Upload Studio</p>
+            <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7a3f13]">Pixdrive Upload Studio</p>
             <h1 className="font-display mt-2 text-3xl font-bold text-[#2a170d] md:text-4xl">{gallery.name}</h1>
             <p className="mt-2 text-sm text-[#58726a]">
               Saved until {formatDate(initialGallery?.expiresAt ?? null)}
@@ -1470,7 +1470,7 @@ export default function DriveDetailPage() {
                   }}
                 />
               </div>
-              <p className="text-xs text-[#8a735f]">Keep this tab open while Pixora adds your photos.</p>
+              <p className="text-xs text-[#8a735f]">Keep this tab open while Pixdrive adds your photos.</p>
             </div>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-3">

@@ -12,7 +12,7 @@ html {
   -webkit-text-size-adjust: 100%;
   text-rendering: optimizeLegibility;
   width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {
@@ -22,7 +22,7 @@ body {
   background: var(--pix-bg);
   color: var(--pix-text-primary);
   width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body::selection {
@@ -203,26 +203,26 @@ select {
 .pixora-marketing-shell {
   background:
     linear-gradient(180deg, rgba(255, 250, 244, 0.92), rgba(250, 250, 248, 0.96) 48%, rgba(255, 253, 248, 0.92)),
-    url("/background/9549580.jpg") top center / min(1900px, 150vw) auto no-repeat,
+    url("/optimized/home-bg.webp") top center / min(1900px, 150vw) auto no-repeat,
     #fffaf4;
 }
 
 .pixora-hero-bloom {
   background:
     linear-gradient(90deg, rgba(255, 250, 244, 0.98) 0%, rgba(255, 250, 244, 0.88) 43%, rgba(255, 250, 244, 0.42) 100%),
-    url("/background/9549580.jpg") center / cover no-repeat;
+    url("/optimized/home-bg.webp") center / cover no-repeat;
 }
 
 .pixora-botanical-band {
   background:
     linear-gradient(90deg, rgba(255, 253, 248, 0.96), rgba(255, 253, 248, 0.78)),
-    url("/background/kollsd-leaves-5713310.png") center / cover no-repeat;
+    url("/optimized/home-leaves-bg.webp") center / cover no-repeat;
 }
 
 .pixora-cta-bloom {
   background:
     linear-gradient(180deg, rgba(42, 23, 13, 0.74), rgba(91, 43, 12, 0.58)),
-    url("/background/kollsd-flowers-5718624.png") center / cover no-repeat;
+    url("/optimized/home-cta-bg.webp") center / cover no-repeat;
 }
 
 .pixora-auth-bg {

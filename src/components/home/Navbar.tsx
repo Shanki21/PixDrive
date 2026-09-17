@@ -33,7 +33,7 @@ export default function Navbar({
           isDrive ? "border-[#86b8cf]/20 bg-[#0f2533]/45" : "border-white/10 bg-[#24181b]/35"
         }`}
       >
-        <div className="font-display text-2xl font-semibold tracking-tight">Pixora</div>
+        <div className="font-display text-2xl font-semibold tracking-tight">Pixdrive</div>
       </div>
 
       <div

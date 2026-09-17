@@ -53,7 +53,7 @@ export default function Page() {
           <a
             target="_blank"
             rel="noopener"
-            href="https://pixora.sentry.io/issues/?project=4511461665669120"
+            href="https://pixdrive.sentry.io/issues/?project=4511461665669120"
           >
             Issues Page
           </a>

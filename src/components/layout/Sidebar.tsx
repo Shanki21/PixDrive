@@ -58,12 +58,12 @@ export default function Sidebar() {
       <div className="flex h-20 w-full items-center justify-center border-b border-[#eadccf]">
         <Link
           href="/dashboard"
-          aria-label="Pixora dashboard"
+          aria-label="Pixdrive dashboard"
           className="group relative flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[#7a3f13] transition hover:bg-[#f4e5d3]"
         >
           <Sparkles className="h-5 w-5" />
           <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-xl border border-[#eadccf] bg-white px-3 py-2 text-sm font-semibold text-[#3a2112] opacity-0 shadow-[0_14px_30px_rgba(73,39,20,0.14)] transition group-hover:opacity-100 group-focus-visible:opacity-100">
-            Pixora Studio
+            Pixdrive Studio
           </span>
         </Link>
       </div>

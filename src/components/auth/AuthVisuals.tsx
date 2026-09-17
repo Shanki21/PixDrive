@@ -67,7 +67,7 @@ export default function AuthVisuals({ mode, tutorialStep = 0 }: AuthVisualsProps
           <div className="relative w-full max-w-4xl overflow-hidden rounded-lg border border-[#E5E5E5] bg-[#f8f9f7]/94 shadow-xl backdrop-blur">
             <div className="grid grid-cols-[220px_1fr]">
               <aside className="bg-[#7a3f13] p-6 text-white">
-                <p className="text-4xl font-black">Pixora</p>
+                <p className="text-4xl font-black">Pixdrive</p>
                 <div className="mt-8 space-y-4 text-base text-white/85">
                   <p>Galleries</p>
                   <p>Shop</p>

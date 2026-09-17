@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const eventId = captureException(new Error("Pixora Sentry smoke test"), {
+  const eventId = captureException(new Error("Pixdrive Sentry smoke test"), {
     layer: "monitoring",
     route: "/api/monitoring/sentry-test",
   });

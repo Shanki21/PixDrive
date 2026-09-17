@@ -32,7 +32,7 @@ export const POST = withApiHandler(async (req: NextRequest) => {
   }
   if (!isStripeConfigured()) {
     return NextResponse.json(
-      { ok: false, message: "Stripe is not enabled for this Pixora environment. Use Razorpay for India beta billing." },
+      { ok: false, message: "Stripe is not enabled for this Pixdrive environment. Use Razorpay for India beta billing." },
       { status: 503 }
     );
   }
@@ -42,7 +42,7 @@ export const POST = withApiHandler(async (req: NextRequest) => {
   const interval: BillingInterval = isBillingInterval(body.interval) ? body.interval : "monthly";
 
   if (!plan || plan === "free") {
-    return NextResponse.json({ ok: false, message: "Choose a paid Pixora plan." }, { status: 400 });
+    return NextResponse.json({ ok: false, message: "Choose a paid Pixdrive plan." }, { status: 400 });
   }
 
   const priceId = getPriceIdForPlan(plan as Exclude<BillingPlan, "free">, interval);

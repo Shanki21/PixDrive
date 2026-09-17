@@ -295,7 +295,7 @@ export default function DrivePage() {
             onPermanentDelete={async (gallery) => {
               const confirmed = await confirmPixoraAction({
                 title: "Permanently delete event?",
-                text: "This removes the event and its related activity from Pixora. This action cannot be undone.",
+                text: "This removes the event and its related activity from Pixdrive. This action cannot be undone.",
                 confirmText: "Delete forever",
                 cancelText: "Keep event",
                 icon: "warning",

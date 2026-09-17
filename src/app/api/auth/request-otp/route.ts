@@ -34,7 +34,7 @@ export const POST = withApiHandler(
 
       if (intent === "login" && !existingUser) {
         return NextResponse.json(
-          { ok: false, code: "ACCOUNT_NOT_FOUND", message: "No Pixora account exists for this email. Please sign up first." },
+          { ok: false, code: "ACCOUNT_NOT_FOUND", message: "No Pixdrive account exists for this email. Please sign up first." },
           { status: 404 }
         );
       }

@@ -1,4 +1,4 @@
-﻿export type SocialAccount = {
+export type SocialAccount = {
   platform: string;
   url: string;
 };
