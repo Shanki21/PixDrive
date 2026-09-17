@@ -2,7 +2,7 @@ type LogArgs = Array<unknown>;
 
 function formatPrefix(level: string) {
   const ts = new Date().toISOString();
-  return `[pixora] [${level}] ${ts}`;
+  return `[Pixdrive] [${level}] ${ts}`;
 }
 
 export const logger = {

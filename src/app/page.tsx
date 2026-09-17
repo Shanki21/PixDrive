@@ -9,9 +9,9 @@ import HomeFooter from "@/components/marketing/HomeFooter";
 
 export default function Home() {
   return (
-    <div className="pixora-marketing-shell w-full overflow-x-hidden">
+    <div className="pixora-marketing-shell w-full overflow-x-clip">
       <HomeNavbar />
-      <main className="relative w-full overflow-x-hidden">
+      <main className="relative w-full overflow-x-clip">
         <Hero />
         <Features />
         <Workflow />

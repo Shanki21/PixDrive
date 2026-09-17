@@ -9,7 +9,7 @@ import { CalendarClock, ChevronDown, LogOut, Plus, Settings2 } from "lucide-reac
 export default function Topbar() {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [profileEmail, setProfileEmail] = useState("studio@pixora.pro");
+  const [profileEmail, setProfileEmail] = useState("studio@pixdrive.pro");
   const [profileInitials, setProfileInitials] = useState("CR");
   const [loggingOut, setLoggingOut] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);

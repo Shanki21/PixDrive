@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -274,7 +274,7 @@ export default function SignupPage() {
             Sign up
           </motion.h1>
           <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="text-[16px] text-[#666666]">
-            Create your Pixora account and start building your first event workspace.
+            Create your Pixdrive account and start building your first event workspace.
           </motion.p>
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
             <label className="mb-2 block text-sm font-semibold text-[#111111]">Email</label>
@@ -353,7 +353,7 @@ export default function SignupPage() {
                 className="pix-btn pix-btn-secondary h-12 w-full justify-between px-5"
                 onClick={() => setStep("contacts")}
               >
-                {lang} <span>→</span>
+                {lang} <span>?</span>
               </motion.button>
             ))}
           </div>
@@ -395,7 +395,7 @@ export default function SignupPage() {
             />
           </div>
           <p className="text-xs text-[#666666]">
-            These details help Pixora prepare your account and client-facing studio identity.
+            These details help Pixdrive prepare your account and client-facing studio identity.
           </p>
           <motion.button
             whileHover={{ scale: 1.01, y: -2 }}
@@ -417,7 +417,7 @@ export default function SignupPage() {
         <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="pix-card space-y-4 p-8 md:p-10">
           <h1 className="pix-heading-xl">Company Details</h1>
           <p className="text-base leading-relaxed text-[#666666]">
-            Tell us how your studio operates so Pixora can shape your dashboard around the way you deliver events.
+            Tell us how your studio operates so Pixdrive can shape your dashboard around the way you deliver events.
           </p>
           <div>
             <label className="mb-2 block text-sm font-semibold text-[#111111]">Company Name</label>

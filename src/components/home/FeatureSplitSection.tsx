@@ -64,7 +64,7 @@ export default function FeatureSplitSection({
           dark ? "bg-black/45 text-white backdrop-blur" : isDrive ? "bg-white/90 text-[#0f3040]" : "bg-white/85 text-[#17171b]"
         }`}
       >
-        Pixora flow
+        Pixdrive flow
       </motion.div>
     </motion.div>
   );

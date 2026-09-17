@@ -30,6 +30,25 @@ type TaskItem = {
   priority: "high" | "medium" | "low";
 };
 
+const DASHBOARD_USERNAME_CACHE_KEY = "pixora_dashboard_username";
+
+function readCachedUsername() {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage.getItem(DASHBOARD_USERNAME_CACHE_KEY)?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function cacheUsername(username: string) {
+  try {
+    window.sessionStorage.setItem(DASHBOARD_USERNAME_CACHE_KEY, username);
+  } catch {
+    // Continue without the navigation cache when browser storage is restricted.
+  }
+}
+
 function formatCompact(value: number) {
   return new Intl.NumberFormat("en-US", {
     notation: "compact",
@@ -58,7 +77,7 @@ export default function DashboardPage() {
     () => readCachedGalleries<DashboardGallery>() ?? []
   );
   const [loading, setLoading] = useState(true);
-  const [username, setUsername] = useState("Creator");
+  const [username, setUsername] = useState<string | null>(() => readCachedUsername());
 
   useEffect(() => {
     let active = true;
@@ -107,6 +126,7 @@ export default function DashboardPage() {
         const displayName = String(data.displayName ?? "").trim();
         if (active && displayName) {
           setUsername(displayName);
+          cacheUsername(displayName);
         }
       } catch {
         // Ignore profile fetch failures.
@@ -242,10 +262,14 @@ export default function DashboardPage() {
       <section className="pixora-panel relative overflow-hidden rounded-[28px] p-6 md:p-8">
         <div className="grid gap-8 lg:grid-cols-[1fr_420px] lg:items-stretch">
           <div className="relative z-10">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7a3f13]">Pixora Dashboard</p>
-            <h1 className="font-display mt-4 max-w-3xl text-4xl font-bold leading-tight text-[#2a170d] sm:text-5xl">
-              Welcome back, {username}.
-            </h1>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7a3f13]">Pixdrive Dashboard</p>
+            {username ? (
+              <h1 className="font-display mt-4 max-w-3xl text-4xl font-bold leading-tight text-[#2a170d] sm:text-5xl">
+                Welcome back, {username}.
+              </h1>
+            ) : (
+              <div className="mt-4 h-24 max-w-2xl animate-pulse rounded-2xl bg-[#eadccf]/70 sm:h-15" />
+            )}
             <p className="mt-4 max-w-2xl text-sm leading-7 text-[#7a6a55] sm:text-base">
               Here&apos;s what&apos;s happening in your event delivery pipeline today. Keep galleries active, share QR
               links, and monitor client activity from one place.
@@ -291,7 +315,7 @@ export default function DashboardPage() {
           <div>
             <h2 className="text-xl font-semibold text-[#2a170d]">Event Command Center Tutorial</h2>
             <p className="mt-1 text-sm text-[#7a6a55]">
-              Follow this quick flow to manage your full event lifecycle inside Pixora.
+              Follow this quick flow to manage your full event lifecycle inside Pixdrive.
             </p>
           </div>
           <Link href="/dashboard/create-events" className="inline-flex items-center gap-1 text-sm font-semibold text-[#7a3f13]">

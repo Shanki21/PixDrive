@@ -44,7 +44,7 @@ export const POST = withApiHandler(async (req: NextRequest) => {
   const interval: BillingInterval = isBillingInterval(body.interval) ? body.interval : "monthly";
 
   if (!plan || plan === "free") {
-    return NextResponse.json({ ok: false, message: "Choose a paid Pixora plan." }, { status: 400 });
+    return NextResponse.json({ ok: false, message: "Choose a paid Pixdrive plan." }, { status: 400 });
   }
 
   const planId = getRazorpayPlanIdForPlan(plan as Exclude<BillingPlan, "free">, interval);

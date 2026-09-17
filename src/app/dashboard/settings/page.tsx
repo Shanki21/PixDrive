@@ -463,7 +463,7 @@ export default function SettingsPage() {
     () => toStudioSlug(profile?.name || accountEmail || "your-studio"),
     [accountEmail, profile?.name]
   );
-  const displayName = formatValue(profile?.name, accountEmail ? accountEmail.split("@")[0] : "Pixora Studio");
+  const displayName = formatValue(profile?.name, accountEmail ? accountEmail.split("@")[0] : "Pixdrive Studio");
   const initials = initialsFromEmail(accountEmail || displayName);
   const activeLabel = tabs.find((tab) => tab.key === activeTab)?.label ?? "Settings";
 
@@ -574,7 +574,7 @@ export default function SettingsPage() {
     if (domainBusy) return;
     const confirmed = await confirmPixoraAction({
       title: "Remove custom domain?",
-      text: "Visitors using this domain may stop reaching your Pixora galleries until DNS is updated again.",
+      text: "Visitors using this domain may stop reaching your Pixdrive galleries until DNS is updated again.",
       confirmText: "Remove domain",
       cancelText: "Keep domain",
       icon: "warning",
@@ -646,7 +646,7 @@ export default function SettingsPage() {
       if (!RazorpayCheckout) throw new Error("Razorpay checkout is not available.");
       const checkout = new RazorpayCheckout({
         key: data.keyId,
-        name: "Pixora",
+        name: "Pixdrive",
         description: `${plan} ${interval} subscription`,
         subscription_id: data.subscriptionId,
         prefill: {
@@ -895,7 +895,7 @@ export default function SettingsPage() {
       return (
         <div className="space-y-6">
           <div className="grid gap-6 xl:grid-cols-2">
-            <SectionCard title="Personal Details" description="Primary contact information shown across Pixora.">
+            <SectionCard title="Personal Details" description="Primary contact information shown across Pixdrive.">
               <div className="grid gap-4 sm:grid-cols-2">
                 <SettingsInput label="Full Name" value={draft.name} onChange={(value) => updateDraft("name", value)} placeholder="Your full name" />
                 <SettingsInput label="Email Id" value={formatValue(accountEmail, "Signed in email")} disabled />
@@ -963,7 +963,7 @@ export default function SettingsPage() {
       const primaryDomain = customDomains[0] ?? null;
       return (
         <div className="space-y-6">
-          <SectionCard title="Pixora Domain" description="Your fast launch URL.">
+          <SectionCard title="Pixdrive Domain" description="Your fast launch URL.">
             <FieldView label="Hosted URL" value={`pixdrive.site/studio/${studioSlug}`} icon={Globe2} />
             <p className="mt-4 text-sm text-[#6b7f78]">Use this while your custom domain and DNS are prepared.</p>
           </SectionCard>
@@ -1130,7 +1130,7 @@ export default function SettingsPage() {
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#7a3f13]">Settings</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-[#2a170d]">{activeLabel}</h1>
-          <p className="mt-1 text-sm text-[#7a6a55]">Manage your Pixora account, plan, domains, and billing.</p>
+          <p className="mt-1 text-sm text-[#7a6a55]">Manage your Pixdrive account, plan, domains, and billing.</p>
         </div>
         <div className="min-w-60 rounded-2xl border border-[#eadccf] bg-[#fffaf4] p-4">
           <div className="flex items-center gap-3">

@@ -24,7 +24,7 @@ function isConfigured(value?: string) {
 function buildOtpHtml(otp: string) {
   return `
     <div style="font-family:Arial,sans-serif;color:#111">
-      <h2 style="margin:0 0 12px;">Your pixora access code</h2>
+      <h2 style="margin:0 0 12px;">Your Pixdrive access code</h2>
       <p style="margin:0 0 12px;">Use this one-time password to continue:</p>
       <p style="font-size:28px;letter-spacing:6px;font-weight:700;margin:0 0 12px;">${otp}</p>
       <p style="margin:0;color:#666;">This code expires in 5 minutes.</p>
@@ -56,7 +56,7 @@ async function sendWithResend({ to, otp }: SendOtpParams): Promise<SendOtpResult
       body: JSON.stringify({
         from,
         to: [to],
-        subject: "Your pixora OTP code",
+        subject: "Your Pixdrive OTP code",
         html: buildOtpHtml(otp),
       }),
     }, { dedupeKey: `resend:${to}:${otp.slice(0,4)}` });
@@ -106,7 +106,7 @@ async function sendWithSmtp({ to, otp }: SendOtpParams): Promise<SendOtpResult> 
     await transporter.sendMail({
       from,
       to,
-      subject: "Your pixora OTP code",
+      subject: "Your Pixdrive OTP code",
       html: buildOtpHtml(otp),
     });
 

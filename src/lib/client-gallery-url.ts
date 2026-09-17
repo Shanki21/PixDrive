@@ -46,7 +46,7 @@ export function buildClientStudioUrl(ownerId: string, fallbackOrigin?: string) {
 
 export function getClientGalleryHostLabel(fallbackOrigin?: string) {
   const origin = getClientGalleryOrigin(fallbackOrigin);
-  if (!origin) return "pixora.pro";
+  if (!origin) return "pixdrive.pro";
 
   try {
     return new URL(origin).host;

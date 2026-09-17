@@ -85,7 +85,7 @@ export default async function StudioEventSelectorPage({ params }: StudioPageProp
         <div className="rounded-3xl border border-[#eadccf] bg-[#fffaf4] p-6 shadow-[0_18px_60px_rgba(73,39,20,0.08)] sm:p-8">
           <div className="inline-flex items-center gap-2 rounded-full border border-[#ead7c5] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#7a3f13]">
             <Sparkles className="h-3.5 w-3.5" />
-            Pixora Photo Delivery
+            Pixdrive Photo Delivery
           </div>
           <h1 className="font-display mt-4 text-4xl font-bold tracking-tight text-[#2a170d] sm:text-5xl">Select your event</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[#7a6a55]">

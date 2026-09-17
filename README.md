@@ -1,6 +1,6 @@
-# Pixora
+# Pixdrive
 
-Pixora is a cloud-first photo galleries and lightweight cloud-drive application built with Next.js, TypeScript, and Prisma. It provides passwordless/OTP authentication, gallery sharing, basic analytics, and a dashboard for managing galleries and uploads.
+Pixdrive is a cloud-first photo galleries and lightweight cloud-drive application built with Next.js, TypeScript, and Prisma. It provides passwordless/OTP authentication, gallery sharing, basic analytics, and a dashboard for managing galleries and uploads.
 
 Table of contents
 1. About
@@ -18,7 +18,7 @@ Table of contents
 
 ## 1. About
 
-Pixora lets users create, share and manage image galleries. The app uses Cloudinary for image hosting, Prisma + PostgreSQL for data, and Next.js for server-rendered frontend and API routes.
+Pixdrive lets users create, share and manage image galleries. The app uses Cloudinary for image hosting, Prisma + PostgreSQL for data, and Next.js for server-rendered frontend and API routes.
 
 ## 2. Features
 
@@ -46,7 +46,7 @@ Clone the repository and install dependencies:
 
 ```bash
 git clone <your-repo-url>
-cd Pixora
+cd Pixdrive
 npm install
 ```
 
@@ -84,7 +84,7 @@ Create a `.env` in the project root with the following variables (example):
 
 ```env
 # Database
-DATABASE_URL="postgresql://postgres:password@localhost:5432/pixora_dev?schema=public"
+DATABASE_URL="postgresql://postgres:password@localhost:5432/Pixdrive_dev?schema=public"
 
 # Authentication
 NEXTAUTH_URL="http://localhost:3000"
@@ -151,7 +151,7 @@ npm run test:unit     # run unit-style tests included in tests/
 
 ## 10. User Roles
 
-Pixora's codebase expects basic user distinctions. Typical roles used in projects like this:
+Pixdrive's codebase expects basic user distinctions. Typical roles used in projects like this:
 
 - Admin / Owner: full access to dashboards, site settings, and user management.
 - Editor / Contributor: can create/edit galleries and content.

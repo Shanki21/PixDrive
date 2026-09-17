@@ -7,7 +7,7 @@ export default function DriveHeader({ totalEvents }: { totalEvents: number }) {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-[#ead7c5] bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#7a3f13]">
             <Sparkles className="h-3.5 w-3.5" />
-            Pixora Events
+            Pixdrive Events
           </div>
           <h1 className="font-display mt-3 text-4xl font-bold text-[#2a170d] sm:text-5xl">My Events</h1>
           <p className="mt-1 text-sm text-[#7a6a55]">

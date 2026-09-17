@@ -125,7 +125,7 @@ export default function GetPhotosForm({ galleryId, gallerySlug, galleryName }: G
         {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
         {submitting ? "Preparing Gallery..." : "Get My Photos"}
       </button>
-      <p className="pt-1 text-center text-[10px] font-semibold uppercase tracking-[0.24em] text-[#8a735f]">Secured by Pixora</p>
+      <p className="pt-1 text-center text-[10px] font-semibold uppercase tracking-[0.24em] text-[#8a735f]">Secured by Pixdrive</p>
       </div>
     </form>
   );

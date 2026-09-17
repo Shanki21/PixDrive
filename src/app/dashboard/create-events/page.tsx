@@ -397,12 +397,12 @@ function CreateEventsPageContent() {
           {isEditMode ? "Edit Event" : "Create Event"}
         </p>
         <h1 className="font-display mt-3 text-3xl font-bold text-[#2a170d] sm:text-4xl">
-          {isEditMode ? "Update your Pixora event" : "Build a new Pixora event"}
+          {isEditMode ? "Update your Pixdrive event" : "Build a new Pixdrive event"}
         </h1>
         <p className="mt-2 text-sm text-[#5e7b72]">
           {isEditMode
             ? "Adjust event details, access controls, and delivery behavior from one professional control board."
-            : "Shape your event flow with Pixora controls: define event details, brand the experience, then tune access and delivery rules."}
+            : "Shape your event flow with Pixdrive controls: define event details, brand the experience, then tune access and delivery rules."}
         </p>
 
         <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_80px_1fr] sm:items-center">

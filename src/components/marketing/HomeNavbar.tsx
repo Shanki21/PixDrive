@@ -8,7 +8,7 @@ export default function HomeNavbar() {
     <header className="sticky top-0 z-40 border-b border-[#E5E5E5] bg-[#FAFAF8]/85 backdrop-blur">
       <Container className="flex items-center justify-between py-4">
         <Link href="/" className="text-[24px] font-semibold tracking-[-0.02em] text-[#111111]">
-          Pixora
+          Pixdrive
         </Link>
         <div className="hidden items-center gap-8 md:flex">
           {NAV_LINKS.map((link) => (

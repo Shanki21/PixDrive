@@ -55,7 +55,7 @@ async function upsertSubscriptionFromStripe(rawSubscription: Stripe.Subscription
   const userId = existing?.userId ?? byCustomer?.userId ?? userIdFromMeta;
 
   if (!userId) {
-    console.warn("[stripe:webhook] subscription event could not be mapped to a Pixora user", {
+    console.warn("[stripe:webhook] subscription event could not be mapped to a Pixdrive user", {
       stripeSubscriptionId,
       stripeCustomerId,
     });

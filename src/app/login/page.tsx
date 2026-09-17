@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
@@ -166,7 +166,7 @@ function LoginContent() {
             Log in
           </motion.h1>
           <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="text-[16px] text-[#666666]">
-            Continue to your Pixora dashboard with a secure one-time code.
+            Continue to your Pixdrive dashboard with a secure one-time code.
           </motion.p>
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
             <label className="mb-2 block text-sm font-semibold text-[#111111]">Email</label>
